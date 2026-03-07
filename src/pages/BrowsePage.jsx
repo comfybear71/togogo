@@ -63,8 +63,9 @@ function ProductCard({ product }) {
             className="h-40 w-full rounded-xl object-cover"
           />
         ) : (
-          <div className="flex h-40 w-full items-center justify-center rounded-xl bg-[#0a0a0a]">
-            <PackageSearch className="h-10 w-10 text-zinc-800" />
+          <div className="flex flex-col h-40 w-full items-center justify-center rounded-xl bg-[#0a0a0a]">
+            <PackageSearch className="h-10 w-10 text-zinc-700" />
+            <span className="text-xs text-zinc-700 mt-1.5">No image</span>
           </div>
         )}
         {savings > 0 && (

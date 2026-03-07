@@ -22,68 +22,175 @@ import {
 import Skeleton from '../components/ui/Skeleton';
 import { useProduct, usePriceHistory } from '../hooks/useProducts';
 
-const MOCK_PRODUCT = {
-  id: '1',
-  name: 'Apple AirPods Pro 2',
-  brand: 'Apple',
-  category: 'electronics',
-  description:
-    'Active Noise Cancellation, Adaptive Audio, Personalized Spatial Audio, USB-C charging case',
-  image_url: '',
-  images: [],
-  deals: [
-    {
-      id: 'd1',
-      price: 189.99,
-      original_price: 249.99,
-      shipping_cost: 0,
-      in_stock: true,
-      url: '#',
-      deal_score: 95,
-      retailer: { name: 'Amazon', domain: 'amazon.com' },
-    },
-    {
-      id: 'd2',
-      price: 199.0,
-      original_price: 249.99,
-      shipping_cost: 0,
-      in_stock: true,
-      url: '#',
-      deal_score: 88,
-      retailer: { name: 'Best Buy', domain: 'bestbuy.com' },
-    },
-    {
-      id: 'd3',
-      price: 209.99,
-      original_price: 249.99,
-      shipping_cost: 5.99,
-      in_stock: true,
-      url: '#',
-      deal_score: 82,
-      retailer: { name: 'Target', domain: 'target.com' },
-    },
-    {
-      id: 'd4',
-      price: 195.0,
-      original_price: 249.99,
-      shipping_cost: 9.95,
-      in_stock: true,
-      url: '#',
-      deal_score: 85,
-      retailer: { name: 'eBay', domain: 'ebay.com' },
-    },
-    {
-      id: 'd5',
-      price: 179.0,
-      original_price: 249.99,
-      shipping_cost: 15.0,
-      in_stock: false,
-      url: '#',
-      deal_score: 70,
-      retailer: { name: 'AliExpress', domain: 'aliexpress.com' },
-    },
-  ],
+const MOCK_PRODUCTS = {
+  '1': {
+    id: '1',
+    name: 'Apple AirPods Pro 2',
+    brand: 'Apple',
+    category: 'electronics',
+    description:
+      'Active Noise Cancellation, Adaptive Audio, Personalized Spatial Audio, USB-C charging case',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd1-1', price: 189.99, original_price: 249.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 95, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+      { id: 'd1-2', price: 199.00, original_price: 249.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 88, retailer: { name: 'Best Buy', domain: 'bestbuy.com' } },
+      { id: 'd1-3', price: 209.99, original_price: 249.99, shipping_cost: 5.99, in_stock: true, url: '#', deal_score: 82, retailer: { name: 'Target', domain: 'target.com' } },
+      { id: 'd1-4', price: 195.00, original_price: 249.99, shipping_cost: 9.95, in_stock: true, url: '#', deal_score: 85, retailer: { name: 'eBay', domain: 'ebay.com' } },
+      { id: 'd1-5', price: 179.00, original_price: 249.99, shipping_cost: 15.00, in_stock: false, url: '#', deal_score: 70, retailer: { name: 'AliExpress', domain: 'aliexpress.com' } },
+    ],
+  },
+  '2': {
+    id: '2',
+    name: 'Dyson V15 Detect Vacuum',
+    brand: 'Dyson',
+    category: 'home',
+    description: 'Laser-equipped cordless vacuum with advanced filtration and LCD screen showing real-time dust detection.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd2-1', price: 449.00, original_price: 749.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 90, retailer: { name: 'eBay', domain: 'ebay.com' } },
+      { id: 'd2-2', price: 499.00, original_price: 749.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 85, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+      { id: 'd2-3', price: 549.00, original_price: 749.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 78, retailer: { name: 'Dyson', domain: 'dyson.com' } },
+    ],
+  },
+  '3': {
+    id: '3',
+    name: 'Samsung 65" Crystal UHD TV',
+    brand: 'Samsung',
+    category: 'electronics',
+    description: '4K Crystal UHD with HDR, smart TV powered by Tizen OS, crystal processor 4K.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd3-1', price: 597.00, original_price: 999.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 88, retailer: { name: 'Best Buy', domain: 'bestbuy.com' } },
+      { id: 'd3-2', price: 649.00, original_price: 999.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 82, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+    ],
+  },
+  '4': {
+    id: '4',
+    name: 'Nike Air Max 90 Sneakers',
+    brand: 'Nike',
+    category: 'fashion',
+    description: 'Classic Air Max 90 with visible Air cushioning, waffle outsole and iconic layered design.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd4-1', price: 89.97, original_price: 130.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 85, retailer: { name: 'Nike', domain: 'nike.com' } },
+      { id: 'd4-2', price: 99.00, original_price: 130.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 80, retailer: { name: 'Foot Locker', domain: 'footlocker.com' } },
+    ],
+  },
+  '5': {
+    id: '5',
+    name: 'Pampers Baby Dry Size 4',
+    brand: 'Pampers',
+    category: 'baby',
+    description: '12-hour overnight dryness protection, 3 extra absorbing channels, soft flexi-sides.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd5-1', price: 32.99, original_price: 54.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 92, retailer: { name: 'Walmart', domain: 'walmart.com' } },
+      { id: 'd5-2', price: 36.99, original_price: 54.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 87, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+    ],
+  },
+  '6': {
+    id: '6',
+    name: 'Organic Whole Milk 2L',
+    brand: 'Various',
+    category: 'groceries',
+    description: 'Certified organic whole milk, sourced from grass-fed cows. No artificial hormones.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd6-1', price: 3.49, original_price: 5.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 82, retailer: { name: 'Woolworths', domain: 'woolworths.com.au' } },
+      { id: 'd6-2', price: 3.99, original_price: 5.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 78, retailer: { name: 'Coles', domain: 'coles.com.au' } },
+    ],
+  },
+  '7': {
+    id: '7',
+    name: 'Instant Pot Duo 7-in-1',
+    brand: 'Instant Pot',
+    category: 'home',
+    description: '7-in-1 programmable pressure cooker, slow cooker, rice cooker, steamer, and more.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd7-1', price: 59.99, original_price: 89.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 87, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+      { id: 'd7-2', price: 64.99, original_price: 89.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 83, retailer: { name: 'Target', domain: 'target.com' } },
+    ],
+  },
+  '8': {
+    id: '8',
+    name: 'Bose QuietComfort 45',
+    brand: 'Bose',
+    category: 'electronics',
+    description: 'Noise cancelling headphones with high-fidelity audio, Quiet and Aware modes, 24-hour battery life.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd8-1', price: 229.00, original_price: 329.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 86, retailer: { name: 'Target', domain: 'target.com' } },
+      { id: 'd8-2', price: 239.00, original_price: 329.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 82, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+    ],
+  },
+  '9': {
+    id: '9',
+    name: 'Huggies Nappies Size 3',
+    brand: 'Huggies',
+    category: 'baby',
+    description: 'Ultra-dry technology with up to 12 hours of leakage protection. Soft, breathable material.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd9-1', price: 28.50, original_price: 42.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 84, retailer: { name: 'Coles', domain: 'coles.com.au' } },
+      { id: 'd9-2', price: 30.00, original_price: 42.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 80, retailer: { name: 'Woolworths', domain: 'woolworths.com.au' } },
+    ],
+  },
+  '10': {
+    id: '10',
+    name: 'KitchenAid Stand Mixer',
+    brand: 'KitchenAid',
+    category: 'home',
+    description: 'Artisan Series 5-quart tilt-head stand mixer. 10 speeds, 59 touchpoints around the bowl.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd10-1', price: 279.99, original_price: 449.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 89, retailer: { name: 'Amazon', domain: 'amazon.com' } },
+      { id: 'd10-2', price: 299.99, original_price: 449.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 85, retailer: { name: 'Williams Sonoma', domain: 'williams-sonoma.com' } },
+    ],
+  },
+  '11': {
+    id: '11',
+    name: 'Sydney to Melbourne Flight',
+    brand: 'Jetstar',
+    category: 'travel',
+    description: 'One-way economy flight from Sydney (SYD) to Melbourne (MEL). Flexible dates available.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd11-1', price: 59.00, original_price: 129.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 93, retailer: { name: 'Skyscanner', domain: 'skyscanner.com.au' } },
+      { id: 'd11-2', price: 69.00, original_price: 129.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 88, retailer: { name: 'Jetstar', domain: 'jetstar.com' } },
+      { id: 'd11-3', price: 79.00, original_price: 139.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 82, retailer: { name: 'Qantas', domain: 'qantas.com' } },
+      { id: 'd11-4', price: 85.00, original_price: 145.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 78, retailer: { name: 'Virgin Australia', domain: 'virginaustralia.com' } },
+      { id: 'd11-5', price: 99.00, original_price: 159.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 72, retailer: { name: 'Webjet', domain: 'webjet.com.au' } },
+      { id: 'd11-6', price: 109.00, original_price: 169.00, shipping_cost: 0, in_stock: true, url: '#', deal_score: 68, retailer: { name: 'Flight Centre', domain: 'flightcentre.com.au' } },
+    ],
+  },
+  '12': {
+    id: '12',
+    name: 'Garden Hose 30m Expandable',
+    brand: 'Gardena',
+    category: 'home',
+    description: 'Expandable garden hose up to 30m. Lightweight, kink-free, with 8-pattern spray nozzle.',
+    image_url: '',
+    images: [],
+    deals: [
+      { id: 'd12-1', price: 34.95, original_price: 69.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 80, retailer: { name: 'Bunnings', domain: 'bunnings.com.au' } },
+      { id: 'd12-2', price: 39.99, original_price: 69.99, shipping_cost: 0, in_stock: true, url: '#', deal_score: 75, retailer: { name: 'Amazon', domain: 'amazon.com.au' } },
+    ],
+  },
 };
+
+const DEFAULT_MOCK_PRODUCT = MOCK_PRODUCTS['1'];
 
 const MOCK_PRICE_HISTORY = Array.from({ length: 30 }, (_, i) => ({
   checked_at: new Date(Date.now() - (29 - i) * 86400000).toISOString(),
@@ -93,7 +200,7 @@ const MOCK_PRICE_HISTORY = Array.from({ length: 30 }, (_, i) => ({
 export default function ProductDetailPage() {
   const { id } = useParams();
   const { data: fetchedProduct, isLoading } = useProduct(id);
-  const product = fetchedProduct || MOCK_PRODUCT;
+  const product = fetchedProduct || MOCK_PRODUCTS[id] || DEFAULT_MOCK_PRODUCT;
 
   const bestDealId = product?.deals?.[0]?.id;
   const { data: fetchedHistory } = usePriceHistory(bestDealId);
