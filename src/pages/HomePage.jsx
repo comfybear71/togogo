@@ -66,13 +66,13 @@ export default function HomePage() {
       </div>
 
       {/* ===== Top spacer ===== */}
-      <div className="flex-1 min-h-[15vh]" />
+      <div className="flex-[1.5] min-h-[12vh]" />
 
       {/* ===== Brand section ===== */}
       <div className="relative z-10 w-full max-w-md text-center">
 
         {/* Animated dots */}
-        <div className="flex items-center justify-center gap-4 mb-8">
+        <div className="flex items-center justify-center gap-4 mb-10">
           <div className="dot-animate-1 w-2.5 h-2.5 rounded-full bg-[#FF6B35] shadow-[0_0_12px_rgba(255,107,53,0.4)]" />
           <div className="dot-animate-2 w-2.5 h-2.5 rounded-full bg-[#FFD23F] shadow-[0_0_12px_rgba(255,210,63,0.4)]" />
           <div className="dot-animate-3 w-2.5 h-2.5 rounded-full bg-[#06D6A0] shadow-[0_0_12px_rgba(6,214,160,0.4)]" />
@@ -114,7 +114,7 @@ export default function HomePage() {
       </div>
 
       {/* ===== Middle spacer ===== */}
-      <div className="flex-1 min-h-[8vh]" />
+      <div className="flex-[2] min-h-[10vh]" />
 
       {/* ===== Search + Actions section ===== */}
       <div className="relative z-10 w-full max-w-md">
@@ -164,7 +164,7 @@ export default function HomePage() {
 
         {/* AI Assistant Button */}
         <div
-          className="fade-up mt-6"
+          className="fade-up mt-10"
           style={{ animationDelay: '1.2s' }}
         >
           <button
@@ -191,7 +191,7 @@ export default function HomePage() {
 
         {/* Shipping + Marketing */}
         <div
-          className="fade-up mt-4 flex gap-4"
+          className="fade-up mt-6 flex gap-5"
           style={{ animationDelay: '1.4s' }}
         >
           <button
@@ -221,7 +221,7 @@ export default function HomePage() {
       </div>
 
       {/* ===== Bottom spacer with branding ===== */}
-      <div className="flex-1 min-h-[6vh] flex items-end pb-8">
+      <div className="flex-[1.5] min-h-[8vh] flex items-end pb-10">
         <p
           className="fade-up text-[10px] text-zinc-700 tracking-wider uppercase"
           style={{ animationDelay: '1.6s' }}
