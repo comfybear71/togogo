@@ -30,7 +30,7 @@ export default function HomePage() {
   ]
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-4 overflow-hidden">
+    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 overflow-hidden">
 
       {/* ===== Animated background orbs ===== */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -72,7 +72,7 @@ export default function HomePage() {
       <div className="relative z-10 w-full max-w-md text-center">
 
         {/* ===== Animated dots ===== */}
-        <div className="flex items-center justify-center gap-3 mb-5">
+        <div className="flex items-center justify-center gap-3 mb-6">
           <div className="dot-animate-1 w-2.5 h-2.5 rounded-full bg-[#FF6B35] shadow-[0_0_12px_rgba(255,107,53,0.4)]" />
           <div className="dot-animate-2 w-2.5 h-2.5 rounded-full bg-[#FFD23F] shadow-[0_0_12px_rgba(255,210,63,0.4)]" />
           <div className="dot-animate-3 w-2.5 h-2.5 rounded-full bg-[#06D6A0] shadow-[0_0_12px_rgba(6,214,160,0.4)]" />
@@ -106,7 +106,7 @@ export default function HomePage() {
 
         {/* ===== Tagline ===== */}
         <p
-          className="fade-up mt-4 text-[11px] sm:text-xs tracking-[0.25em] uppercase text-zinc-500 font-semibold"
+          className="fade-up mt-5 text-[11px] sm:text-xs tracking-[0.25em] uppercase text-zinc-500 font-semibold"
           style={{ animationDelay: '0.8s' }}
         >
           Trade &middot; Swap &middot; Connect &middot; Share
@@ -115,7 +115,7 @@ export default function HomePage() {
         {/* ===== Search bar (compact) ===== */}
         <form
           onSubmit={handleSearch}
-          className="fade-up mt-10"
+          className="fade-up mt-14"
           style={{ animationDelay: '1s' }}
         >
           <div
@@ -157,7 +157,7 @@ export default function HomePage() {
 
         {/* ===== Action Buttons ===== */}
         <div
-          className="fade-up mt-10 flex flex-col gap-3"
+          className="fade-up mt-6 flex flex-col gap-4"
           style={{ animationDelay: '1.2s' }}
         >
           {/* AI Assistant Button - hero button */}
@@ -183,7 +183,7 @@ export default function HomePage() {
           </button>
 
           {/* Bottom row: Shipping + Marketing */}
-          <div className="flex gap-3">
+          <div className="flex gap-4">
             <button
               onClick={() => navigate('/shipping')}
               className="group flex-1 flex items-center justify-center gap-2.5 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] px-4 py-3 transition-all duration-300 hover:border-[#06D6A0]/30 hover:shadow-[0_0_30px_rgba(6,214,160,0.08)]"
@@ -212,7 +212,7 @@ export default function HomePage() {
 
         {/* ===== Bottom subtle branding ===== */}
         <p
-          className="fade-up mt-10 text-[10px] text-zinc-700 tracking-wider uppercase"
+          className="fade-up mt-14 text-[10px] text-zinc-700 tracking-wider uppercase"
           style={{ animationDelay: '1.5s' }}
         >
           The marketplace for everything
