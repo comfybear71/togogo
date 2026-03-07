@@ -106,7 +106,7 @@ export default function HomePage() {
 
         {/* ===== Tagline ===== */}
         <p
-          className="fade-up mt-3 text-[11px] sm:text-xs tracking-[0.25em] uppercase text-zinc-500 font-semibold"
+          className="fade-up mt-4 text-[11px] sm:text-xs tracking-[0.25em] uppercase text-zinc-500 font-semibold"
           style={{ animationDelay: '0.8s' }}
         >
           Trade &middot; Swap &middot; Connect &middot; Share
@@ -115,7 +115,7 @@ export default function HomePage() {
         {/* ===== Search bar (compact) ===== */}
         <form
           onSubmit={handleSearch}
-          className="fade-up mt-8"
+          className="fade-up mt-10"
           style={{ animationDelay: '1s' }}
         >
           <div
@@ -157,7 +157,7 @@ export default function HomePage() {
 
         {/* ===== Action Buttons ===== */}
         <div
-          className="fade-up mt-7 flex flex-col gap-3"
+          className="fade-up mt-10 flex flex-col gap-3"
           style={{ animationDelay: '1.2s' }}
         >
           {/* AI Assistant Button - hero button */}
