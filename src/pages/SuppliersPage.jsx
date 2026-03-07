@@ -1,127 +1,305 @@
-import { Factory, Star, DollarSign, ShieldCheck, Globe, ArrowRight } from 'lucide-react'
+import { useState } from 'react'
+import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2 } from 'lucide-react'
+import { useSupplierSearch, useTrendingProducts, useSupplierCategories } from '../hooks/useSuppliers'
 
-const SUPPLIERS = [
-  {
-    name: 'AliExpress',
-    desc: 'Millions of products, low prices, direct from manufacturers',
-    tags: ['Dropshipping', 'Wholesale'],
-    color: '#FF6B35',
-    url: 'https://aliexpress.com',
-  },
-  {
-    name: 'Spocket',
-    desc: 'US/EU suppliers with fast shipping, auto-sync with your store',
-    tags: ['Dropshipping', 'Fast Shipping'],
-    color: '#06D6A0',
-    url: 'https://spocket.co',
-  },
-  {
-    name: 'CJ Dropshipping',
-    desc: 'Product sourcing, warehousing, and global fulfilment',
-    tags: ['Dropshipping', 'Fulfilment'],
-    color: '#FFD23F',
-    url: 'https://cjdropshipping.com',
-  },
-  {
-    name: 'Alibaba',
-    desc: 'Bulk wholesale from verified manufacturers worldwide',
-    tags: ['Wholesale', 'Bulk Orders'],
-    color: '#FF6B35',
-    url: 'https://alibaba.com',
-  },
-  {
-    name: 'Printful',
-    desc: 'Print-on-demand: custom t-shirts, mugs, posters & more',
-    tags: ['Print on Demand', 'Custom'],
-    color: '#a78bfa',
-    url: 'https://printful.com',
-  },
-  {
-    name: 'Wholesale Central',
-    desc: 'Directory of verified wholesalers across every category',
-    tags: ['Wholesale', 'Directory'],
-    color: '#06D6A0',
-    url: 'https://wholesalecentral.com',
-  },
+const SORT_OPTIONS = [
+  { value: 'relevance', label: 'Most Relevant' },
+  { value: 'price_low', label: 'Lowest Cost' },
+  { value: 'price_high', label: 'Highest Margin' },
+  { value: 'fastest', label: 'Fastest Shipping' },
 ]
 
-const FEATURES = [
-  { icon: DollarSign, title: 'Price Comparison', desc: 'Compare costs across suppliers instantly', color: '#FF6B35' },
-  { icon: Star, title: 'Reliability Ratings', desc: 'See real reviews and fulfilment scores', color: '#FFD23F' },
-  { icon: ShieldCheck, title: 'Verified Suppliers', desc: 'Only trusted, vetted suppliers listed', color: '#06D6A0' },
-  { icon: Globe, title: 'Ship Worldwide', desc: 'Suppliers with global reach and fast delivery', color: '#a78bfa' },
+const SUPPLIER_FILTERS = [
+  { value: '', label: 'All Suppliers' },
+  { value: 'CJ Dropshipping', label: '📦 CJ Dropshipping' },
+  { value: 'Printful', label: '🎨 Printful' },
 ]
 
 export default function SuppliersPage() {
-  return (
-    <div className="py-6">
-      {/* Page title */}
-      <div className="flex items-center gap-3 mb-8">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF6B35]/15">
-          <Factory className="h-5 w-5 text-[#FF6B35]" />
-        </div>
-        <h1 className="text-xl font-heading font-bold text-white">Suppliers</h1>
-      </div>
+  const [searchInput, setSearchInput] = useState('')
+  const [query, setQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('')
+  const [selectedSupplier, setSelectedSupplier] = useState('')
+  const [sort, setSort] = useState('relevance')
+  const [showFilters, setShowFilters] = useState(false)
 
-      {/* Hero */}
-      <div className="text-center mb-10">
-        <h2 className="font-heading text-3xl font-bold text-white mb-4">
-          Find Products to Sell
-        </h2>
-        <p className="text-sm text-zinc-500 max-w-[300px] mx-auto leading-relaxed">
-          Browse top suppliers for dropshipping, wholesale, and print-on-demand. Start selling without holding stock.
+  const { data: searchData, isLoading: searching } = useSupplierSearch({
+    query: query || undefined,
+    category: selectedCategory || undefined,
+    supplier: selectedSupplier || undefined,
+    sort,
+  })
+
+  const { data: trendingData, isLoading: loadingTrending } = useTrendingProducts(selectedCategory)
+  const { data: catData } = useSupplierCategories()
+
+  const categories = catData?.categories || []
+  const products = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
+  const isLoading = searching || loadingTrending
+  const isLive = searchData?.live
+
+  const handleSearch = (e) => {
+    e.preventDefault()
+    setQuery(searchInput.trim())
+    setSelectedCategory('')
+  }
+
+  const handleCategoryClick = (catId) => {
+    setSelectedCategory(catId)
+    setQuery('')
+    setSearchInput('')
+  }
+
+  return (
+    <div className="py-4">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
+        <p className="text-xs text-zinc-500">
+          Browse thousands of products — we handle the supplier setup for you
         </p>
       </div>
 
-      {/* Supplier cards */}
-      <div className="space-y-3 max-w-lg mx-auto mb-10">
-        {SUPPLIERS.map((s) => (
-          <a
-            key={s.name}
-            href={s.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center gap-4 rounded-2xl bg-[#111] border border-white/[0.06] p-4 hover:border-white/[0.12] transition-all duration-300"
+      {/* Search bar */}
+      <form onSubmit={handleSearch} className="relative mb-4">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+        <input
+          type="text"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          placeholder="Search products (e.g. phone cases, t-shirts, LED lights...)"
+          className="w-full rounded-xl bg-[#111] border border-white/[0.06] pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#FF6B35]/40 transition-colors"
+        />
+        {searchInput && (
+          <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-semibold bg-[#FF6B35] text-white rounded-lg hover:bg-[#FF6B35]/90 transition-colors">
+            Search
+          </button>
+        )}
+      </form>
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 mb-4">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showFilters ? 'bg-[#FF6B35]/15 border-[#FF6B35]/30 text-[#FF6B35]' : 'bg-[#111] border-white/[0.06] text-zinc-400 hover:text-zinc-200'}`}
+        >
+          <Filter className="h-3 w-3" />
+          Filters
+          <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+        </button>
+
+        {selectedSupplier && (
+          <button
+            onClick={() => setSelectedSupplier('')}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-[#06D6A0]/15 border border-[#06D6A0]/30 text-[#06D6A0]"
           >
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl flex-shrink-0 text-lg font-bold"
-              style={{ backgroundColor: `${s.color}15`, color: s.color }}
-            >
-              {s.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold text-white mb-0.5">{s.name}</h3>
-              <p className="text-xs text-zinc-500 leading-relaxed">{s.desc}</p>
-              <div className="flex gap-1.5 mt-2">
-                {s.tags.map((tag) => (
-                  <span key={tag} className="text-[10px] font-medium text-zinc-400 bg-white/[0.04] border border-white/[0.06] px-2 py-0.5 rounded-full">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <ArrowRight className="h-4 w-4 text-zinc-600 group-hover:text-white transition-colors flex-shrink-0" />
-          </a>
-        ))}
+            {selectedSupplier} &times;
+          </button>
+        )}
+
+        {query && (
+          <span className="text-[10px] text-zinc-500">
+            {searchData?.total || 0} results for "{query}"
+          </span>
+        )}
+
+        {!isLive && (searchData || trendingData) && (
+          <span className="ml-auto text-[10px] text-zinc-600 bg-zinc-800/50 px-2 py-0.5 rounded-full">
+            Sample data
+          </span>
+        )}
       </div>
 
-      {/* Feature cards */}
-      <div className="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-        {FEATURES.map((f) => (
-          <div
-            key={f.title}
-            className="group rounded-2xl bg-[#111] border border-white/[0.06] p-5 hover:border-white/[0.12] transition-all duration-300"
-          >
-            <div
-              className="flex h-11 w-11 items-center justify-center rounded-xl mb-4 transition-transform duration-300 group-hover:scale-110"
-              style={{ backgroundColor: `${f.color}15` }}
-            >
-              <f.icon className="h-5 w-5" style={{ color: f.color }} />
+      {/* Expandable filters */}
+      {showFilters && (
+        <div className="mb-4 p-3 rounded-xl bg-[#111] border border-white/[0.06] space-y-3">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5 block">Supplier</label>
+            <div className="flex flex-wrap gap-1.5">
+              {SUPPLIER_FILTERS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => setSelectedSupplier(s.value)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${selectedSupplier === s.value ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
-            <h3 className="text-sm font-semibold text-white mb-1.5">{f.title}</h3>
-            <p className="text-xs text-zinc-500 leading-relaxed">{f.desc}</p>
           </div>
-        ))}
+          <div>
+            <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5 block">Sort by</label>
+            <div className="flex flex-wrap gap-1.5">
+              {SORT_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => setSort(s.value)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${sort === s.value ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Categories */}
+      {!query && (
+        <div className="mb-6">
+          <h2 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Categories</h2>
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <button
+              onClick={() => setSelectedCategory('')}
+              className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${!selectedCategory ? 'bg-[#FF6B35]/15 border-[#FF6B35]/30 text-[#FF6B35]' : 'bg-[#111] border-white/[0.06] text-zinc-400 hover:text-zinc-200'}`}
+            >
+              <TrendingUp className="h-3 w-3 inline mr-1" />
+              Trending
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => handleCategoryClick(cat.id)}
+                className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${selectedCategory === cat.id ? 'bg-[#FF6B35]/15 border-[#FF6B35]/30 text-[#FF6B35]' : 'bg-[#111] border-white/[0.06] text-zinc-400 hover:text-zinc-200'}`}
+              >
+                <span className="mr-1">{cat.emoji}</span>
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <Loader2 className="h-6 w-6 text-[#FF6B35] animate-spin" />
+          <p className="text-xs text-zinc-500">Searching suppliers...</p>
+        </div>
+      )}
+
+      {/* Product grid */}
+      {!isLoading && products.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && products.length === 0 && (query || selectedCategory) && (
+        <div className="text-center py-16">
+          <Package className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
+          <p className="text-sm text-zinc-400 mb-1">No products found</p>
+          <p className="text-xs text-zinc-600">Try a different search or browse categories</p>
+        </div>
+      )}
+
+      {/* Initial state — no search yet */}
+      {!isLoading && !query && !selectedCategory && products.length === 0 && (
+        <div className="text-center py-12">
+          <div className="text-4xl mb-4">🔍</div>
+          <p className="text-sm text-zinc-400 mb-1">Search for anything to sell</p>
+          <p className="text-xs text-zinc-600">We'll find it across all our suppliers instantly</p>
+          <div className="flex flex-wrap justify-center gap-2 mt-4">
+            {['Phone cases', 'T-shirts', 'LED lights', 'Jewellery', 'Mugs'].map((idea) => (
+              <button
+                key={idea}
+                onClick={() => { setSearchInput(idea); setQuery(idea) }}
+                className="px-3 py-1.5 rounded-full text-xs font-medium bg-[#111] border border-white/[0.06] text-zinc-400 hover:text-white hover:border-white/[0.12] transition-colors"
+              >
+                {idea}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Product card component
+function ProductCard({ product }) {
+  const hasImage = product.image && product.image.length > 0
+
+  return (
+    <div className="group rounded-2xl bg-[#111] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all duration-300">
+      {/* Image */}
+      <div className="aspect-square bg-[#0a0a0a] relative overflow-hidden">
+        {hasImage ? (
+          <img
+            src={product.image}
+            alt={product.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <span className="text-4xl">{product.supplierLogo}</span>
+          </div>
+        )}
+
+        {/* Supplier badge */}
+        <div className="absolute top-2 left-2">
+          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-black/70 text-zinc-300 backdrop-blur-sm">
+            {product.supplierLogo} {product.supplier}
+          </span>
+        </div>
+
+        {/* Customisable badge */}
+        {product.customisable && (
+          <div className="absolute top-2 right-2">
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#a78bfa]/20 text-[#a78bfa] backdrop-blur-sm flex items-center gap-0.5">
+              <Palette className="h-2.5 w-2.5" />
+              Custom
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Info */}
+      <div className="p-3">
+        <h3 className="text-xs font-semibold text-white leading-tight mb-2 line-clamp-2">
+          {product.title}
+        </h3>
+
+        {/* Pricing row */}
+        <div className="flex items-end justify-between mb-2">
+          <div>
+            <span className="text-[10px] text-zinc-600 block">Your cost</span>
+            <span className="text-sm font-bold text-white">${product.totalCost.toFixed(2)}</span>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-zinc-600 block">Sell for</span>
+            <span className="text-sm font-bold text-[#06D6A0]">${product.suggestedPrice.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Margin bar */}
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex-1 h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#06D6A0] to-[#FFD23F]"
+              style={{ width: `${Math.min((product.suggestedMargin / product.suggestedPrice) * 100, 100)}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-semibold text-[#06D6A0]">
+            ${product.suggestedMargin.toFixed(2)} profit
+          </span>
+        </div>
+
+        {/* Delivery */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-zinc-500">
+            {product.deliveryDays <= 7 ? '🚀' : '📦'} {product.deliveryDays} day delivery
+          </span>
+        </div>
+
+        {/* Sell button */}
+        <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90 active:scale-[0.97] transition-all">
+          Sell This Product
+        </button>
       </div>
     </div>
   )

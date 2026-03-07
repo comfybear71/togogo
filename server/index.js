@@ -9,6 +9,7 @@ import pricesRoutes from './routes/prices.js'
 import stripeRoutes from './routes/stripe.js'
 import adminRoutes from './routes/admin.js'
 import aiRoutes from './routes/ai.js'
+import dropshipRoutes from './routes/dropship.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -53,6 +54,7 @@ app.use('/api/prices', pricesRoutes)
 app.use('/api/stripe', stripeRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/ai', aiRoutes)
+app.use('/api/dropship', dropshipRoutes)
 
 // Schedule price checks (3 times per day: 6am, 12pm, 6pm)
 cron.schedule('0 6,12,18 * * *', async () => {
