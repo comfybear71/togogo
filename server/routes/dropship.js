@@ -303,6 +303,29 @@ async function importFromCJ(url) {
 }
 
 // --- Printful ---
+// Cache the catalog since it changes rarely (avoid burning rate limit)
+let printfulCatalogCache = null
+let printfulCacheTime = 0
+const PRINTFUL_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
+
+async function fetchPrintfulCatalog(apiKey) {
+  const now = Date.now()
+  if (printfulCatalogCache && (now - printfulCacheTime) < PRINTFUL_CACHE_TTL) {
+    return printfulCatalogCache
+  }
+
+  const response = await fetch('https://api.printful.com/products', {
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  })
+
+  if (!response.ok) throw new Error(`Printful API ${response.status}`)
+
+  const data = await response.json()
+  printfulCatalogCache = data.result || []
+  printfulCacheTime = now
+  return printfulCatalogCache
+}
+
 async function searchPrintful(query) {
   const apiKey = process.env.PRINTFUL_API_KEY
   if (!apiKey) {
@@ -310,22 +333,15 @@ async function searchPrintful(query) {
   }
 
   try {
-    // Printful catalog endpoint - get all available products
-    const response = await fetch('https://api.printful.com/products', {
-      headers: { 'Authorization': `Bearer ${apiKey}` },
-    })
-
-    if (!response.ok) throw new Error('Printful API error')
-
-    const data = await response.json()
+    const catalog = await fetchPrintfulCatalog(apiKey)
     const q = (query || '').toLowerCase()
 
-    // Filter catalog by search query
-    const filtered = (data.result || [])
+    // Filter catalog by search query (match title, type, brand, model)
+    const filtered = catalog
       .filter(p => {
-        const name = (p.title || '').toLowerCase()
-        const type = (p.type_name || '').toLowerCase()
-        return name.includes(q) || type.includes(q) || q.includes(type)
+        if (p.is_discontinued) return false
+        const fields = [p.title, p.type_name, p.brand, p.model].map(f => (f || '').toLowerCase())
+        return fields.some(f => f.includes(q) || q.includes(f))
       })
       .slice(0, 15)
 
@@ -336,28 +352,66 @@ async function searchPrintful(query) {
 }
 
 function normalisePrintfulProduct(p) {
-  const baseCost = p.avg_price || 15.00
+  // Printful catalog doesn't return pricing — use known base costs by product type
+  const baseCost = PRINTFUL_BASE_COSTS[p.type_name] || 15.00
+  const shipping = 4.50
   const suggestedPrice = Math.ceil(baseCost * 2.2 * 100) / 100
+  const fulfillmentDays = p.avg_fulfillment_time || 3
+  const deliveryDays = fulfillmentDays + 4 // fulfillment + shipping transit
+
   return {
     id: `pf_${p.id}`,
     title: p.title || 'Printful Product',
-    description: p.description || `Custom ${p.type_name || 'product'} — print your own design`,
+    description: p.description || `Custom ${p.type_name || 'product'} by ${p.brand || 'Printful'} — print your own design`,
     image: p.image || '',
     images: [p.image].filter(Boolean),
     cost: baseCost,
-    shipping: 4.50, // Printful avg US shipping
-    totalCost: Math.round((baseCost + 4.50) * 100) / 100,
+    shipping,
+    totalCost: Math.round((baseCost + shipping) * 100) / 100,
     suggestedPrice,
-    suggestedMargin: Math.round((suggestedPrice - baseCost - 4.50) * 100) / 100,
-    deliveryDays: 5,
+    suggestedMargin: Math.round((suggestedPrice - baseCost - shipping) * 100) / 100,
+    deliveryDays,
     supplier: 'Printful',
     supplierLogo: '🎨',
     sourceUrl: `https://www.printful.com/custom/${p.type_name?.toLowerCase().replace(/\s+/g, '-') || 'products'}`,
     minOrderQty: 1,
     category: p.type_name || 'Custom',
+    brand: p.brand || '',
+    variantCount: p.variant_count || 0,
     customisable: true,
     _live: true,
   }
+}
+
+// Approximate base costs by product type (Printful public pricing)
+const PRINTFUL_BASE_COSTS = {
+  'T-SHIRT': 9.50,
+  'HOODIE': 22.00,
+  'TANK TOP': 10.00,
+  'LONG SLEEVE SHIRT': 14.00,
+  'CROP TOP': 12.00,
+  'DRESS': 25.00,
+  'LEGGINGS': 22.00,
+  'SHORTS': 18.00,
+  'SWIMSUIT': 26.00,
+  'MUG': 6.50,
+  'POSTER': 7.00,
+  'CANVAS': 14.00,
+  'PHONE CASE': 8.50,
+  'TOTE BAG': 10.00,
+  'BACKPACK': 28.00,
+  'HAT': 12.00,
+  'BEANIE': 14.00,
+  'SOCKS': 8.00,
+  'FACE MASK': 6.00,
+  'PILLOW': 14.00,
+  'BLANKET': 30.00,
+  'STICKER': 2.00,
+  'NOTEBOOK': 10.00,
+  'MOUSE PAD': 8.00,
+  'APRON': 16.00,
+  'ONESIE': 12.00,
+  'KIDS T-SHIRT': 9.00,
 }
 
 // --- AliExpress (placeholder for future) ---
