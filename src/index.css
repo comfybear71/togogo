@@ -199,3 +199,15 @@ input:-webkit-autofill:focus {
   0% { letter-spacing: 0; opacity: 0; }
   100% { letter-spacing: 0.25em; opacity: 1; }
 }
+
+/* Quick-start card tap feedback */
+.quick-card {
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.quick-card:active {
+  transform: scale(0.96);
+  transition: transform 0.1s ease;
+}

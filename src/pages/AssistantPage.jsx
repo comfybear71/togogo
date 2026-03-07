@@ -1,22 +1,19 @@
-import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Send, Bot, User, Sparkles, Loader2 } from 'lucide-react'
 
 const SUGGESTIONS = [
-  'Find me trending products to sell',
-  'Best marketing strategy for a new store',
-  'Compare shipping rates for small parcels',
-  'How do I price my products competitively?',
+  { emoji: '🏷️', text: 'I want to start selling from home' },
+  { emoji: '🔥', text: 'What products are trending right now?' },
+  { emoji: '📦', text: 'How does dropshipping work?' },
+  { emoji: '💰', text: 'Give me easy side hustle ideas' },
 ]
 
 function formatMessage(text) {
-  // Simple markdown-like formatting for bold, bullets, and line breaks
   return text
     .split('\n')
     .map((line, i) => {
-      // Bold text
       let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      // Bullet points
       if (formatted.startsWith('- ') || formatted.startsWith('• ')) {
         formatted = `<span class="text-[#06D6A0] mr-1.5">•</span>${formatted.slice(2)}`
         return `<div key="${i}" class="flex items-start gap-0 pl-2 py-0.5">${formatted}</div>`
@@ -28,11 +25,13 @@ function formatMessage(text) {
 
 export default function AssistantPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const hasAutoSent = useRef(false)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -42,7 +41,7 @@ export default function AssistantPage() {
     inputRef.current?.focus()
   }, [])
 
-  const sendMessage = async (text) => {
+  const sendMessage = useCallback(async (text) => {
     const userMessage = text || input.trim()
     if (!userMessage || isLoading) return
 
@@ -63,9 +62,7 @@ export default function AssistantPage() {
         }),
       })
 
-      if (!res.ok) {
-        throw new Error('Failed to get response')
-      }
+      if (!res.ok) throw new Error('Failed to get response')
 
       const data = await res.json()
       setMessages((prev) => [
@@ -84,7 +81,16 @@ export default function AssistantPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [input, isLoading, messages])
+
+  // Auto-send prompt from URL param (when user taps a quick-start card)
+  useEffect(() => {
+    const startPrompt = searchParams.get('start')
+    if (startPrompt && !hasAutoSent.current && messages.length === 0) {
+      hasAutoSent.current = true
+      sendMessage(startPrompt)
+    }
+  }, [searchParams, messages.length, sendMessage])
 
   const handleSubmit = (e) => {
     e.preventDefault()
@@ -107,7 +113,7 @@ export default function AssistantPage() {
           </div>
           <div>
             <h1 className="text-sm font-semibold text-white leading-tight">ToGoGo AI</h1>
-            <p className="text-[11px] text-zinc-500">Powered by Claude</p>
+            <p className="text-[11px] text-zinc-500">Your personal selling assistant</p>
           </div>
         </div>
         <Sparkles className="ml-auto h-4 w-4 text-[#FFD23F]/40" />
@@ -115,7 +121,7 @@ export default function AssistantPage() {
 
       {/* ===== Messages Area ===== */}
       <div className="flex-1 overflow-y-auto px-6 py-8 space-y-5">
-        {messages.length === 0 ? (
+        {messages.length === 0 && !isLoading ? (
           <div className="flex flex-col items-center text-center pt-8 px-4">
             {/* Welcome state */}
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-6">
@@ -125,19 +131,19 @@ export default function AssistantPage() {
               How can I help?
             </h2>
             <p className="text-sm text-zinc-500 max-w-[280px] mb-10 leading-relaxed">
-              I can find deals, build marketing strategies, compare shipping rates, and more.
+              Just tap a button below — I'll do all the work for you.
             </p>
 
-            {/* Suggestion chips */}
+            {/* Suggestion chips — visual & tappable */}
             <div className="flex flex-col gap-3 w-full max-w-[300px]">
               {SUGGESTIONS.map((s) => (
                 <button
-                  key={s}
-                  onClick={() => sendMessage(s)}
-                  className="group text-left px-5 py-4 rounded-2xl bg-[#111] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-white/[0.12] hover:bg-[#161616] transition-all duration-300"
+                  key={s.text}
+                  onClick={() => sendMessage(s.text)}
+                  className="group text-left px-5 py-4 rounded-2xl bg-[#111] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-white/[0.12] hover:bg-[#161616] transition-all duration-300 active:scale-[0.98]"
                 >
-                  <span className="text-[#FF6B35] mr-2 opacity-50 group-hover:opacity-100 transition-opacity">→</span>
-                  {s}
+                  <span className="mr-3 text-lg">{s.emoji}</span>
+                  {s.text}
                 </button>
               ))}
             </div>
@@ -205,7 +211,7 @@ export default function AssistantPage() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything..."
+              placeholder="Type or just tap a button above..."
               disabled={isLoading}
               style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', padding: '14px 20px', fontSize: '14px', color: '#fff' }}
             />
