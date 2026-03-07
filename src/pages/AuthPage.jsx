@@ -1,173 +1,465 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuthStore } from '../stores/authStore'
-import Logo from '../components/layout/Logo'
-import Button from '../components/ui/Button'
-import Input from '../components/ui/Input'
-import { Mail, Lock, User, ShoppingBag, Store, ArrowRight } from 'lucide-react'
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Mail,
+  Lock,
+  User,
+  Eye,
+  EyeOff,
+  ShoppingBag,
+  Store,
+  Sparkles,
+  ArrowLeft,
+} from 'lucide-react';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import { useAuthStore } from '../stores/authStore';
 
 export default function AuthPage() {
-  const [mode, setMode] = useState('signin') // signin | role | signup
-  const [role, setRole] = useState(null)
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const { signIn, signUp, signInWithGoogle } = useAuthStore()
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user, signIn, signUp, signInWithGoogle } = useAuthStore();
+
+  const [tab, setTab] = useState(searchParams.get('tab') === 'signup' ? 'signup' : 'signin');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Sign-in form
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  // Sign-up form
+  const [signupStep, setSignupStep] = useState('role'); // 'role' | 'form'
+  const [role, setRole] = useState('');
+  const [name, setName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) navigate('/');
+  }, [user, navigate]);
 
   const handleSignIn = async (e) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError('');
+    setLoading(true);
     try {
-      await signIn(form.email, form.password)
-      navigate('/')
+      await signIn(email, password);
+      navigate('/');
     } catch (err) {
-      setError(err.message || 'Sign in failed. Please check your credentials.')
+      setError(err.message || 'Failed to sign in. Please check your credentials.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSignUp = async (e) => {
-    e.preventDefault()
-    setError('')
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match')
-      return
+    e.preventDefault();
+    setError('');
+
+    if (signupPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
     }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return
+    if (signupPassword.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
     }
-    setLoading(true)
+
+    setLoading(true);
     try {
-      await signUp(form.email, form.password, { name: form.name, role: role || 'buyer' })
-      navigate('/')
+      await signUp(signupEmail, signupPassword, { name, role });
+      navigate('/');
     } catch (err) {
-      setError(err.message || 'Sign up failed. Please try again.')
+      setError(err.message || 'Failed to create account.');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const handleGoogle = async () => {
+  const handleGoogleSignIn = async () => {
+    setError('');
     try {
-      await signInWithGoogle()
+      await signInWithGoogle();
     } catch (err) {
-      setError(err.message || 'Google sign in failed.')
+      setError(err.message || 'Google sign in failed.');
     }
-  }
+  };
 
-  const update = (field) => (e) => setForm({ ...form, [field]: e.target.value })
+  const ROLES = [
+    {
+      value: 'buyer',
+      label: 'BUY',
+      desc: 'Find amazing deals',
+      color: '#06D6A0',
+      icon: ShoppingBag,
+    },
+    {
+      value: 'seller',
+      label: 'SELL',
+      desc: 'Start your store',
+      color: '#FF6B35',
+      icon: Store,
+    },
+    {
+      value: 'both',
+      label: 'BOTH',
+      desc: 'Buy & sell freely',
+      color: '#FFD23F',
+      icon: Sparkles,
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#FF6B35]/5 via-white to-[#06D6A0]/5 flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#FF6B35]/5 via-white to-[#06D6A0]/5 px-4 py-12 dark:from-[#FF6B35]/5 dark:via-gray-950 dark:to-[#06D6A0]/5">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Logo size="lg" />
+        {/* Logo */}
+        <div className="mb-8 text-center">
+          <h1 className="font-['Baloo_2'] text-4xl font-bold">
+            <span className="text-[#FF6B35]">To</span>
+            <span className="text-[#06D6A0]">Go</span>
+            <span className="text-[#FFD23F]">Go</span>
+          </h1>
+          <p className="mt-1 font-['Nunito'] text-gray-500 dark:text-gray-400">
+            Your marketplace for amazing deals
+          </p>
         </div>
 
-        <div className="bg-white rounded-[16px] shadow-lg p-6 sm:p-8" style={{ boxShadow: '0 4px 20px rgba(255,107,53,0.1)' }}>
+        {/* Card */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+          {/* Tab Switcher */}
+          <div className="mb-6 flex rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
+            <button
+              onClick={() => { setTab('signin'); setError(''); }}
+              className={`flex-1 rounded-lg py-2 text-sm font-['Nunito'] font-bold transition-all ${
+                tab === 'signin'
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setTab('signup'); setSignupStep('role'); setError(''); }}
+              className={`flex-1 rounded-lg py-2 text-sm font-['Nunito'] font-bold transition-all ${
+                tab === 'signup'
+                  ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
           {/* Sign In */}
-          {mode === 'signin' && (
-            <>
-              <h2 className="font-heading text-2xl font-bold text-center mb-6">Welcome back</h2>
-              {error && <div className="bg-red-50 text-red-600 rounded-[8px] p-3 mb-4 text-sm">{error}</div>}
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <Input label="Email" type="email" value={form.email} onChange={update('email')} placeholder="your@email.com" required />
-                <Input label="Password" type="password" value={form.password} onChange={update('password')} placeholder="Your password" required />
-                <Button type="submit" variant="primary" className="w-full" loading={loading}>Sign In</Button>
-              </form>
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-                <div className="relative flex justify-center text-sm"><span className="bg-white px-4 text-gray-400">or</span></div>
+          {tab === 'signin' && (
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-700 transition-colors focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                  />
+                </div>
               </div>
-              <button onClick={handleGoogle} className="w-full flex items-center justify-center gap-3 border-2 border-gray-200 rounded-[12px] px-4 py-3 text-sm font-semibold hover:bg-gray-50 transition min-h-[44px]">
-                <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z"/></svg>
-                Continue with Google
+
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Your password"
+                    required
+                    className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-10 text-sm text-gray-700 transition-colors focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <button
+                  type="button"
+                  className="text-sm font-['Nunito'] font-semibold text-[#FF6B35] hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-[#FF6B35] py-3 font-semibold text-white hover:bg-[#e55a2b] disabled:opacity-60"
+              >
+                {loading ? 'Signing in...' : 'Sign In'}
+              </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-white px-2 text-gray-400 dark:bg-gray-900">or</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white py-3 font-['Nunito'] text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                    fill="#4285F4"
+                  />
+                  <path
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    fill="#34A853"
+                  />
+                  <path
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    fill="#FBBC05"
+                  />
+                  <path
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    fill="#EA4335"
+                  />
+                </svg>
+                Sign in with Google
               </button>
-              <p className="text-center text-sm text-gray-500 mt-6">
-                Don't have an account?{' '}
-                <button onClick={() => { setMode('role'); setError('') }} className="text-[#FF6B35] font-semibold hover:underline">Sign Up</button>
-              </p>
-            </>
+            </form>
           )}
 
-          {/* Role Selection */}
-          {mode === 'role' && (
+          {/* Sign Up */}
+          {tab === 'signup' && (
             <>
-              <h2 className="font-heading text-2xl font-bold text-center mb-2">What do you want to do?</h2>
-              <p className="text-center text-gray-500 text-sm mb-6">You can always change this later</p>
-              <div className="space-y-3">
-                <button onClick={() => { setRole('buyer'); setMode('signup') }} className="w-full flex items-center gap-4 p-4 rounded-[16px] border-2 border-transparent bg-[#06D6A0]/10 hover:border-[#06D6A0] transition group min-h-[44px]">
-                  <div className="w-12 h-12 rounded-full bg-[#06D6A0] flex items-center justify-center flex-shrink-0">
-                    <ShoppingBag className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-lg">Buy</p>
-                    <p className="text-sm text-gray-500">Find amazing deals and shop</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 ml-auto group-hover:text-[#06D6A0] transition" />
-                </button>
-                <button onClick={() => { setRole('seller'); setMode('signup') }} className="w-full flex items-center gap-4 p-4 rounded-[16px] border-2 border-transparent bg-[#FF6B35]/10 hover:border-[#FF6B35] transition group min-h-[44px]">
-                  <div className="w-12 h-12 rounded-full bg-[#FF6B35] flex items-center justify-center flex-shrink-0">
-                    <Store className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-lg">Sell</p>
-                    <p className="text-sm text-gray-500">List products and start earning</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 ml-auto group-hover:text-[#FF6B35] transition" />
-                </button>
-                <button onClick={() => { setRole('both'); setMode('signup') }} className="w-full flex items-center gap-4 p-4 rounded-[16px] border-2 border-transparent bg-[#FFD23F]/10 hover:border-[#FFD23F] transition group min-h-[44px]">
-                  <div className="w-12 h-12 rounded-full bg-[#FFD23F] flex items-center justify-center flex-shrink-0">
-                    <User className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-lg">Both</p>
-                    <p className="text-sm text-gray-500">Buy and sell — the full experience</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 ml-auto group-hover:text-[#FFD23F] transition" />
-                </button>
-              </div>
-              <p className="text-center text-sm text-gray-500 mt-6">
-                Already have an account?{' '}
-                <button onClick={() => { setMode('signin'); setError('') }} className="text-[#FF6B35] font-semibold hover:underline">Sign In</button>
-              </p>
-            </>
-          )}
+              {/* Role Selection */}
+              {signupStep === 'role' && (
+                <div>
+                  <h2 className="mb-2 text-center font-['Baloo_2'] text-xl font-bold text-gray-900 dark:text-white">
+                    What do you want to do?
+                  </h2>
+                  <p className="mb-6 text-center text-sm text-gray-500">
+                    You can always change this later
+                  </p>
 
-          {/* Sign Up Form */}
-          {mode === 'signup' && (
-            <>
-              <h2 className="font-heading text-2xl font-bold text-center mb-6">Create your account</h2>
-              {error && <div className="bg-red-50 text-red-600 rounded-[8px] p-3 mb-4 text-sm">{error}</div>}
-              <form onSubmit={handleSignUp} className="space-y-4">
-                <Input label="Full Name" type="text" value={form.name} onChange={update('name')} placeholder="Your name" required />
-                <Input label="Email" type="email" value={form.email} onChange={update('email')} placeholder="your@email.com" required />
-                <Input label="Password" type="password" value={form.password} onChange={update('password')} placeholder="At least 6 characters" required />
-                <Input label="Confirm Password" type="password" value={form.confirmPassword} onChange={update('confirmPassword')} placeholder="Confirm your password" required />
-                <Button type="submit" variant="primary" className="w-full" loading={loading}>Create Account</Button>
-              </form>
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-                <div className="relative flex justify-center text-sm"><span className="bg-white px-4 text-gray-400">or</span></div>
-              </div>
-              <button onClick={handleGoogle} className="w-full flex items-center justify-center gap-3 border-2 border-gray-200 rounded-[12px] px-4 py-3 text-sm font-semibold hover:bg-gray-50 transition min-h-[44px]">
-                <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z"/></svg>
-                Sign up with Google
-              </button>
-              <p className="text-center text-sm text-gray-500 mt-6">
-                <button onClick={() => { setMode('role'); setError('') }} className="text-[#FF6B35] font-semibold hover:underline">← Back</button>
-                {' · '}
-                Already have an account?{' '}
-                <button onClick={() => { setMode('signin'); setError('') }} className="text-[#FF6B35] font-semibold hover:underline">Sign In</button>
-              </p>
+                  <div className="space-y-3">
+                    {ROLES.map((r) => {
+                      const Icon = r.icon;
+                      return (
+                        <button
+                          key={r.value}
+                          onClick={() => { setRole(r.value); setSignupStep('form'); }}
+                          className="group flex w-full items-center gap-4 rounded-xl border-2 p-4 text-left transition-all hover:shadow-md"
+                          style={{
+                            borderColor: `${r.color}40`,
+                            backgroundColor: `${r.color}08`,
+                          }}
+                        >
+                          <div
+                            className="flex h-12 w-12 items-center justify-center rounded-xl"
+                            style={{ backgroundColor: `${r.color}20` }}
+                          >
+                            <Icon className="h-6 w-6" style={{ color: r.color }} />
+                          </div>
+                          <div className="flex-1">
+                            <p
+                              className="font-['Baloo_2'] text-lg font-bold"
+                              style={{ color: r.color }}
+                            >
+                              {r.label}
+                            </p>
+                            <p className="text-sm text-gray-500">{r.desc}</p>
+                          </div>
+                          <div
+                            className="h-5 w-5 rounded-full border-2 transition-colors group-hover:bg-current"
+                            style={{ borderColor: r.color, color: r.color }}
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Sign Up Form */}
+              {signupStep === 'form' && (
+                <form onSubmit={handleSignUp} className="space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => setSignupStep('role')}
+                    className="flex items-center gap-1 text-sm font-['Nunito'] font-semibold text-gray-500 hover:text-gray-700 dark:text-gray-400"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Change role
+                  </button>
+
+                  <div className="rounded-lg px-3 py-2 text-center text-sm font-semibold capitalize"
+                    style={{
+                      backgroundColor: `${ROLES.find((r) => r.value === role)?.color}15`,
+                      color: ROLES.find((r) => r.value === role)?.color,
+                    }}
+                  >
+                    Signing up as: {role}
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Name
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Your name"
+                        required
+                        className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-700 transition-colors focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Email
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="email"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                        className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-700 transition-colors focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        placeholder="Min 6 characters"
+                        required
+                        minLength={6}
+                        className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-10 text-sm text-gray-700 transition-colors focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Confirm your password"
+                        required
+                        className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm text-gray-700 transition-colors focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                      />
+                    </div>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-[#FF6B35] py-3 font-semibold text-white hover:bg-[#e55a2b] disabled:opacity-60"
+                  >
+                    {loading ? 'Creating account...' : 'Create Account'}
+                  </Button>
+
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="bg-white px-2 text-gray-400 dark:bg-gray-900">or</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white py-3 font-['Nunito'] text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24">
+                      <path
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                        fill="#4285F4"
+                      />
+                      <path
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        fill="#34A853"
+                      />
+                      <path
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        fill="#FBBC05"
+                      />
+                      <path
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        fill="#EA4335"
+                      />
+                    </svg>
+                    Sign up with Google
+                  </button>
+                </form>
+              )}
             </>
           )}
         </div>
+
+        <p className="mt-6 text-center text-xs text-gray-400">
+          By continuing, you agree to ToGoGo's Terms of Service and Privacy Policy.
+        </p>
       </div>
     </div>
-  )
+  );
 }
