@@ -102,6 +102,7 @@ export default function ProductDetailPage() {
   const [watchlisted, setWatchlisted] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Sort deals by total price (price + shipping), in-stock first
   const sortedDeals = useMemo(() => {
     if (!product?.deals) return [];
     return [...product.deals].sort((a, b) => {
@@ -115,6 +116,7 @@ export default function ProductDetailPage() {
 
   const bestDeal = sortedDeals.find((d) => d.in_stock);
 
+  // Format chart data
   const chartData = useMemo(() => {
     return priceHistory.map((p) => ({
       date: new Date(p.checked_at).toLocaleDateString('en-US', {
@@ -140,16 +142,20 @@ export default function ProductDetailPage() {
     return (
       <div className="min-h-screen bg-[#050505]">
         <div className="mx-auto max-w-5xl px-4 py-8">
-          <Skeleton className="h-8 w-40 rounded-xl mb-6" />
-          <div className="flex flex-col md:flex-row gap-8">
-            <Skeleton className="w-full md:w-80 h-80 rounded-2xl flex-shrink-0" />
-            <div className="flex-1 space-y-4">
-              <Skeleton className="h-12 w-3/4 rounded-xl" />
-              <Skeleton className="h-8 w-1/3 rounded-xl" />
-              <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-6 w-36 rounded-lg mb-6 bg-[#111]" />
+          <div className="rounded-2xl border border-white/5 bg-[#111] p-6 md:p-8 mb-6">
+            <div className="flex flex-col md:flex-row gap-8">
+              <Skeleton className="w-full md:w-80 h-80 rounded-2xl flex-shrink-0 bg-[#0a0a0a]" />
+              <div className="flex-1 space-y-4">
+                <Skeleton className="h-5 w-24 rounded-full bg-[#0a0a0a]" />
+                <Skeleton className="h-10 w-3/4 rounded-xl bg-[#0a0a0a]" />
+                <Skeleton className="h-6 w-1/3 rounded-xl bg-[#0a0a0a]" />
+                <Skeleton className="h-20 w-full rounded-xl bg-[#0a0a0a]" />
+              </div>
             </div>
           </div>
-          <Skeleton className="h-64 w-full rounded-2xl mt-8" />
+          <Skeleton className="h-32 w-full rounded-2xl mb-6 bg-[#111]" />
+          <Skeleton className="h-64 w-full rounded-2xl bg-[#111]" />
         </div>
       </div>
     );
@@ -161,19 +167,19 @@ export default function ProductDetailPage() {
     : '';
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-[#050505]">
       <div className="mx-auto max-w-5xl px-4 py-4 md:py-8">
         {/* Back link */}
         <Link
           to="/browse"
-          className="inline-flex items-center gap-1 text-zinc-500 hover:text-white font-semibold mb-6 text-base transition-colors"
+          className="inline-flex items-center gap-1 text-zinc-500 hover:text-white font-medium mb-6 text-sm transition-colors"
         >
-          <ChevronLeft className="w-5 h-5" />
-          Back
+          <ChevronLeft className="w-4 h-4" />
+          Back to browsing
         </Link>
 
-        {/* Product Header */}
-        <div className="bg-[#111] rounded-2xl border border-white/5 p-6 md:p-8 mb-6">
+        {/* ===== PRODUCT HEADER ===== */}
+        <div className="rounded-2xl border border-white/5 bg-[#111] p-6 md:p-8 mb-6">
           <div className="flex flex-col md:flex-row gap-6 md:gap-8">
             {/* Product Image */}
             <div className="flex-shrink-0 w-full md:w-72 lg:w-80">
@@ -186,7 +192,7 @@ export default function ProductDetailPage() {
                   />
                 ) : (
                   <div className="text-center p-8">
-                    <Package className="w-16 h-16 text-zinc-700 mx-auto mb-3" />
+                    <Package className="w-16 h-16 text-zinc-800 mx-auto mb-3" />
                     <p className="text-zinc-600 text-sm font-medium">No image</p>
                   </div>
                 )}
@@ -195,19 +201,23 @@ export default function ProductDetailPage() {
 
             {/* Product Info */}
             <div className="flex-1 min-w-0">
+              {/* Category badge */}
               {categoryLabel && (
                 <span className="inline-block bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-bold px-3 py-1 rounded-full mb-3">
                   {categoryLabel}
                 </span>
               )}
-              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
+              {/* Product name */}
+              <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 leading-tight">
                 {product.name}
               </h1>
+              {/* Brand */}
               {product.brand && (
-                <p className="text-lg text-zinc-500 font-medium mb-4">
+                <p className="text-lg text-zinc-400 font-medium mb-4">
                   by {product.brand}
                 </p>
               )}
+              {/* Description */}
               {product.description && (
                 <p className="text-base text-zinc-400 leading-relaxed">
                   {product.description}
@@ -217,24 +227,26 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Best Price Banner */}
+        {/* ===== BEST PRICE BANNER ===== */}
         {bestDeal && (
-          <div className="bg-gradient-to-r from-[#06D6A0]/10 to-[#06D6A0]/5 border border-[#06D6A0]/20 rounded-2xl p-6 md:p-8 mb-6">
+          <div className="rounded-2xl bg-gradient-to-r from-[#06D6A0]/10 to-[#06D6A0]/5 border border-[#06D6A0]/20 p-6 md:p-8 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <p className="text-[#06D6A0]/70 text-sm font-medium mb-1 uppercase tracking-wide">Best Price Available</p>
+                <p className="text-zinc-400 text-sm font-medium mb-1">Best Price Available</p>
                 <p className="text-4xl md:text-5xl font-bold text-[#06D6A0] mb-1">
                   ${bestDeal.price.toFixed(2)}
                 </p>
                 <p className="text-zinc-400 text-base">
-                  from <span className="font-bold text-white">{bestDeal.retailer?.name}</span>
-                  {bestDeal.shipping_cost === 0 && ' — Free Shipping'}
+                  from <span className="font-semibold text-white">{bestDeal.retailer?.name}</span>
+                  {bestDeal.shipping_cost === 0 && (
+                    <span className="text-[#06D6A0] ml-1">-- Free Shipping</span>
+                  )}
                 </p>
                 {bestDeal.original_price && bestDeal.original_price > bestDeal.price && (
                   <p className="text-zinc-500 text-sm mt-1">
                     <span className="line-through">${bestDeal.original_price.toFixed(2)}</span>
                     {' '}
-                    <span className="bg-[#06D6A0]/10 text-[#06D6A0] rounded-full px-2 py-0.5 text-xs font-bold">
+                    <span className="bg-[#FF6B35]/10 text-[#FF6B35] rounded-full px-2 py-0.5 text-xs font-bold">
                       Save ${(bestDeal.original_price - bestDeal.price).toFixed(2)}
                     </span>
                   </p>
@@ -244,7 +256,7 @@ export default function ProductDetailPage() {
                 href={bestDeal.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 bg-[#06D6A0] text-black hover:bg-[#05c494] font-bold text-lg px-8 py-4 rounded-xl transition-colors flex-shrink-0"
+                className="inline-flex items-center gap-3 bg-[#06D6A0] text-black hover:brightness-110 font-bold text-lg px-8 py-4 rounded-xl transition-all flex-shrink-0"
               >
                 Go to Store
                 <ExternalLink className="w-5 h-5" />
@@ -253,14 +265,15 @@ export default function ProductDetailPage() {
           </div>
         )}
 
-        {/* Price Comparison Table */}
-        <div className="bg-[#111] rounded-2xl border border-white/5 mb-6">
+        {/* ===== PRICE COMPARISON TABLE ===== */}
+        <div className="rounded-2xl border border-white/5 bg-[#111] mb-6">
           <div className="p-6 md:p-8 border-b border-white/5">
             <h2 className="text-xl md:text-2xl font-bold text-white">
-              Compare Prices
+              Compare Prices Across Stores
             </h2>
             <p className="text-sm text-zinc-500 mt-1">
-              {sortedDeals.length} retailer{sortedDeals.length !== 1 && 's'} compared
+              {sortedDeals.length} retailer{sortedDeals.length !== 1 && 's'} compared -- sorted by
+              lowest total price
             </p>
           </div>
 
@@ -269,12 +282,12 @@ export default function ProductDetailPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-[#0a0a0a] text-left">
-                  <th className="px-8 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Retailer</th>
-                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Price</th>
-                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Shipping</th>
-                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Total</th>
-                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Stock</th>
-                  <th className="px-8 py-3"></th>
+                  <th className="px-8 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Retailer</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Shipping</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider">Stock</th>
+                  <th className="px-8 py-4 text-xs font-semibold text-zinc-500 uppercase tracking-wider"></th>
                 </tr>
               </thead>
               <tbody>
@@ -290,9 +303,10 @@ export default function ProductDetailPage() {
                           : 'hover:bg-white/[0.02]'
                       } ${!deal.in_stock ? 'opacity-40' : ''}`}
                     >
-                      <td className="px-8 py-4">
+                      {/* Retailer */}
+                      <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-zinc-400 flex-shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-[#0a0a0a] border border-white/5 flex items-center justify-center text-xs font-bold text-zinc-500 flex-shrink-0">
                             {deal.retailer?.name?.charAt(0) || '?'}
                           </div>
                           <div>
@@ -302,13 +316,14 @@ export default function ProductDetailPage() {
                             <p className="text-xs text-zinc-600">{deal.retailer?.domain}</p>
                           </div>
                           {isBest && (
-                            <span className="bg-[#06D6A0]/10 text-[#06D6A0] text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 uppercase">
+                            <span className="bg-[#06D6A0]/10 text-[#06D6A0] text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 uppercase tracking-wider">
                               Best
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      {/* Price */}
+                      <td className="px-6 py-5">
                         <span className="text-lg font-bold text-white">
                           ${deal.price.toFixed(2)}
                         </span>
@@ -318,16 +333,18 @@ export default function ProductDetailPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      {/* Shipping */}
+                      <td className="px-6 py-5">
                         <span className="text-sm font-medium text-zinc-400">
                           {deal.shipping_cost === 0 ? (
-                            <span className="text-[#06D6A0] font-bold">FREE</span>
+                            <span className="text-[#06D6A0] font-semibold">FREE</span>
                           ) : (
                             `$${deal.shipping_cost.toFixed(2)}`
                           )}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      {/* Total */}
+                      <td className="px-6 py-5">
                         <span
                           className={`text-lg font-bold ${
                             isBest ? 'text-[#06D6A0]' : 'text-white'
@@ -336,27 +353,29 @@ export default function ProductDetailPage() {
                           ${total.toFixed(2)}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      {/* Stock */}
+                      <td className="px-6 py-5">
                         {deal.in_stock ? (
-                          <span className="inline-flex items-center gap-1 text-[#06D6A0] font-semibold text-sm">
-                            <Check className="w-4 h-4" />
+                          <span className="inline-flex items-center gap-1 text-[#06D6A0] font-medium text-xs">
+                            <Check className="w-3.5 h-3.5" />
                             In Stock
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-red-400 font-semibold text-sm">
-                            <XCircle className="w-4 h-4" />
+                          <span className="inline-flex items-center gap-1 text-zinc-500 font-medium text-xs">
+                            <XCircle className="w-3.5 h-3.5" />
                             Out of Stock
                           </span>
                         )}
                       </td>
-                      <td className="px-8 py-4">
+                      {/* Buy Button */}
+                      <td className="px-8 py-5">
                         <a
                           href={deal.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl transition-colors ${
+                          className={`inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl transition-all ${
                             deal.in_stock
-                              ? 'bg-[#FF6B35] hover:bg-[#e55a2b] text-white'
+                              ? 'bg-[#FF6B35] hover:brightness-110 text-white'
                               : 'bg-white/5 text-zinc-600 cursor-not-allowed pointer-events-none'
                           }`}
                         >
@@ -385,29 +404,31 @@ export default function ProductDetailPage() {
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-zinc-400">
+                      <div className="w-8 h-8 rounded-full bg-[#0a0a0a] border border-white/5 flex items-center justify-center text-xs font-bold text-zinc-500">
                         {deal.retailer?.name?.charAt(0) || '?'}
                       </div>
-                      <p className="text-base font-semibold text-white">{deal.retailer?.name}</p>
+                      <div>
+                        <p className="text-base font-semibold text-white">{deal.retailer?.name}</p>
+                      </div>
                       {isBest && (
-                        <span className="bg-[#06D6A0]/10 text-[#06D6A0] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                        <span className="bg-[#06D6A0]/10 text-[#06D6A0] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                           Best
                         </span>
                       )}
                     </div>
                     {deal.in_stock ? (
-                      <span className="text-[#06D6A0] font-semibold text-xs flex items-center gap-1">
+                      <span className="text-[#06D6A0] font-medium text-xs flex items-center gap-1">
                         <Check className="w-3.5 h-3.5" /> In Stock
                       </span>
                     ) : (
-                      <span className="text-red-400 font-semibold text-xs flex items-center gap-1">
+                      <span className="text-zinc-500 font-medium text-xs flex items-center gap-1">
                         <XCircle className="w-3.5 h-3.5" /> Out of Stock
                       </span>
                     )}
                   </div>
                   <div className="flex items-end justify-between">
                     <div>
-                      <div className="flex items-baseline gap-2">
+                      <div className="flex items-baseline gap-3">
                         <span className="text-xl font-bold text-white">
                           ${deal.price.toFixed(2)}
                         </span>
@@ -420,13 +441,13 @@ export default function ProductDetailPage() {
                       <p className="text-xs text-zinc-500 mt-0.5">
                         Shipping:{' '}
                         {deal.shipping_cost === 0 ? (
-                          <span className="text-[#06D6A0] font-bold">FREE</span>
+                          <span className="text-[#06D6A0] font-semibold">FREE</span>
                         ) : (
                           `$${deal.shipping_cost.toFixed(2)}`
                         )}
-                        {' · '}
+                        {' | '}
                         Total:{' '}
-                        <span className={`font-bold ${isBest ? 'text-[#06D6A0]' : 'text-white'}`}>
+                        <span className={`font-bold ${isBest ? 'text-[#06D6A0]' : 'text-zinc-300'}`}>
                           ${total.toFixed(2)}
                         </span>
                       </p>
@@ -435,13 +456,13 @@ export default function ProductDetailPage() {
                       href={deal.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 font-bold text-sm px-4 py-2.5 rounded-xl transition-colors ${
+                      className={`inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl transition-all ${
                         deal.in_stock
-                          ? 'bg-[#FF6B35] hover:bg-[#e55a2b] text-white'
+                          ? 'bg-[#FF6B35] hover:brightness-110 text-white'
                           : 'bg-white/5 text-zinc-600 cursor-not-allowed pointer-events-none'
                       }`}
                     >
-                      Buy <ExternalLink className="w-3.5 h-3.5" />
+                      Buy <ExternalLink className="w-4 h-4" />
                     </a>
                   </div>
                 </div>
@@ -450,14 +471,13 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Price History Chart */}
-        <div className="bg-[#111] rounded-2xl border border-white/5 p-6 md:p-8 mb-6">
+        {/* ===== PRICE HISTORY CHART ===== */}
+        <div className="rounded-2xl border border-white/5 bg-[#111] p-6 md:p-8 mb-6">
           <div className="flex items-center gap-3 mb-6">
-            <TrendingDown className="w-5 h-5 text-[#06D6A0]" />
+            <TrendingDown className="w-5 h-5 text-[#FF6B35]" />
             <h2 className="text-lg md:text-xl font-bold text-white">
-              Price History
+              Price History (Last 30 Days)
             </h2>
-            <span className="text-xs text-zinc-600">Last 30 days</span>
           </div>
           <div className="w-full h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -471,13 +491,13 @@ export default function ProductDetailPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12, fill: '#52525b' }}
+                  tick={{ fontSize: 11, fill: '#71717a' }}
                   tickLine={false}
                   axisLine={{ stroke: '#1e1e1e' }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 12, fill: '#52525b' }}
+                  tick={{ fontSize: 11, fill: '#71717a' }}
                   tickLine={false}
                   axisLine={{ stroke: '#1e1e1e' }}
                   tickFormatter={(v) => `$${v}`}
@@ -486,12 +506,15 @@ export default function ProductDetailPage() {
                 />
                 <Tooltip
                   contentStyle={{
-                    fontSize: '14px',
-                    borderRadius: '8px',
+                    fontSize: '13px',
+                    borderRadius: '10px',
                     backgroundColor: '#1a1a1a',
                     border: '1px solid #2a2a2a',
-                    color: '#d4d4d8',
+                    color: '#fff',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                   }}
+                  itemStyle={{ color: '#FF6B35' }}
+                  labelStyle={{ color: '#71717a', fontSize: '11px' }}
                   formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
                 />
                 <Area
@@ -501,37 +524,39 @@ export default function ProductDetailPage() {
                   strokeWidth={2}
                   fill="url(#priceGradient)"
                   dot={false}
-                  activeDot={{ r: 5, fill: '#06D6A0', stroke: '#111', strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: '#FF6B35', stroke: '#050505', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Actions */}
+        {/* ===== WATCHLIST & SHARE ACTIONS ===== */}
         <div className="flex flex-col sm:flex-row gap-3 mb-12">
+          {/* Add to Watchlist */}
           <button
             onClick={() => setWatchlisted(!watchlisted)}
-            className={`flex-1 inline-flex items-center justify-center gap-3 text-base font-bold px-6 py-4 rounded-xl transition-all ${
+            className={`flex-1 inline-flex items-center justify-center gap-2.5 text-sm font-bold px-6 py-4 rounded-xl transition-all ${
               watchlisted
-                ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                ? 'bg-[#FF6B35]/10 border border-[#FF6B35]/30 text-[#FF6B35]'
                 : 'bg-[#111] border border-white/5 text-zinc-300 hover:border-white/10'
             }`}
           >
             <Heart
-              className={`w-5 h-5 ${watchlisted ? 'fill-red-400 text-red-400' : ''}`}
+              className={`w-5 h-5 ${watchlisted ? 'fill-[#FF6B35] text-[#FF6B35]' : ''}`}
             />
-            {watchlisted ? 'Watching' : 'Watch for Price Drops'}
+            {watchlisted ? 'Watching for Price Drops' : 'Watch for Price Drops'}
           </button>
 
+          {/* Share / Copy Link */}
           <button
             onClick={handleShare}
-            className="inline-flex items-center justify-center gap-3 text-base font-bold px-6 py-4 rounded-xl bg-[#111] border border-white/5 text-zinc-300 hover:border-white/10 transition-all"
+            className="inline-flex items-center justify-center gap-2.5 text-sm font-bold px-6 py-4 rounded-xl bg-[#111] border border-white/5 text-zinc-300 hover:border-white/10 transition-all"
           >
             {copied ? (
               <>
                 <Check className="w-5 h-5 text-[#06D6A0]" />
-                Copied!
+                Link Copied
               </>
             ) : (
               <>
