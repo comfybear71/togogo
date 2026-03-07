@@ -62,10 +62,10 @@ export default function HomePage() {
 
         {/* === Search — narrower, centrepiece === */}
         <form onSubmit={handleSearch} className="fade-up" style={{ marginTop: '56px', width: '75%', maxWidth: '260px', animationDelay: '1s' }}>
-          <div className={`relative rounded-full transition-all duration-500 ${isFocused ? 'bg-[#1a1a1a] shadow-[0_0_0_1px_rgba(255,107,53,0.25),0_0_40px_rgba(255,107,53,0.06)]' : 'bg-[#1a1a1a] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]'}`}>
+          <div className={`relative rounded-full transition-all duration-500 ${isFocused ? 'bg-[#222] shadow-[0_0_0_1px_rgba(255,107,53,0.25),0_0_40px_rgba(255,107,53,0.06)]' : 'bg-[#222] shadow-[0_0_0_1px_rgba(255,255,255,0.1)]'}`}>
             <div className="flex items-center">
-              <div className="pl-4">
-                <Search className={`h-4 w-4 transition-colors duration-300 ${isFocused ? 'text-[#FF6B35]' : 'text-zinc-600'}`} />
+              <div className="pl-5">
+                <Search className={`h-4.5 w-4.5 transition-colors duration-300 ${isFocused ? 'text-[#FF6B35]' : 'text-zinc-500'}`} />
               </div>
               <input
                 ref={inputRef}
@@ -75,7 +75,7 @@ export default function HomePage() {
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder="Search for anything..."
-                className="flex-1 bg-transparent py-5 px-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none"
+                className="flex-1 bg-transparent py-6 px-3 text-sm text-white placeholder:text-zinc-400 focus:outline-none"
               />
               {searchQuery.trim() && (
                 <button type="submit" className="mr-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#FF6B35] text-white transition-all hover:scale-110 active:scale-95">
@@ -93,7 +93,7 @@ export default function HomePage() {
             className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all duration-300"
             style={{ background: 'linear-gradient(135deg, #FF6B35, #FFD23F, #06D6A0)', backgroundSize: '200% 200%', animation: 'gradient-shift 4s ease infinite' }}
           >
-            <div className="flex items-center gap-3 rounded-[15px] bg-[#0a0a0a] px-4 py-5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
+            <div className="flex items-center gap-3 rounded-[15px] bg-[#0a0a0a] px-5 py-5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#06D6A0]/20">
                 <Bot className="h-4.5 w-4.5 text-[#FF6B35]" />
               </div>

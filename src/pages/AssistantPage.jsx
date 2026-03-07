@@ -114,29 +114,29 @@ export default function AssistantPage() {
       </div>
 
       {/* ===== Messages Area ===== */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-6 py-8 space-y-5">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-2">
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
             {/* Welcome state */}
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-6">
-              <Bot className="h-8 w-8 text-[#FF6B35]" />
+            <div className="flex h-18 w-18 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-8">
+              <Bot className="h-9 w-9 text-[#FF6B35]" />
             </div>
-            <h2 className="font-heading text-2xl font-bold text-white mb-3">
+            <h2 className="font-heading text-2xl font-bold text-white mb-4">
               How can I help?
             </h2>
-            <p className="text-sm text-zinc-500 max-w-[260px] mb-10 leading-relaxed">
+            <p className="text-sm text-zinc-500 max-w-[280px] mb-12 leading-relaxed">
               I can find deals, build marketing strategies, compare shipping rates, and more.
             </p>
 
             {/* Suggestion chips */}
-            <div className="flex flex-col gap-3 w-full max-w-[280px]">
+            <div className="flex flex-col gap-4 w-full max-w-[300px]">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   onClick={() => sendMessage(s)}
-                  className="group text-left px-5 py-4 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-[#FF6B35]/20 hover:bg-[#111] transition-all duration-300"
+                  className="group text-left px-6 py-5 rounded-2xl bg-[#111] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-[#FF6B35]/20 hover:bg-[#161616] transition-all duration-300"
                 >
-                  <span className="text-[#FF6B35] mr-2 opacity-50 group-hover:opacity-100 transition-opacity">→</span>
+                  <span className="text-[#FF6B35] mr-2.5 opacity-50 group-hover:opacity-100 transition-opacity">→</span>
                   {s}
                 </button>
               ))}
@@ -155,7 +155,7 @@ export default function AssistantPage() {
                   </div>
                 )}
                 <div
-                  className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                  className={`max-w-[78%] rounded-2xl px-5 py-4 text-sm leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-[#FF6B35] text-white rounded-br-md'
                       : 'bg-[#111] text-zinc-200 border border-white/[0.06] rounded-bl-md'
@@ -197,9 +197,9 @@ export default function AssistantPage() {
       </div>
 
       {/* ===== Input Area ===== */}
-      <div className="border-t border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl px-6 py-4 pb-safe">
-        <form onSubmit={handleSubmit} className="flex items-center gap-3 max-w-[340px] mx-auto">
-          <div className="flex-1 flex items-center rounded-2xl bg-[#1a1a1a] border border-white/[0.06] focus-within:border-[#FF6B35]/25 transition-colors">
+      <div className="border-t border-white/[0.06] bg-[#0a0a0a]/90 backdrop-blur-xl px-6 py-5" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+        <form onSubmit={handleSubmit} className="flex items-center gap-3 max-w-[360px] mx-auto">
+          <div className="flex-1 flex items-center rounded-2xl bg-[#1a1a1a] border border-white/[0.08] focus-within:border-[#FF6B35]/30 transition-colors">
             <input
               ref={inputRef}
               type="text"
@@ -213,9 +213,9 @@ export default function AssistantPage() {
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FF6B35] text-white transition-all hover:scale-105 hover:shadow-[0_0_25px_rgba(255,107,53,0.25)] active:scale-95 disabled:opacity-30 disabled:hover:scale-100 disabled:hover:shadow-none"
+            className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FF6B35] text-white transition-all hover:scale-105 hover:shadow-[0_0_25px_rgba(255,107,53,0.25)] active:scale-95 disabled:opacity-30 disabled:hover:scale-100 disabled:hover:shadow-none"
           >
-            <Send className="h-4 w-4" />
+            <Send className="h-4.5 w-4.5" />
           </button>
         </form>
       </div>

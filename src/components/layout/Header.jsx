@@ -7,7 +7,7 @@ export default function Header() {
 
   return (
     <header className="fixed top-0 inset-x-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-b border-white/5">
-      <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-4">
+      <div className="max-w-6xl mx-auto flex items-center justify-between h-16 px-6">
         {/* Logo */}
         <Link to="/" className="shrink-0">
           <Logo size="sm" />
