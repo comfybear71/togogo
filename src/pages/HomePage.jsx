@@ -62,7 +62,7 @@ export default function HomePage() {
 
         {/* === Search — narrower, centrepiece === */}
         <form onSubmit={handleSearch} className="fade-up" style={{ marginTop: '56px', width: '75%', maxWidth: '260px', animationDelay: '1s' }}>
-          <div className={`relative rounded-full transition-all duration-500 ${isFocused ? 'bg-[#0e0e0e] shadow-[0_0_0_1px_rgba(255,107,53,0.25),0_0_40px_rgba(255,107,53,0.06)]' : 'bg-[#0e0e0e] shadow-[0_0_0_1px_rgba(255,255,255,0.06)]'}`}>
+          <div className={`relative rounded-full transition-all duration-500 ${isFocused ? 'bg-[#1a1a1a] shadow-[0_0_0_1px_rgba(255,107,53,0.25),0_0_40px_rgba(255,107,53,0.06)]' : 'bg-[#1a1a1a] shadow-[0_0_0_1px_rgba(255,255,255,0.08)]'}`}>
             <div className="flex items-center">
               <div className="pl-4">
                 <Search className={`h-4 w-4 transition-colors duration-300 ${isFocused ? 'text-[#FF6B35]' : 'text-zinc-600'}`} />
@@ -75,7 +75,7 @@ export default function HomePage() {
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder="Search for anything..."
-                className="flex-1 bg-transparent py-4 px-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none"
+                className="flex-1 bg-transparent py-5 px-3 text-sm text-white placeholder:text-zinc-500 focus:outline-none"
               />
               {searchQuery.trim() && (
                 <button type="submit" className="mr-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#FF6B35] text-white transition-all hover:scale-110 active:scale-95">

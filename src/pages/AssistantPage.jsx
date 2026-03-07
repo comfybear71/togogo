@@ -118,23 +118,23 @@ export default function AssistantPage() {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-2">
             {/* Welcome state */}
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-5">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-6">
               <Bot className="h-8 w-8 text-[#FF6B35]" />
             </div>
-            <h2 className="font-heading text-xl font-bold text-white mb-2">
+            <h2 className="font-heading text-2xl font-bold text-white mb-3">
               How can I help?
             </h2>
-            <p className="text-sm text-zinc-500 max-w-xs mb-8">
+            <p className="text-sm text-zinc-500 max-w-[260px] mb-10 leading-relaxed">
               I can find deals, build marketing strategies, compare shipping rates, and more.
             </p>
 
             {/* Suggestion chips */}
-            <div className="flex flex-col gap-2 w-full max-w-xs">
+            <div className="flex flex-col gap-3 w-full max-w-[280px]">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
                   onClick={() => sendMessage(s)}
-                  className="group text-left px-4 py-3 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-[#FF6B35]/20 hover:bg-[#111] transition-all duration-300"
+                  className="group text-left px-5 py-4 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-[#FF6B35]/20 hover:bg-[#111] transition-all duration-300"
                 >
                   <span className="text-[#FF6B35] mr-2 opacity-50 group-hover:opacity-100 transition-opacity">→</span>
                   {s}
@@ -197,9 +197,9 @@ export default function AssistantPage() {
       </div>
 
       {/* ===== Input Area ===== */}
-      <div className="border-t border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl px-6 py-3 pb-safe">
-        <form onSubmit={handleSubmit} className="flex items-center gap-2">
-          <div className="flex-1 flex items-center rounded-2xl bg-[#0e0e0e] border border-white/[0.06] focus-within:border-[#FF6B35]/25 transition-colors">
+      <div className="border-t border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl px-6 py-4 pb-safe">
+        <form onSubmit={handleSubmit} className="flex items-center gap-3 max-w-[340px] mx-auto">
+          <div className="flex-1 flex items-center rounded-2xl bg-[#1a1a1a] border border-white/[0.06] focus-within:border-[#FF6B35]/25 transition-colors">
             <input
               ref={inputRef}
               type="text"
@@ -207,7 +207,7 @@ export default function AssistantPage() {
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask anything..."
               disabled={isLoading}
-              className="flex-1 bg-transparent px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none disabled:opacity-50"
+              className="flex-1 bg-transparent px-5 py-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none disabled:opacity-50"
             />
           </div>
           <button
