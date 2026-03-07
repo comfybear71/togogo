@@ -3,12 +3,12 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import cron from 'node-cron'
+import dealsRoutes from './routes/deals.js'
+import pricesRoutes from './routes/prices.js'
 import stripeRoutes from './routes/stripe.js'
-import ordersRoutes from './routes/orders.js'
-import aiRoutes from './routes/ai.js'
-import shippingRoutes from './routes/shipping.js'
-import dropshipRoutes from './routes/dropship.js'
 import adminRoutes from './routes/admin.js'
+import aiRoutes from './routes/ai.js'
 
 const app = express()
 const PORT = process.env.PORT || 3001
@@ -40,16 +40,37 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'togogo-api', timestamp: new Date().toISOString() })
+  res.json({
+    status: 'ok',
+    service: 'togogo-price-comparison-api',
+    timestamp: new Date().toISOString(),
+  })
 })
 
 // Routes
+app.use('/api/deals', dealsRoutes)
+app.use('/api/prices', pricesRoutes)
 app.use('/api/stripe', stripeRoutes)
-app.use('/api/orders', ordersRoutes)
-app.use('/api/ai', aiRoutes)
-app.use('/api/shipping', shippingRoutes)
-app.use('/api/dropship', dropshipRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/ai', aiRoutes)
+
+// Schedule price checks (3 times per day: 6am, 12pm, 6pm)
+cron.schedule('0 6,12,18 * * *', async () => {
+  console.log('[CRON] Running scheduled price check...')
+  try {
+    const response = await fetch(`http://localhost:${PORT}/api/prices/check-all`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.CRON_SECRET || 'internal-cron'}`,
+      },
+    })
+    const result = await response.json()
+    console.log(`[CRON] Price check complete: ${result.checked} checked, ${result.updated} updated`)
+  } catch (err) {
+    console.error('[CRON] Price check failed:', err.message)
+  }
+})
 
 // Error handler
 app.use((err, req, res, _next) => {
@@ -62,5 +83,5 @@ app.use((err, req, res, _next) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`ToGoGo API running on port ${PORT}`)
+  console.log(`ToGoGo Price Comparison API running on port ${PORT}`)
 })

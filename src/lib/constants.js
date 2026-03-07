@@ -1,34 +1,42 @@
 export const CATEGORIES = [
-  { id: 'electronics', label: 'Electronics', icon: 'Smartphone' },
-  { id: 'fashion', label: 'Fashion', icon: 'Shirt' },
-  { id: 'home', label: 'Home', icon: 'Home' },
-  { id: 'garden', label: 'Garden', icon: 'Flower2' },
-  { id: 'sports', label: 'Sports', icon: 'Dumbbell' },
-  { id: 'toys', label: 'Toys', icon: 'Gamepad2' },
-  { id: 'health', label: 'Health', icon: 'Heart' },
-  { id: 'automotive', label: 'Automotive', icon: 'Car' },
-  { id: 'books', label: 'Books', icon: 'BookOpen' },
-  { id: 'food', label: 'Food', icon: 'UtensilsCrossed' },
+  { id: 'electronics', label: 'Electronics', icon: 'Smartphone', emoji: '📱' },
+  { id: 'fashion', label: 'Fashion', icon: 'Shirt', emoji: '👕' },
+  { id: 'home', label: 'Home & Garden', icon: 'Home', emoji: '🏠' },
+  { id: 'groceries', label: 'Groceries', icon: 'ShoppingBasket', emoji: '🛒' },
+  { id: 'health', label: 'Health & Beauty', icon: 'Heart', emoji: '💊' },
+  { id: 'sports', label: 'Sports', icon: 'Dumbbell', emoji: '⚽' },
+  { id: 'travel', label: 'Travel & Hotels', icon: 'Plane', emoji: '✈️' },
+  { id: 'automotive', label: 'Automotive', icon: 'Car', emoji: '🚗' },
+  { id: 'baby', label: 'Baby & Kids', icon: 'Baby', emoji: '👶' },
+  { id: 'books', label: 'Books & Media', icon: 'BookOpen', emoji: '📚' },
+  { id: 'pets', label: 'Pets', icon: 'PawPrint', emoji: '🐾' },
+  { id: 'food', label: 'Food & Drink', icon: 'UtensilsCrossed', emoji: '🍕' },
 ]
 
-export const CONDITIONS = ['New', 'Like New', 'Good', 'Fair']
-
-export const SHIPPING_TYPES = [
-  { id: 'free', label: 'Free Shipping', cost: 0 },
-  { id: 'small', label: 'Small ($5)', cost: 5 },
-  { id: 'medium', label: 'Medium ($10)', cost: 10 },
-  { id: 'large', label: 'Large ($20)', cost: 20 },
-  { id: 'pickup', label: 'Local Pickup', cost: 0 },
+export const SUBSCRIPTION_PLANS = [
+  { id: 'free', label: 'Free', price: 0, features: ['Daily deals', 'Basic search', '3 watchlist items'] },
+  { id: 'basic', label: 'Basic', price: 4.99, features: ['All free features', 'Price alerts', '20 watchlist items', 'Price history charts'] },
+  { id: 'premium', label: 'Premium', price: 9.99, features: ['All basic features', 'Unlimited watchlist', 'Priority alerts', 'Price predictions', 'Ad-free experience'] },
 ]
 
-export const PLATFORM_FEE_PERCENT = 8
+export const SORT_OPTIONS = [
+  { id: 'price_low', label: 'Price: Low to High' },
+  { id: 'price_high', label: 'Price: High to Low' },
+  { id: 'deal_score', label: 'Best Deal' },
+  { id: 'newest', label: 'Newest First' },
+  { id: 'popular', label: 'Most Popular' },
+]
 
-export const USER_ROLES = ['buyer', 'seller', 'both', 'admin']
+export const CURRENCIES = [
+  { code: 'USD', symbol: '$', label: 'US Dollar' },
+  { code: 'EUR', symbol: '€', label: 'Euro' },
+  { code: 'GBP', symbol: '£', label: 'British Pound' },
+  { code: 'AUD', symbol: 'A$', label: 'Australian Dollar' },
+  { code: 'CAD', symbol: 'C$', label: 'Canadian Dollar' },
+  { code: 'NZD', symbol: 'NZ$', label: 'New Zealand Dollar' },
+]
 
-export const ORDER_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'disputed', 'refunded']
-
-export const VERIFICATION_LEVELS = [
-  { level: 1, label: 'Email Verified', icon: 'Mail' },
-  { level: 2, label: 'Phone Verified', icon: 'Phone' },
-  { level: 3, label: 'ID Verified', icon: 'ShieldCheck' },
+export const RETAILERS = [
+  'Amazon', 'eBay', 'Walmart', 'Target', 'AliExpress', 'Temu',
+  'Best Buy', 'Costco', 'Kmart', 'Big W', 'Woolworths', 'Coles',
 ]

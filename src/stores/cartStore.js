@@ -1,50 +1,36 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
-export const useCartStore = create(
-  persist(
-    (set, get) => ({
-      items: [],
+export const useWatchlistStore = create((set, get) => ({
+  items: JSON.parse(localStorage.getItem('togogo_watchlist') || '[]'),
 
-      addItem: (product, quantity = 1) => {
-        const items = get().items
-        const existing = items.find(i => i.product.id === product.id)
-        if (existing) {
-          set({
-            items: items.map(i =>
-              i.product.id === product.id
-                ? { ...i, quantity: i.quantity + quantity }
-                : i
-            )
-          })
-        } else {
-          set({ items: [...items, { product, quantity }] })
-        }
-      },
+  addItem: (product) => {
+    const items = get().items
+    if (items.find((i) => i.id === product.id)) return
+    const updated = [...items, { ...product, addedAt: new Date().toISOString(), targetPrice: null }]
+    localStorage.setItem('togogo_watchlist', JSON.stringify(updated))
+    set({ items: updated })
+  },
 
-      removeItem: (productId) => {
-        set({ items: get().items.filter(i => i.product.id !== productId) })
-      },
+  removeItem: (productId) => {
+    const updated = get().items.filter((i) => i.id !== productId)
+    localStorage.setItem('togogo_watchlist', JSON.stringify(updated))
+    set({ items: updated })
+  },
 
-      updateQuantity: (productId, quantity) => {
-        if (quantity <= 0) return get().removeItem(productId)
-        set({
-          items: get().items.map(i =>
-            i.product.id === productId ? { ...i, quantity } : i
-          )
-        })
-      },
+  setTargetPrice: (productId, price) => {
+    const updated = get().items.map((i) =>
+      i.id === productId ? { ...i, targetPrice: price } : i
+    )
+    localStorage.setItem('togogo_watchlist', JSON.stringify(updated))
+    set({ items: updated })
+  },
 
-      clearCart: () => set({ items: [] }),
+  isWatching: (productId) => get().items.some((i) => i.id === productId),
 
-      getTotal: () => {
-        return get().items.reduce((sum, i) => sum + i.product.price * i.quantity, 0)
-      },
+  getItemCount: () => get().items.length,
 
-      getItemCount: () => {
-        return get().items.reduce((sum, i) => sum + i.quantity, 0)
-      },
-    }),
-    { name: 'togogo-cart' }
-  )
-)
+  clearAll: () => {
+    localStorage.removeItem('togogo_watchlist')
+    set({ items: [] })
+  },
+}))

@@ -1,4 +1,4 @@
--- ToGoGo Database Schema
+-- ToGoGo Database Schema - Global Price Comparison Platform
 -- Run this in your Supabase SQL editor to set up the database
 
 -- Enable UUID extension
@@ -15,7 +15,7 @@ create table if not exists public.users (
   bio text default '',
   location_suburb text default '',
   location_country text default 'Australia',
-  role text not null default 'buyer' check (role in ('buyer', 'seller', 'both', 'admin')),
+  role text not null default 'buyer' check (role in ('buyer', 'subscriber', 'both', 'admin')),
   trust_score numeric(5,2) default 0,
   stripe_account_id text,
   wallet_balance numeric(10,2) default 0,
@@ -26,107 +26,135 @@ create table if not exists public.users (
 );
 
 -- ============================================
--- SUPPLIERS TABLE (must be created before products)
+-- RETAILERS TABLE (Shopping portals we aggregate from)
 -- ============================================
-create table if not exists public.suppliers (
+create table if not exists public.retailers (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
-  api_type text default 'manual' check (api_type in ('aliexpress', 'cj', 'zendrop', 'spocket', 'manual')),
-  api_key_encrypted text,
-  base_shipping_cost numeric(10,2) default 0,
-  avg_delivery_days integer default 14,
+  domain text not null,
+  country text not null default '',
+  logo_url text,
+  api_type text not null default 'scrape' check (api_type in ('api', 'scrape', 'affiliate')),
+  api_config jsonb default '{}',
   is_active boolean default true,
   created_at timestamptz default now()
 );
 
 -- ============================================
--- PRODUCTS TABLE
+-- CATEGORIES TABLE
+-- ============================================
+create table if not exists public.categories (
+  id text primary key,
+  name text not null,
+  icon text,
+  parent_id text references public.categories(id) on delete set null,
+  sort_order integer default 0,
+  created_at timestamptz default now()
+);
+
+-- ============================================
+-- PRODUCTS TABLE (Canonical products)
 -- ============================================
 create table if not exists public.products (
   id uuid default uuid_generate_v4() primary key,
-  seller_id uuid references public.users(id) on delete cascade not null,
-  title text not null,
+  name text not null,
   description text default '',
+  brand text default '',
+  category text default '',
+  subcategory text default '',
+  image_url text,
+  images text[] default '{}',
+  barcode text,
+  is_active boolean default true,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ============================================
+-- DEALS TABLE (Core table: product + retailer + price)
+-- ============================================
+create table if not exists public.deals (
+  id uuid default uuid_generate_v4() primary key,
+  product_id uuid references public.products(id) on delete cascade not null,
+  retailer_id uuid references public.retailers(id) on delete cascade not null,
   price numeric(10,2) not null check (price >= 0),
   original_price numeric(10,2),
-  condition text default 'New' check (condition in ('New', 'Like New', 'Good', 'Fair')),
-  category text not null,
-  images text[] default '{}',
-  quantity integer default 1 check (quantity >= 0),
-  status text default 'active' check (status in ('active', 'sold', 'draft', 'removed')),
-  is_dropship boolean default false,
-  supplier_id uuid references public.suppliers(id),
-  supplier_cost numeric(10,2),
-  shipping_type text default 'small',
-  location text default '',
-  views_count integer default 0,
-  is_featured boolean default false,
+  currency text not null default 'USD',
+  url text not null,
+  shipping_cost numeric(10,2) default 0,
+  in_stock boolean default true,
+  deal_score integer check (deal_score between 1 and 100),
+  is_daily_deal boolean default false,
+  is_verified boolean default false,
+  expires_at timestamptz,
+  last_checked_at timestamptz,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
 -- ============================================
--- ORDERS TABLE
+-- PRICE HISTORY TABLE
 -- ============================================
-create table if not exists public.orders (
+create table if not exists public.price_history (
   id uuid default uuid_generate_v4() primary key,
-  buyer_id uuid references public.users(id) not null,
-  seller_id uuid references public.users(id) not null,
-  product_id uuid references public.products(id) not null,
-  quantity integer default 1,
-  unit_price numeric(10,2) not null,
-  total_price numeric(10,2) not null,
-  platform_fee numeric(10,2) default 0,
-  seller_payout numeric(10,2) default 0,
-  status text default 'pending' check (status in ('pending', 'paid', 'shipped', 'delivered', 'disputed', 'refunded')),
-  shipping_address jsonb,
-  tracking_number text,
-  supplier_order_id text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  deal_id uuid references public.deals(id) on delete cascade not null,
+  price numeric(10,2) not null,
+  checked_at timestamptz default now()
 );
 
 -- ============================================
--- MESSAGES TABLE
+-- SUBSCRIPTIONS TABLE
 -- ============================================
-create table if not exists public.messages (
+create table if not exists public.subscriptions (
   id uuid default uuid_generate_v4() primary key,
-  conversation_id text not null,
-  sender_id uuid references public.users(id) not null,
-  recipient_id uuid references public.users(id),
-  product_id uuid references public.products(id),
-  content text default '',
-  image_url text,
-  offer_price numeric(10,2),
-  offer_status text check (offer_status in ('pending', 'accepted', 'declined', null)),
+  user_id uuid references public.users(id) on delete cascade not null,
+  plan text not null default 'free' check (plan in ('free', 'basic', 'premium')),
+  status text not null default 'active' check (status in ('active', 'cancelled', 'expired')),
+  stripe_subscription_id text,
+  price_per_month numeric(10,2) default 0,
+  started_at timestamptz default now(),
+  expires_at timestamptz,
   created_at timestamptz default now()
 );
 
 -- ============================================
--- REVIEWS TABLE
+-- WATCHLIST TABLE
 -- ============================================
-create table if not exists public.reviews (
+create table if not exists public.watchlist (
   id uuid default uuid_generate_v4() primary key,
-  order_id uuid references public.orders(id) not null,
-  reviewer_id uuid references public.users(id) not null,
-  reviewed_id uuid references public.users(id) not null,
-  rating integer not null check (rating between 1 and 5),
+  user_id uuid references public.users(id) on delete cascade not null,
+  product_id uuid references public.products(id) on delete cascade not null,
+  target_price numeric(10,2),
+  notify_email boolean default true,
+  notify_push boolean default true,
+  created_at timestamptz default now()
+);
+
+-- ============================================
+-- PRICE ALERTS TABLE
+-- ============================================
+create table if not exists public.price_alerts (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.users(id) on delete cascade not null,
+  deal_id uuid references public.deals(id) on delete cascade not null,
+  watchlist_id uuid references public.watchlist(id) on delete set null,
+  alert_type text not null check (alert_type in ('price_drop', 'daily_deal', 'back_in_stock')),
+  message text default '',
+  is_read boolean default false,
+  created_at timestamptz default now()
+);
+
+-- ============================================
+-- NOTIFICATIONS TABLE
+-- ============================================
+create table if not exists public.notifications (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.users(id) on delete cascade not null,
+  type text not null,
+  title text not null,
   body text default '',
-  seller_response text,
-  created_at timestamptz default now()
-);
-
--- ============================================
--- DISPUTES TABLE
--- ============================================
-create table if not exists public.disputes (
-  id uuid default uuid_generate_v4() primary key,
-  order_id uuid references public.orders(id) not null,
-  opened_by uuid references public.users(id) not null,
-  reason text not null,
-  status text default 'open' check (status in ('open', 'in_review', 'resolved')),
-  admin_note text,
-  resolution text,
+  is_read boolean default false,
+  link text,
   created_at timestamptz default now()
 );
 
@@ -159,33 +187,39 @@ create table if not exists public.referrals (
 );
 
 -- ============================================
--- NOTIFICATIONS TABLE
--- ============================================
-create table if not exists public.notifications (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.users(id) on delete cascade not null,
-  type text not null,
-  title text not null,
-  body text default '',
-  is_read boolean default false,
-  link text,
-  created_at timestamptz default now()
-);
-
--- ============================================
 -- INDEXES
 -- ============================================
-create index if not exists idx_products_seller on public.products(seller_id);
 create index if not exists idx_products_category on public.products(category);
-create index if not exists idx_products_status on public.products(status);
+create index if not exists idx_products_brand on public.products(brand);
+create index if not exists idx_products_barcode on public.products(barcode);
 create index if not exists idx_products_created on public.products(created_at desc);
-create index if not exists idx_orders_buyer on public.orders(buyer_id);
-create index if not exists idx_orders_seller on public.orders(seller_id);
-create index if not exists idx_orders_status on public.orders(status);
-create index if not exists idx_messages_conversation on public.messages(conversation_id);
-create index if not exists idx_messages_sender on public.messages(sender_id);
+
+create index if not exists idx_deals_product on public.deals(product_id);
+create index if not exists idx_deals_retailer on public.deals(retailer_id);
+create index if not exists idx_deals_daily_deal on public.deals(is_daily_deal) where is_daily_deal = true;
+create index if not exists idx_deals_deal_score on public.deals(deal_score desc);
+create index if not exists idx_deals_price on public.deals(price);
+create index if not exists idx_deals_in_stock on public.deals(in_stock) where in_stock = true;
+create index if not exists idx_deals_created on public.deals(created_at desc);
+
+create index if not exists idx_price_history_deal on public.price_history(deal_id);
+create index if not exists idx_price_history_checked on public.price_history(checked_at desc);
+
+create index if not exists idx_subscriptions_user on public.subscriptions(user_id);
+create index if not exists idx_subscriptions_status on public.subscriptions(status);
+
+create index if not exists idx_watchlist_user on public.watchlist(user_id);
+create index if not exists idx_watchlist_product on public.watchlist(product_id);
+
+create index if not exists idx_price_alerts_user on public.price_alerts(user_id);
+create index if not exists idx_price_alerts_unread on public.price_alerts(user_id, is_read) where is_read = false;
+
 create index if not exists idx_notifications_user on public.notifications(user_id);
-create index if not exists idx_reviews_reviewed on public.reviews(reviewed_id);
+
+create index if not exists idx_retailers_country on public.retailers(country);
+create index if not exists idx_retailers_active on public.retailers(is_active) where is_active = true;
+
+create index if not exists idx_categories_parent on public.categories(parent_id);
 
 -- ============================================
 -- RLS POLICIES
@@ -193,46 +227,56 @@ create index if not exists idx_reviews_reviewed on public.reviews(reviewed_id);
 
 -- Enable RLS on all tables
 alter table public.users enable row level security;
+alter table public.retailers enable row level security;
+alter table public.categories enable row level security;
 alter table public.products enable row level security;
-alter table public.orders enable row level security;
-alter table public.messages enable row level security;
-alter table public.reviews enable row level security;
-alter table public.suppliers enable row level security;
-alter table public.disputes enable row level security;
+alter table public.deals enable row level security;
+alter table public.price_history enable row level security;
+alter table public.subscriptions enable row level security;
+alter table public.watchlist enable row level security;
+alter table public.price_alerts enable row level security;
+alter table public.notifications enable row level security;
 alter table public.promo_codes enable row level security;
 alter table public.referrals enable row level security;
-alter table public.notifications enable row level security;
 
 -- Users: anyone can read, users can update own
 create policy "Users are viewable by everyone" on public.users for select using (true);
 create policy "Users can update own profile" on public.users for update using (auth.uid() = id);
 create policy "Users can insert own profile" on public.users for insert with check (auth.uid() = id);
 
--- Products: anyone can read active, sellers can CRUD own
-create policy "Active products are viewable by everyone" on public.products for select using (status = 'active' or seller_id = auth.uid());
-create policy "Sellers can insert products" on public.products for insert with check (auth.uid() = seller_id);
-create policy "Sellers can update own products" on public.products for update using (auth.uid() = seller_id);
-create policy "Sellers can delete own products" on public.products for delete using (auth.uid() = seller_id);
+-- Retailers: public read
+create policy "Retailers are viewable by everyone" on public.retailers for select using (true);
 
--- Orders: buyers and sellers can see their own
-create policy "Users can view own orders" on public.orders for select using (auth.uid() = buyer_id or auth.uid() = seller_id);
-create policy "Users can create orders" on public.orders for insert with check (auth.uid() = buyer_id);
-create policy "Order participants can update" on public.orders for update using (auth.uid() = buyer_id or auth.uid() = seller_id);
+-- Categories: public read
+create policy "Categories are viewable by everyone" on public.categories for select using (true);
 
--- Messages: participants can see their own conversations
-create policy "Users can view own messages" on public.messages for select using (auth.uid() = sender_id or auth.uid() = recipient_id);
-create policy "Users can send messages" on public.messages for insert with check (auth.uid() = sender_id);
+-- Products: public read
+create policy "Products are viewable by everyone" on public.products for select using (true);
 
--- Reviews: anyone can read, participants can write
-create policy "Reviews are viewable by everyone" on public.reviews for select using (true);
-create policy "Reviewers can insert" on public.reviews for insert with check (auth.uid() = reviewer_id);
+-- Deals: public read
+create policy "Deals are viewable by everyone" on public.deals for select using (true);
 
--- Suppliers: authenticated users can read
-create policy "Suppliers viewable by authenticated" on public.suppliers for select using (auth.role() = 'authenticated');
+-- Price history: public read
+create policy "Price history is viewable by everyone" on public.price_history for select using (true);
 
--- Disputes: participants can view and create
-create policy "Dispute participants can view" on public.disputes for select using (auth.uid() = opened_by);
-create policy "Users can open disputes" on public.disputes for insert with check (auth.uid() = opened_by);
+-- Subscriptions: users see only their own
+create policy "Users can view own subscriptions" on public.subscriptions for select using (auth.uid() = user_id);
+create policy "Users can insert own subscriptions" on public.subscriptions for insert with check (auth.uid() = user_id);
+create policy "Users can update own subscriptions" on public.subscriptions for update using (auth.uid() = user_id);
+
+-- Watchlist: users see only their own
+create policy "Users can view own watchlist" on public.watchlist for select using (auth.uid() = user_id);
+create policy "Users can insert own watchlist" on public.watchlist for insert with check (auth.uid() = user_id);
+create policy "Users can update own watchlist" on public.watchlist for update using (auth.uid() = user_id);
+create policy "Users can delete own watchlist" on public.watchlist for delete using (auth.uid() = user_id);
+
+-- Price alerts: users see only their own
+create policy "Users can view own price alerts" on public.price_alerts for select using (auth.uid() = user_id);
+create policy "Users can update own price alerts" on public.price_alerts for update using (auth.uid() = user_id);
+
+-- Notifications: users see own
+create policy "Users can view own notifications" on public.notifications for select using (auth.uid() = user_id);
+create policy "Users can update own notifications" on public.notifications for update using (auth.uid() = user_id);
 
 -- Promo codes: anyone can read active
 create policy "Active promos viewable" on public.promo_codes for select using (is_active = true);
@@ -241,21 +285,9 @@ create policy "Active promos viewable" on public.promo_codes for select using (i
 create policy "Users can view own referrals" on public.referrals for select using (auth.uid() = referrer_id or auth.uid() = referred_id);
 create policy "Users can create referrals" on public.referrals for insert with check (auth.uid() = referrer_id);
 
--- Notifications: users see own
-create policy "Users can view own notifications" on public.notifications for select using (auth.uid() = user_id);
-create policy "Users can update own notifications" on public.notifications for update using (auth.uid() = user_id);
-
 -- ============================================
 -- FUNCTIONS
 -- ============================================
-
--- Increment product views
-create or replace function public.increment_views(product_id uuid)
-returns void as $$
-begin
-  update public.products set views_count = views_count + 1 where id = product_id;
-end;
-$$ language plpgsql security definer;
 
 -- Auto-create user profile on signup
 create or replace function public.handle_new_user()
@@ -286,6 +318,49 @@ begin
 end;
 $$ language plpgsql;
 
+-- Triggers for updated_at
 create or replace trigger update_users_updated_at before update on public.users for each row execute function public.update_updated_at();
 create or replace trigger update_products_updated_at before update on public.products for each row execute function public.update_updated_at();
-create or replace trigger update_orders_updated_at before update on public.orders for each row execute function public.update_updated_at();
+create or replace trigger update_deals_updated_at before update on public.deals for each row execute function public.update_updated_at();
+
+-- Get the best price (lowest price + shipping) for a product
+create or replace function public.get_best_price(p_product_id uuid)
+returns table (
+  deal_id uuid,
+  retailer_id uuid,
+  retailer_name text,
+  retailer_domain text,
+  price numeric(10,2),
+  shipping_cost numeric(10,2),
+  total_cost numeric(10,2),
+  currency text,
+  url text,
+  in_stock boolean,
+  deal_score integer,
+  is_verified boolean,
+  last_checked_at timestamptz
+) as $$
+begin
+  return query
+  select
+    d.id as deal_id,
+    d.retailer_id,
+    r.name as retailer_name,
+    r.domain as retailer_domain,
+    d.price,
+    d.shipping_cost,
+    (d.price + d.shipping_cost) as total_cost,
+    d.currency,
+    d.url,
+    d.in_stock,
+    d.deal_score,
+    d.is_verified,
+    d.last_checked_at
+  from public.deals d
+  join public.retailers r on r.id = d.retailer_id
+  where d.product_id = p_product_id
+    and d.in_stock = true
+  order by (d.price + d.shipping_cost) asc
+  limit 1;
+end;
+$$ language plpgsql security definer;

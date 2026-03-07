@@ -1,73 +1,84 @@
-import React from 'react'
-import { Link } from 'react-router-dom'
-import { Bell, ShoppingCart } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Search, User, Heart } from 'lucide-react'
+import { useState } from 'react'
 import { useAuthStore } from '../../stores/authStore'
-import { useCartStore } from '../../stores/cartStore'
+import { useWatchlistStore } from '../../stores/cartStore'
+import Logo from './Logo'
 
 export default function Header() {
   const { user, profile } = useAuthStore()
-  const itemCount = useCartStore((s) => s.getItemCount())
+  const watchCount = useWatchlistStore((s) => s.getItemCount())
+  const navigate = useNavigate()
+  const [query, setQuery] = useState('')
+
+  const handleSearch = (e) => {
+    e.preventDefault()
+    if (query.trim()) {
+      navigate(`/browse?q=${encodeURIComponent(query.trim())}`)
+      setQuery('')
+    }
+  }
 
   return (
-    <header className="hidden lg:flex fixed top-0 right-0 left-64 z-30 h-16 items-center justify-between bg-white border-b border-gray-200 px-6">
-      {/* Search bar centered */}
-      <div className="flex-1 flex justify-center max-w-2xl mx-auto">
-        <div className="relative w-full">
-          <input
-            type="text"
-            placeholder="Search items, categories, sellers..."
-            className="w-full h-10 pl-4 pr-4 rounded-full bg-gray-100 border border-gray-200 text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* Right actions */}
-      <div className="flex items-center gap-3 ml-4">
-        {/* Notifications */}
-        <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-        </button>
-
-        {/* Cart */}
-        <Link
-          to="/cart"
-          className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
-        >
-          <ShoppingCart className="w-5 h-5" />
-          {itemCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-[#FF6B35] rounded-full">
-              {itemCount > 99 ? '99+' : itemCount}
-            </span>
-          )}
+    <header className="fixed top-0 inset-x-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+      <div className="max-w-6xl mx-auto flex items-center gap-4 h-20 px-4">
+        {/* Logo */}
+        <Link to="/" className="shrink-0">
+          <Logo size="sm" />
         </Link>
 
-        {/* User avatar or Login */}
-        {user ? (
+        {/* Search */}
+        <form onSubmit={handleSearch} className="flex-1 max-w-xl">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="What are you looking for?"
+              className="w-full h-14 pl-12 pr-4 rounded-2xl bg-gray-50 border-2 border-gray-200 text-lg placeholder-gray-400 focus:outline-none focus:border-[#FF6B35] transition-colors"
+            />
+          </div>
+        </form>
+
+        {/* Right actions */}
+        <div className="flex items-center gap-2">
+          {/* Watchlist */}
           <Link
-            to="/profile"
-            className="flex items-center gap-2 ml-2"
+            to="/watchlist"
+            className="relative flex items-center justify-center w-12 h-12 rounded-xl text-gray-500 hover:bg-gray-100 transition-colors"
           >
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt={profile.display_name || 'User'}
-                className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-[#FF6B35] flex items-center justify-center text-white text-sm font-semibold">
-                {(profile?.display_name || user.email || '?')[0].toUpperCase()}
-              </div>
+            <Heart className="w-6 h-6" />
+            {watchCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex items-center justify-center min-w-[22px] h-[22px] px-1 text-xs font-bold text-white bg-[#FF6B35] rounded-full">
+                {watchCount}
+              </span>
             )}
           </Link>
-        ) : (
-          <Link
-            to="/login"
-            className="ml-2 px-4 py-2 text-sm font-medium text-white bg-[#FF6B35] rounded-full hover:bg-[#e55a2b] transition-colors"
-          >
-            Login
-          </Link>
-        )}
+
+          {/* Profile or Sign In */}
+          {user ? (
+            <Link
+              to="/profile"
+              className="flex items-center justify-center w-12 h-12 rounded-xl overflow-hidden hover:bg-gray-100 transition-colors"
+            >
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" className="w-10 h-10 rounded-xl object-cover" />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-[#FF6B35] flex items-center justify-center text-white text-lg font-bold">
+                  {(profile?.name || user.email || '?')[0].toUpperCase()}
+                </div>
+              )}
+            </Link>
+          ) : (
+            <Link
+              to="/auth"
+              className="flex items-center gap-2 h-12 px-6 text-base font-semibold text-white bg-[#FF6B35] rounded-xl hover:bg-[#e55a2b] transition-colors"
+            >
+              Sign In
+            </Link>
+          )}
+        </div>
       </div>
     </header>
   )

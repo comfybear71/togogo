@@ -1,114 +1,281 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { SlidersHorizontal, ChevronDown, X, Grid3X3, LayoutGrid } from 'lucide-react';
-import SearchBar from '../components/ui/SearchBar';
-import Card from '../components/ui/Card';
-import Skeleton from '../components/ui/Skeleton';
-import EmptyState from '../components/ui/EmptyState';
-import Button from '../components/ui/Button';
-import { useProducts } from '../hooks/useProducts';
-import { CATEGORIES, CONDITIONS } from '../lib/constants';
+import { useSearchParams, Link } from 'react-router-dom';
+import { Search, ChevronDown, PackageSearch, ArrowRight } from 'lucide-react';
+import { useProductSearch } from '../hooks/useProducts';
+import { CATEGORIES } from '../lib/constants';
 
 const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest First' },
+  { value: 'deal_score', label: 'Best Deal' },
   { value: 'price_low', label: 'Price: Low to High' },
   { value: 'price_high', label: 'Price: High to Low' },
-  { value: 'most_viewed', label: 'Most Viewed' },
+  { value: 'newest', label: 'Newest' },
 ];
+
+const MOCK_RESULTS = [
+  { id: '1', name: 'Apple AirPods Pro 2', brand: 'Apple', category: 'electronics', image_url: '', best_price: 189.99, original_price: 249.99, deal_score: 95, retailer_name: 'Amazon', price_count: 8 },
+  { id: '2', name: 'Dyson V15 Detect Vacuum', brand: 'Dyson', category: 'home', image_url: '', best_price: 449.00, original_price: 749.99, deal_score: 90, retailer_name: 'eBay', price_count: 5 },
+  { id: '3', name: 'Samsung 65" Crystal UHD TV', brand: 'Samsung', category: 'electronics', image_url: '', best_price: 597.00, original_price: 999.99, deal_score: 88, retailer_name: 'Best Buy', price_count: 12 },
+  { id: '4', name: 'Nike Air Max 90 Sneakers', brand: 'Nike', category: 'fashion', image_url: '', best_price: 89.97, original_price: 130.00, deal_score: 85, retailer_name: 'Nike', price_count: 6 },
+  { id: '5', name: 'Pampers Baby Dry Size 4', brand: 'Pampers', category: 'baby', image_url: '', best_price: 32.99, original_price: 54.99, deal_score: 92, retailer_name: 'Walmart', price_count: 9 },
+  { id: '6', name: 'Organic Whole Milk 2L', brand: 'Various', category: 'groceries', image_url: '', best_price: 3.49, original_price: 5.99, deal_score: 82, retailer_name: 'Woolworths', price_count: 4 },
+  { id: '7', name: 'Instant Pot Duo 7-in-1', brand: 'Instant Pot', category: 'home', image_url: '', best_price: 59.99, original_price: 89.99, deal_score: 87, retailer_name: 'Amazon', price_count: 7 },
+  { id: '8', name: 'Bose QuietComfort 45', brand: 'Bose', category: 'electronics', image_url: '', best_price: 229.00, original_price: 329.99, deal_score: 86, retailer_name: 'Target', price_count: 10 },
+  { id: '9', name: 'Huggies Nappies Size 3', brand: 'Huggies', category: 'baby', image_url: '', best_price: 28.50, original_price: 42.00, deal_score: 84, retailer_name: 'Coles', price_count: 5 },
+  { id: '10', name: 'KitchenAid Stand Mixer', brand: 'KitchenAid', category: 'home', image_url: '', best_price: 279.99, original_price: 449.99, deal_score: 89, retailer_name: 'Amazon', price_count: 8 },
+  { id: '11', name: 'Sydney to Melbourne Flight', brand: 'Jetstar', category: 'travel', image_url: '', best_price: 59.00, original_price: 129.00, deal_score: 93, retailer_name: 'Skyscanner', price_count: 6 },
+  { id: '12', name: 'Garden Hose 30m Expandable', brand: 'Gardena', category: 'home', image_url: '', best_price: 34.95, original_price: 69.99, deal_score: 80, retailer_name: 'Bunnings', price_count: 3 },
+];
+
+const CATEGORY_COLORS = {
+  electronics: 'bg-blue-500',
+  fashion: 'bg-pink-500',
+  home: 'bg-amber-500',
+  groceries: 'bg-green-500',
+  health: 'bg-red-400',
+  sports: 'bg-indigo-500',
+  travel: 'bg-cyan-500',
+  automotive: 'bg-gray-500',
+  baby: 'bg-purple-400',
+  books: 'bg-yellow-600',
+  pets: 'bg-orange-400',
+  food: 'bg-rose-500',
+};
+
+function getSavingsPercent(original, best) {
+  if (!original || original <= best) return 0;
+  return Math.round(((original - best) / original) * 100);
+}
+
+function ProductCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-2xl border-2 border-gray-100 bg-white p-4">
+      <div className="mb-4 h-44 w-full rounded-xl bg-gray-200" />
+      <div className="mb-2 h-6 w-3/4 rounded bg-gray-200" />
+      <div className="mb-3 h-4 w-1/3 rounded bg-gray-200" />
+      <div className="mb-2 h-8 w-1/2 rounded bg-gray-200" />
+      <div className="h-4 w-2/3 rounded bg-gray-200" />
+    </div>
+  );
+}
+
+function ProductCard({ product }) {
+  const savings = getSavingsPercent(product.original_price, product.best_price);
+  const colorClass = CATEGORY_COLORS[product.category] || 'bg-gray-400';
+
+  return (
+    <Link
+      to={`/product/${product.id}`}
+      className="group block rounded-2xl border-2 border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-emerald-300 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200"
+    >
+      {/* Product Image / Placeholder */}
+      <div className="relative mb-4">
+        {product.image_url ? (
+          <img
+            src={product.image_url}
+            alt={product.name}
+            className="h-44 w-full rounded-xl object-cover"
+          />
+        ) : (
+          <div className={`flex h-44 w-full items-center justify-center rounded-xl ${colorClass} bg-opacity-20`}>
+            <span className="text-5xl">
+              {CATEGORIES.find(c => c.id === product.category)?.emoji || '📦'}
+            </span>
+          </div>
+        )}
+
+        {/* Savings Badge */}
+        {savings > 0 && (
+          <span className="absolute right-2 top-2 rounded-full bg-red-500 px-3 py-1.5 text-base font-bold text-white shadow-md">
+            -{savings}%
+          </span>
+        )}
+      </div>
+
+      {/* Product Info */}
+      <h3 className="mb-1 text-lg font-bold leading-snug text-gray-900 group-hover:text-emerald-700 sm:text-xl">
+        {product.name}
+      </h3>
+
+      <p className="mb-3 text-base text-gray-500">
+        {product.brand}
+      </p>
+
+      {/* Price Section */}
+      <div className="mb-2">
+        <span className="text-2xl font-extrabold text-emerald-600 sm:text-3xl">
+          ${product.best_price.toFixed(2)}
+        </span>
+        <span className="ml-2 text-base text-gray-400">
+          from {product.retailer_name}
+        </span>
+      </div>
+
+      {savings > 0 && (
+        <p className="mb-3 text-base text-gray-400 line-through">
+          Was ${product.original_price.toFixed(2)}
+        </p>
+      )}
+
+      {/* Compare Link */}
+      <div className="flex items-center gap-1 text-base font-semibold text-emerald-600 group-hover:text-emerald-700">
+        Compare {product.price_count} prices
+        <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+      </div>
+    </Link>
+  );
+}
 
 export default function BrowsePage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [showFilters, setShowFilters] = useState(false);
 
   const [query, setQuery] = useState(searchParams.get('q') || '');
+  const [inputValue, setInputValue] = useState(searchParams.get('q') || '');
   const [category, setCategory] = useState(searchParams.get('category') || '');
-  const [condition, setCondition] = useState(searchParams.get('condition') || '');
-  const [minPrice, setMinPrice] = useState(searchParams.get('min') || '');
-  const [maxPrice, setMaxPrice] = useState(searchParams.get('max') || '');
-  const [sort, setSort] = useState(searchParams.get('sort') || 'newest');
+  const [sort, setSort] = useState(searchParams.get('sort') || 'deal_score');
 
+  // Build filters for the hook
   const filters = useMemo(() => ({
     query: query || undefined,
     category: category || undefined,
-    condition: condition || undefined,
-    minPrice: minPrice ? Number(minPrice) : undefined,
-    maxPrice: maxPrice ? Number(maxPrice) : undefined,
     sort,
-  }), [query, category, condition, minPrice, maxPrice, sort]);
+  }), [query, category, sort]);
 
-  const { data: products, isLoading } = useProducts(filters);
+  const { data: apiResults, isLoading } = useProductSearch(filters);
 
+  // Fall back to mock data if API returns nothing
+  const products = useMemo(() => {
+    if (apiResults && apiResults.length > 0) return apiResults;
+
+    let results = [...MOCK_RESULTS];
+
+    // Filter by search query
+    if (query) {
+      const q = query.toLowerCase();
+      results = results.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        p.brand.toLowerCase().includes(q)
+      );
+    }
+
+    // Filter by category
+    if (category) {
+      results = results.filter(p => p.category === category);
+    }
+
+    // Sort
+    switch (sort) {
+      case 'price_low':
+        results.sort((a, b) => a.best_price - b.best_price);
+        break;
+      case 'price_high':
+        results.sort((a, b) => b.best_price - a.best_price);
+        break;
+      case 'deal_score':
+        results.sort((a, b) => b.deal_score - a.deal_score);
+        break;
+      case 'newest':
+      default:
+        break;
+    }
+
+    return results;
+  }, [apiResults, query, category, sort]);
+
+  // Sync filters to URL
   useEffect(() => {
     const params = {};
     if (query) params.q = query;
     if (category) params.category = category;
-    if (condition) params.condition = condition;
-    if (minPrice) params.min = minPrice;
-    if (maxPrice) params.max = maxPrice;
-    if (sort && sort !== 'newest') params.sort = sort;
+    if (sort && sort !== 'deal_score') params.sort = sort;
     setSearchParams(params, { replace: true });
-  }, [query, category, condition, minPrice, maxPrice, sort, setSearchParams]);
+  }, [query, category, sort, setSearchParams]);
 
-  const handleSearch = (q) => setQuery(q);
-
-  const clearFilters = () => {
-    setCategory('');
-    setCondition('');
-    setMinPrice('');
-    setMaxPrice('');
-    setSort('newest');
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setQuery(inputValue.trim());
   };
 
-  const hasActiveFilters = category || condition || minPrice || maxPrice;
+  const handleCategoryToggle = (catId) => {
+    setCategory(category === catId ? '' : catId);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50">
       {/* Search Header */}
-      <div className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur-lg dark:border-gray-800 dark:bg-gray-950/80">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <SearchBar onSearch={handleSearch} defaultValue={query} placeholder="Search products..." />
+      <div className="sticky top-0 z-30 border-b-2 border-gray-200 bg-white shadow-sm">
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <form onSubmit={handleSearchSubmit} className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                placeholder="Search for any product or brand..."
+                className="w-full rounded-xl border-2 border-gray-200 bg-white py-4 pl-13 pr-4 text-lg text-gray-900 placeholder-gray-400 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-xl bg-emerald-600 px-8 text-lg font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+            >
+              Search
+            </button>
+          </form>
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Filter Bar */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filters
-            {hasActiveFilters && (
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#FF6B35] text-xs text-white">
-                {[category, condition, minPrice, maxPrice].filter(Boolean).length}
-              </span>
-            )}
-          </button>
-
-          {/* Quick category pills */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {CATEGORIES?.slice(0, 6).map((cat) => (
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        {/* Category Filter Pills */}
+        <div className="mb-6 overflow-x-auto pb-2">
+          <div className="flex gap-3">
+            <button
+              onClick={() => setCategory('')}
+              className={`flex-shrink-0 rounded-full px-6 py-3 text-base font-bold transition-colors ${
+                !category
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'border-2 border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
+              }`}
+            >
+              All
+            </button>
+            {CATEGORIES.map((cat) => (
               <button
-                key={cat.value || cat}
-                onClick={() => setCategory(category === (cat.value || cat) ? '' : (cat.value || cat))}
-                className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  category === (cat.value || cat)
-                    ? 'bg-[#FF6B35] text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-400 dark:hover:bg-gray-800'
+                key={cat.id}
+                onClick={() => handleCategoryToggle(cat.id)}
+                className={`flex flex-shrink-0 items-center gap-2 rounded-full px-6 py-3 text-base font-bold transition-colors ${
+                  category === cat.id
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'border-2 border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
                 }`}
               >
-                {cat.label || cat}
+                <span className="text-xl">{cat.emoji}</span>
+                {cat.label}
               </button>
             ))}
           </div>
+        </div>
 
-          {/* Sort dropdown */}
-          <div className="relative ml-auto">
+        {/* Sort & Results Count Bar */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <p className="text-lg font-medium text-gray-700">
+            {isLoading
+              ? 'Searching for deals...'
+              : `${products.length} deal${products.length !== 1 ? 's' : ''} found`}
+            {query && (
+              <span className="text-gray-400"> for &ldquo;{query}&rdquo;</span>
+            )}
+          </p>
+
+          <div className="relative">
+            <label htmlFor="sort-select" className="mr-2 text-base font-medium text-gray-600">
+              Sort by:
+            </label>
             <select
+              id="sort-select"
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              className="appearance-none rounded-lg border border-gray-200 bg-white py-2 pl-4 pr-10 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"
+              className="appearance-none rounded-xl border-2 border-gray-200 bg-white py-3 pl-4 pr-12 text-base font-bold text-gray-700 transition-colors hover:border-emerald-300 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-100"
             >
               {SORT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -116,126 +283,43 @@ export default function BrowsePage() {
                 </option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           </div>
         </div>
 
-        {/* Expanded Filters Panel */}
-        {showFilters && (
-          <div className="mb-6 rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-['Baloo_2'] text-lg font-bold text-gray-900 dark:text-white">
-                Filters
-              </h3>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-1 text-sm text-[#FF6B35] hover:underline"
-                >
-                  <X className="h-3 w-3" /> Clear all
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Category */}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Category
-                </label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                >
-                  <option value="">All Categories</option>
-                  {CATEGORIES?.map((cat) => (
-                    <option key={cat.value || cat} value={cat.value || cat}>
-                      {cat.label || cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Condition */}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Condition
-                </label>
-                <select
-                  value={condition}
-                  onChange={(e) => setCondition(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                >
-                  <option value="">Any Condition</option>
-                  {CONDITIONS?.map((cond) => (
-                    <option key={cond.value || cond} value={cond.value || cond}>
-                      {cond.label || cond}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Price Range */}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Min Price
-                </label>
-                <input
-                  type="number"
-                  value={minPrice}
-                  onChange={(e) => setMinPrice(e.target.value)}
-                  placeholder="$0"
-                  min="0"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Max Price
-                </label>
-                <input
-                  type="number"
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  placeholder="No limit"
-                  min="0"
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Results Info */}
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {isLoading ? 'Searching...' : `${products?.length || 0} results`}
-            {query && ` for "${query}"`}
-          </p>
-        </div>
-
-        {/* Product Grid */}
+        {/* Results Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 12 }).map((_, i) => (
-              <Skeleton key={i} className="h-72 w-full rounded-xl" />
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <ProductCardSkeleton key={i} />
             ))}
           </div>
-        ) : products?.length === 0 ? (
-          <EmptyState
-            icon="search"
-            title="No products found"
-            description="Try adjusting your filters or search with different keywords."
-            action={
-              <Button onClick={clearFilters} className="bg-[#FF6B35] text-white hover:bg-[#e55a2b]">
-                Clear Filters
-              </Button>
-            }
-          />
+        ) : products.length === 0 ? (
+          /* Empty State */
+          <div className="mx-auto max-w-md py-20 text-center">
+            <PackageSearch className="mx-auto mb-6 h-20 w-20 text-gray-300" />
+            <h2 className="mb-3 text-2xl font-bold text-gray-700">
+              No deals found
+            </h2>
+            <p className="mb-8 text-lg text-gray-500">
+              We couldn&apos;t find any deals matching your search. Try a different product name, brand, or category.
+            </p>
+            <button
+              onClick={() => {
+                setQuery('');
+                setInputValue('');
+                setCategory('');
+                setSort('deal_score');
+              }}
+              className="rounded-xl bg-emerald-600 px-8 py-4 text-lg font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+            >
+              Clear All Filters
+            </button>
+          </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {products?.map((product) => (
-              <Card key={product.id} product={product} />
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
             ))}
           </div>
         )}
