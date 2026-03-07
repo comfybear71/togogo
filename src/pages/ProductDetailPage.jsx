@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  Share2,
   ChevronLeft,
   Heart,
   Check,
@@ -12,8 +11,6 @@ import {
   Copy,
 } from 'lucide-react';
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -105,11 +102,9 @@ export default function ProductDetailPage() {
   const [watchlisted, setWatchlisted] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Sort deals by total price (price + shipping), in-stock first
   const sortedDeals = useMemo(() => {
     if (!product?.deals) return [];
     return [...product.deals].sort((a, b) => {
-      // In-stock items first
       if (a.in_stock && !b.in_stock) return -1;
       if (!a.in_stock && b.in_stock) return 1;
       const totalA = (a.price || 0) + (a.shipping_cost || 0);
@@ -120,7 +115,6 @@ export default function ProductDetailPage() {
 
   const bestDeal = sortedDeals.find((d) => d.in_stock);
 
-  // Format chart data
   const chartData = useMemo(() => {
     return priceHistory.map((p) => ({
       date: new Date(p.checked_at).toLocaleDateString('en-US', {
@@ -144,7 +138,7 @@ export default function ProductDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#050505]">
         <div className="mx-auto max-w-5xl px-4 py-8">
           <Skeleton className="h-8 w-40 rounded-xl mb-6" />
           <div className="flex flex-col md:flex-row gap-8">
@@ -161,30 +155,29 @@ export default function ProductDetailPage() {
     );
   }
 
-  const productImage =
-    product.image_url || product.images?.[0] || '';
+  const productImage = product.image_url || product.images?.[0] || '';
   const categoryLabel = product.category
     ? product.category.charAt(0).toUpperCase() + product.category.slice(1)
     : '';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen">
       <div className="mx-auto max-w-5xl px-4 py-4 md:py-8">
         {/* Back link */}
         <Link
           to="/browse"
-          className="inline-flex items-center gap-1 text-gray-500 hover:text-teal-600 font-semibold mb-6 text-lg transition-colors"
+          className="inline-flex items-center gap-1 text-zinc-500 hover:text-white font-semibold mb-6 text-base transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
-          Back to browsing
+          Back
         </Link>
 
-        {/* ===== PRODUCT HEADER ===== */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mb-6">
+        {/* Product Header */}
+        <div className="bg-[#111] rounded-2xl border border-white/5 p-6 md:p-8 mb-6">
           <div className="flex flex-col md:flex-row gap-6 md:gap-8">
             {/* Product Image */}
             <div className="flex-shrink-0 w-full md:w-72 lg:w-80">
-              <div className="aspect-square rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 flex items-center justify-center">
+              <div className="aspect-square rounded-2xl overflow-hidden bg-[#0a0a0a] border border-white/5 flex items-center justify-center">
                 {productImage ? (
                   <img
                     src={productImage}
@@ -193,8 +186,8 @@ export default function ProductDetailPage() {
                   />
                 ) : (
                   <div className="text-center p-8">
-                    <Package className="w-20 h-20 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-400 text-lg font-medium">No image</p>
+                    <Package className="w-16 h-16 text-zinc-700 mx-auto mb-3" />
+                    <p className="text-zinc-600 text-sm font-medium">No image</p>
                   </div>
                 )}
               </div>
@@ -202,25 +195,21 @@ export default function ProductDetailPage() {
 
             {/* Product Info */}
             <div className="flex-1 min-w-0">
-              {/* Category badge */}
               {categoryLabel && (
-                <span className="inline-block bg-teal-50 text-teal-700 text-sm font-bold px-3 py-1 rounded-full mb-3">
+                <span className="inline-block bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-bold px-3 py-1 rounded-full mb-3">
                   {categoryLabel}
                 </span>
               )}
-              {/* Product name */}
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 leading-tight">
+              <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
                 {product.name}
               </h1>
-              {/* Brand */}
               {product.brand && (
-                <p className="text-xl text-gray-500 font-medium mb-4">
+                <p className="text-lg text-zinc-500 font-medium mb-4">
                   by {product.brand}
                 </p>
               )}
-              {/* Description */}
               {product.description && (
-                <p className="text-lg text-gray-600 leading-relaxed">
+                <p className="text-base text-zinc-400 leading-relaxed">
                   {product.description}
                 </p>
               )}
@@ -228,24 +217,24 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* ===== BEST PRICE BANNER ===== */}
+        {/* Best Price Banner */}
         {bestDeal && (
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl p-6 md:p-8 mb-6 text-white shadow-lg">
+          <div className="bg-gradient-to-r from-[#06D6A0]/10 to-[#06D6A0]/5 border border-[#06D6A0]/20 rounded-2xl p-6 md:p-8 mb-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <p className="text-green-100 text-lg font-medium mb-1">Best Price Available</p>
-                <p className="text-4xl md:text-5xl font-bold mb-1">
+                <p className="text-[#06D6A0]/70 text-sm font-medium mb-1 uppercase tracking-wide">Best Price Available</p>
+                <p className="text-4xl md:text-5xl font-bold text-[#06D6A0] mb-1">
                   ${bestDeal.price.toFixed(2)}
                 </p>
-                <p className="text-green-100 text-xl">
+                <p className="text-zinc-400 text-base">
                   from <span className="font-bold text-white">{bestDeal.retailer?.name}</span>
-                  {bestDeal.shipping_cost === 0 && ' — Free Shipping!'}
+                  {bestDeal.shipping_cost === 0 && ' — Free Shipping'}
                 </p>
                 {bestDeal.original_price && bestDeal.original_price > bestDeal.price && (
-                  <p className="text-green-200 text-lg mt-1">
+                  <p className="text-zinc-500 text-sm mt-1">
                     <span className="line-through">${bestDeal.original_price.toFixed(2)}</span>
                     {' '}
-                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-sm font-bold">
+                    <span className="bg-[#06D6A0]/10 text-[#06D6A0] rounded-full px-2 py-0.5 text-xs font-bold">
                       Save ${(bestDeal.original_price - bestDeal.price).toFixed(2)}
                     </span>
                   </p>
@@ -255,24 +244,23 @@ export default function ProductDetailPage() {
                 href={bestDeal.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 bg-white text-green-700 hover:bg-green-50 font-bold text-xl md:text-2xl px-8 py-4 md:py-5 rounded-2xl transition-colors shadow-md flex-shrink-0"
+                className="inline-flex items-center gap-3 bg-[#06D6A0] text-black hover:bg-[#05c494] font-bold text-lg px-8 py-4 rounded-xl transition-colors flex-shrink-0"
               >
                 Go to Store
-                <ExternalLink className="w-6 h-6 md:w-7 md:h-7" />
+                <ExternalLink className="w-5 h-5" />
               </a>
             </div>
           </div>
         )}
 
-        {/* ===== PRICE COMPARISON TABLE (HERO) ===== */}
-        <div className="bg-white rounded-2xl border-2 border-teal-200 shadow-sm mb-6">
-          <div className="p-6 md:p-8 border-b border-gray-100">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Compare Prices Across Stores
+        {/* Price Comparison Table */}
+        <div className="bg-[#111] rounded-2xl border border-white/5 mb-6">
+          <div className="p-6 md:p-8 border-b border-white/5">
+            <h2 className="text-xl md:text-2xl font-bold text-white">
+              Compare Prices
             </h2>
-            <p className="text-lg text-gray-500 mt-1">
-              {sortedDeals.length} retailer{sortedDeals.length !== 1 && 's'} compared — sorted by
-              lowest total price
+            <p className="text-sm text-zinc-500 mt-1">
+              {sortedDeals.length} retailer{sortedDeals.length !== 1 && 's'} compared
             </p>
           </div>
 
@@ -280,106 +268,100 @@ export default function ProductDetailPage() {
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="px-8 py-4 text-base font-bold text-gray-600">Retailer</th>
-                  <th className="px-6 py-4 text-base font-bold text-gray-600">Price</th>
-                  <th className="px-6 py-4 text-base font-bold text-gray-600">Shipping</th>
-                  <th className="px-6 py-4 text-base font-bold text-gray-600">Total</th>
-                  <th className="px-6 py-4 text-base font-bold text-gray-600">Stock</th>
-                  <th className="px-8 py-4 text-base font-bold text-gray-600"></th>
+                <tr className="bg-[#0a0a0a] text-left">
+                  <th className="px-8 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Retailer</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Price</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Shipping</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Total</th>
+                  <th className="px-6 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wide">Stock</th>
+                  <th className="px-8 py-3"></th>
                 </tr>
               </thead>
               <tbody>
-                {sortedDeals.map((deal, index) => {
+                {sortedDeals.map((deal) => {
                   const total = (deal.price || 0) + (deal.shipping_cost || 0);
                   const isBest = deal.id === bestDeal?.id;
                   return (
                     <tr
                       key={deal.id}
-                      className={`border-t border-gray-100 transition-colors ${
+                      className={`border-t border-white/5 transition-colors ${
                         isBest
-                          ? 'bg-green-50/60'
-                          : 'hover:bg-gray-50'
-                      } ${!deal.in_stock ? 'opacity-60' : ''}`}
+                          ? 'bg-[#06D6A0]/5'
+                          : 'hover:bg-white/[0.02]'
+                      } ${!deal.in_stock ? 'opacity-40' : ''}`}
                     >
-                      {/* Retailer */}
-                      <td className="px-8 py-5">
+                      <td className="px-8 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-sm font-bold text-gray-500 flex-shrink-0">
+                          <div className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-zinc-400 flex-shrink-0">
                             {deal.retailer?.name?.charAt(0) || '?'}
                           </div>
                           <div>
-                            <p className="text-xl font-bold text-gray-900">
+                            <p className="text-base font-semibold text-white">
                               {deal.retailer?.name}
                             </p>
-                            <p className="text-sm text-gray-400">{deal.retailer?.domain}</p>
+                            <p className="text-xs text-zinc-600">{deal.retailer?.domain}</p>
                           </div>
                           {isBest && (
-                            <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full ml-1">
-                              BEST
+                            <span className="bg-[#06D6A0]/10 text-[#06D6A0] text-[10px] font-bold px-2 py-0.5 rounded-full ml-1 uppercase">
+                              Best
                             </span>
                           )}
                         </div>
                       </td>
-                      {/* Price */}
-                      <td className="px-6 py-5">
-                        <span className="text-2xl font-bold text-gray-900">
+                      <td className="px-6 py-4">
+                        <span className="text-lg font-bold text-white">
                           ${deal.price.toFixed(2)}
                         </span>
                         {deal.original_price && deal.original_price > deal.price && (
-                          <span className="block text-sm text-gray-400 line-through">
+                          <span className="block text-xs text-zinc-600 line-through">
                             ${deal.original_price.toFixed(2)}
                           </span>
                         )}
                       </td>
-                      {/* Shipping */}
-                      <td className="px-6 py-5">
-                        <span className="text-lg font-medium text-gray-700">
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-zinc-400">
                           {deal.shipping_cost === 0 ? (
-                            <span className="text-green-600 font-bold">FREE</span>
+                            <span className="text-[#06D6A0] font-bold">FREE</span>
                           ) : (
                             `$${deal.shipping_cost.toFixed(2)}`
                           )}
                         </span>
                       </td>
-                      {/* Total */}
-                      <td className="px-6 py-5">
+                      <td className="px-6 py-4">
                         <span
-                          className={`text-2xl font-bold ${
-                            isBest ? 'text-green-600' : 'text-gray-900'
+                          className={`text-lg font-bold ${
+                            isBest ? 'text-[#06D6A0]' : 'text-white'
                           }`}
                         >
                           ${total.toFixed(2)}
                         </span>
                       </td>
-                      {/* Stock */}
-                      <td className="px-6 py-5">
+                      <td className="px-6 py-4">
                         {deal.in_stock ? (
-                          <span className="inline-flex items-center gap-1.5 text-green-600 font-bold text-base">
-                            <Check className="w-5 h-5" />
+                          <span className="inline-flex items-center gap-1 text-[#06D6A0] font-semibold text-sm">
+                            <Check className="w-4 h-4" />
                             In Stock
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 text-red-500 font-bold text-base">
-                            <XCircle className="w-5 h-5" />
+                          <span className="inline-flex items-center gap-1 text-red-400 font-semibold text-sm">
+                            <XCircle className="w-4 h-4" />
                             Out of Stock
                           </span>
                         )}
                       </td>
-                      {/* Buy Button */}
-                      <td className="px-8 py-5">
+                      <td className="px-8 py-4">
                         <a
                           href={deal.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={`inline-flex items-center gap-2 font-bold text-lg px-6 py-3 rounded-xl transition-colors ${
+                          className={`inline-flex items-center gap-2 font-bold text-sm px-5 py-2.5 rounded-xl transition-colors ${
                             deal.in_stock
-                              ? 'bg-teal-600 hover:bg-teal-700 text-white'
-                              : 'bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none'
+                              ? 'bg-[#FF6B35] hover:bg-[#e55a2b] text-white'
+                              : 'bg-white/5 text-zinc-600 cursor-not-allowed pointer-events-none'
                           }`}
                         >
                           Buy
-                          <ExternalLink className="w-5 h-5" />
+                          <ExternalLink className="w-4 h-4" />
                         </a>
                       </td>
                     </tr>
@@ -390,63 +372,61 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Mobile Cards */}
-          <div className="md:hidden divide-y divide-gray-100">
+          <div className="md:hidden divide-y divide-white/5">
             {sortedDeals.map((deal) => {
               const total = (deal.price || 0) + (deal.shipping_cost || 0);
               const isBest = deal.id === bestDeal?.id;
               return (
                 <div
                   key={deal.id}
-                  className={`p-5 ${isBest ? 'bg-green-50/60' : ''} ${
-                    !deal.in_stock ? 'opacity-60' : ''
+                  className={`p-5 ${isBest ? 'bg-[#06D6A0]/5' : ''} ${
+                    !deal.in_stock ? 'opacity-40' : ''
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-sm font-bold text-gray-500">
+                      <div className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs font-bold text-zinc-400">
                         {deal.retailer?.name?.charAt(0) || '?'}
                       </div>
-                      <div>
-                        <p className="text-xl font-bold text-gray-900">{deal.retailer?.name}</p>
-                      </div>
+                      <p className="text-base font-semibold text-white">{deal.retailer?.name}</p>
                       {isBest && (
-                        <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-full">
-                          BEST
+                        <span className="bg-[#06D6A0]/10 text-[#06D6A0] text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                          Best
                         </span>
                       )}
                     </div>
                     {deal.in_stock ? (
-                      <span className="text-green-600 font-bold text-sm flex items-center gap-1">
-                        <Check className="w-4 h-4" /> In Stock
+                      <span className="text-[#06D6A0] font-semibold text-xs flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> In Stock
                       </span>
                     ) : (
-                      <span className="text-red-500 font-bold text-sm flex items-center gap-1">
-                        <XCircle className="w-4 h-4" /> Out of Stock
+                      <span className="text-red-400 font-semibold text-xs flex items-center gap-1">
+                        <XCircle className="w-3.5 h-3.5" /> Out of Stock
                       </span>
                     )}
                   </div>
                   <div className="flex items-end justify-between">
                     <div>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-2xl font-bold text-gray-900">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-bold text-white">
                           ${deal.price.toFixed(2)}
                         </span>
                         {deal.original_price && deal.original_price > deal.price && (
-                          <span className="text-sm text-gray-400 line-through">
+                          <span className="text-xs text-zinc-600 line-through">
                             ${deal.original_price.toFixed(2)}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 mt-0.5">
+                      <p className="text-xs text-zinc-500 mt-0.5">
                         Shipping:{' '}
                         {deal.shipping_cost === 0 ? (
-                          <span className="text-green-600 font-bold">FREE</span>
+                          <span className="text-[#06D6A0] font-bold">FREE</span>
                         ) : (
                           `$${deal.shipping_cost.toFixed(2)}`
                         )}
-                        {' | '}
+                        {' · '}
                         Total:{' '}
-                        <span className={`font-bold ${isBest ? 'text-green-600' : ''}`}>
+                        <span className={`font-bold ${isBest ? 'text-[#06D6A0]' : 'text-white'}`}>
                           ${total.toFixed(2)}
                         </span>
                       </p>
@@ -455,13 +435,13 @@ export default function ProductDetailPage() {
                       href={deal.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 font-bold text-base px-5 py-3 rounded-xl transition-colors ${
+                      className={`inline-flex items-center gap-2 font-bold text-sm px-4 py-2.5 rounded-xl transition-colors ${
                         deal.in_stock
-                          ? 'bg-teal-600 hover:bg-teal-700 text-white'
-                          : 'bg-gray-200 text-gray-400 cursor-not-allowed pointer-events-none'
+                          ? 'bg-[#FF6B35] hover:bg-[#e55a2b] text-white'
+                          : 'bg-white/5 text-zinc-600 cursor-not-allowed pointer-events-none'
                       }`}
                     >
-                      Buy <ExternalLink className="w-4 h-4" />
+                      Buy <ExternalLink className="w-3.5 h-3.5" />
                     </a>
                   </div>
                 </div>
@@ -470,90 +450,92 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* ===== PRICE HISTORY CHART ===== */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 md:p-8 mb-6">
+        {/* Price History Chart */}
+        <div className="bg-[#111] rounded-2xl border border-white/5 p-6 md:p-8 mb-6">
           <div className="flex items-center gap-3 mb-6">
-            <TrendingDown className="w-7 h-7 text-teal-600" />
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Price History (Last 30 Days)
+            <TrendingDown className="w-5 h-5 text-[#06D6A0]" />
+            <h2 className="text-lg md:text-xl font-bold text-white">
+              Price History
             </h2>
+            <span className="text-xs text-zinc-600">Last 30 days</span>
           </div>
-          <div className="w-full h-72 md:h-80">
+          <div className="w-full h-64 md:h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F97316" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#14B8A6" stopOpacity={0.05} />
+                    <stop offset="5%" stopColor="#FF6B35" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#FF6B35" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 14, fill: '#6B7280' }}
+                  tick={{ fontSize: 12, fill: '#52525b' }}
                   tickLine={false}
+                  axisLine={{ stroke: '#1e1e1e' }}
                   interval="preserveStartEnd"
                 />
                 <YAxis
-                  tick={{ fontSize: 14, fill: '#6B7280' }}
+                  tick={{ fontSize: 12, fill: '#52525b' }}
                   tickLine={false}
+                  axisLine={{ stroke: '#1e1e1e' }}
                   tickFormatter={(v) => `$${v}`}
                   domain={['dataMin - 5', 'dataMax + 5']}
-                  width={70}
+                  width={60}
                 />
                 <Tooltip
                   contentStyle={{
-                    fontSize: '16px',
-                    borderRadius: '12px',
-                    border: '1px solid #E5E7EB',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    fontSize: '14px',
+                    borderRadius: '8px',
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid #2a2a2a',
+                    color: '#d4d4d8',
                   }}
                   formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
                 />
                 <Area
                   type="monotone"
                   dataKey="price"
-                  stroke="#F97316"
-                  strokeWidth={3}
+                  stroke="#FF6B35"
+                  strokeWidth={2}
                   fill="url(#priceGradient)"
                   dot={false}
-                  activeDot={{ r: 6, fill: '#14B8A6', stroke: '#fff', strokeWidth: 2 }}
+                  activeDot={{ r: 5, fill: '#06D6A0', stroke: '#111', strokeWidth: 2 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* ===== WATCHLIST & SHARE ACTIONS ===== */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-12">
-          {/* Add to Watchlist */}
+        {/* Actions */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-12">
           <button
             onClick={() => setWatchlisted(!watchlisted)}
-            className={`flex-1 inline-flex items-center justify-center gap-3 text-xl font-bold px-8 py-5 rounded-2xl transition-colors ${
+            className={`flex-1 inline-flex items-center justify-center gap-3 text-base font-bold px-6 py-4 rounded-xl transition-all ${
               watchlisted
-                ? 'bg-red-50 border-2 border-red-300 text-red-600'
-                : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-red-300 hover:text-red-500'
+                ? 'bg-red-500/10 border border-red-500/20 text-red-400'
+                : 'bg-[#111] border border-white/5 text-zinc-300 hover:border-white/10'
             }`}
           >
             <Heart
-              className={`w-7 h-7 ${watchlisted ? 'fill-red-500 text-red-500' : ''}`}
+              className={`w-5 h-5 ${watchlisted ? 'fill-red-400 text-red-400' : ''}`}
             />
-            {watchlisted ? 'Watching for Price Drops' : 'Watch for Price Drops'}
+            {watchlisted ? 'Watching' : 'Watch for Price Drops'}
           </button>
 
-          {/* Share / Copy Link */}
           <button
             onClick={handleShare}
-            className="inline-flex items-center justify-center gap-3 text-xl font-bold px-8 py-5 rounded-2xl bg-white border-2 border-gray-200 text-gray-700 hover:border-teal-300 hover:text-teal-600 transition-colors"
+            className="inline-flex items-center justify-center gap-3 text-base font-bold px-6 py-4 rounded-xl bg-[#111] border border-white/5 text-zinc-300 hover:border-white/10 transition-all"
           >
             {copied ? (
               <>
-                <Check className="w-7 h-7 text-green-500" />
-                Link Copied!
+                <Check className="w-5 h-5 text-[#06D6A0]" />
+                Copied!
               </>
             ) : (
               <>
-                <Copy className="w-7 h-7" />
+                <Copy className="w-5 h-5" />
                 Share
               </>
             )}

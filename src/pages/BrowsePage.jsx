@@ -26,21 +26,6 @@ const MOCK_RESULTS = [
   { id: '12', name: 'Garden Hose 30m Expandable', brand: 'Gardena', category: 'home', image_url: '', best_price: 34.95, original_price: 69.99, deal_score: 80, retailer_name: 'Bunnings', price_count: 3 },
 ];
 
-const CATEGORY_COLORS = {
-  electronics: 'bg-blue-500',
-  fashion: 'bg-pink-500',
-  home: 'bg-amber-500',
-  groceries: 'bg-green-500',
-  health: 'bg-red-400',
-  sports: 'bg-indigo-500',
-  travel: 'bg-cyan-500',
-  automotive: 'bg-gray-500',
-  baby: 'bg-purple-400',
-  books: 'bg-yellow-600',
-  pets: 'bg-orange-400',
-  food: 'bg-rose-500',
-};
-
 function getSavingsPercent(original, best) {
   if (!original || original <= best) return 0;
   return Math.round(((original - best) / original) * 100);
@@ -48,24 +33,26 @@ function getSavingsPercent(original, best) {
 
 function ProductCardSkeleton() {
   return (
-    <div className="animate-pulse rounded-2xl border-2 border-gray-100 bg-white p-4">
-      <div className="mb-4 h-44 w-full rounded-xl bg-gray-200" />
-      <div className="mb-2 h-6 w-3/4 rounded bg-gray-200" />
-      <div className="mb-3 h-4 w-1/3 rounded bg-gray-200" />
-      <div className="mb-2 h-8 w-1/2 rounded bg-gray-200" />
-      <div className="h-4 w-2/3 rounded bg-gray-200" />
+    <div className="animate-pulse rounded-2xl border border-white/5 bg-[#111] p-5">
+      <div className="mb-4 h-40 w-full rounded-xl bg-[#0a0a0a]" />
+      <div className="mb-2 h-3 w-1/4 rounded bg-[#0a0a0a]" />
+      <div className="mb-3 h-4 w-3/4 rounded bg-[#0a0a0a]" />
+      <div className="mb-1 h-6 w-1/3 rounded bg-[#0a0a0a]" />
+      <div className="h-3 w-1/4 rounded bg-[#0a0a0a]" />
+      <div className="mt-4 pt-3 border-t border-white/5">
+        <div className="h-3 w-1/3 rounded bg-[#0a0a0a]" />
+      </div>
     </div>
   );
 }
 
 function ProductCard({ product }) {
   const savings = getSavingsPercent(product.original_price, product.best_price);
-  const colorClass = CATEGORY_COLORS[product.category] || 'bg-gray-400';
 
   return (
     <Link
       to={`/product/${product.id}`}
-      className="group block rounded-2xl border-2 border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-emerald-300 hover:shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200"
+      className="group block rounded-2xl border border-white/5 bg-[#111] p-5 transition-all duration-200 hover:border-white/10"
     >
       {/* Product Image / Placeholder */}
       <div className="relative mb-4">
@@ -73,53 +60,45 @@ function ProductCard({ product }) {
           <img
             src={product.image_url}
             alt={product.name}
-            className="h-44 w-full rounded-xl object-cover"
+            className="h-40 w-full rounded-xl object-cover"
           />
         ) : (
-          <div className={`flex h-44 w-full items-center justify-center rounded-xl ${colorClass} bg-opacity-20`}>
-            <span className="text-5xl">
-              {CATEGORIES.find(c => c.id === product.category)?.emoji || '📦'}
-            </span>
+          <div className="flex h-40 w-full items-center justify-center rounded-xl bg-[#0a0a0a]">
+            <PackageSearch className="h-10 w-10 text-zinc-800" />
           </div>
         )}
-
-        {/* Savings Badge */}
         {savings > 0 && (
-          <span className="absolute right-2 top-2 rounded-full bg-red-500 px-3 py-1.5 text-base font-bold text-white shadow-md">
+          <span className="absolute right-2 top-2 rounded-full bg-[#FF6B35]/10 px-2.5 py-1 text-xs font-bold text-[#FF6B35]">
             -{savings}%
           </span>
         )}
       </div>
 
       {/* Product Info */}
-      <h3 className="mb-1 text-lg font-bold leading-snug text-gray-900 group-hover:text-emerald-700 sm:text-xl">
+      <p className="text-xs font-medium text-zinc-500 mb-1">{product.brand}</p>
+      <h3 className="text-sm font-semibold text-white leading-snug mb-3 line-clamp-2">
         {product.name}
       </h3>
 
-      <p className="mb-3 text-base text-gray-500">
-        {product.brand}
-      </p>
-
-      {/* Price Section */}
-      <div className="mb-2">
-        <span className="text-2xl font-extrabold text-emerald-600 sm:text-3xl">
+      {/* Price */}
+      <div className="flex items-baseline gap-2 mb-1">
+        <span className="text-lg font-bold text-[#06D6A0]">
           ${product.best_price.toFixed(2)}
         </span>
-        <span className="ml-2 text-base text-gray-400">
-          from {product.retailer_name}
-        </span>
+        {savings > 0 && (
+          <span className="text-xs text-zinc-600 line-through">
+            ${product.original_price.toFixed(2)}
+          </span>
+        )}
       </div>
 
-      {savings > 0 && (
-        <p className="mb-3 text-base text-gray-400 line-through">
-          Was ${product.original_price.toFixed(2)}
-        </p>
-      )}
-
-      {/* Compare Link */}
-      <div className="flex items-center gap-1 text-base font-semibold text-emerald-600 group-hover:text-emerald-700">
-        Compare {product.price_count} prices
-        <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-white/5">
+        <span className="text-xs text-zinc-600">{product.retailer_name}</span>
+        <span className="flex items-center gap-1 text-xs font-medium text-zinc-400 group-hover:text-[#FF6B35] transition-colors">
+          Compare {product.price_count} prices
+          <ArrowRight className="h-3 w-3" />
+        </span>
       </div>
     </Link>
   );
@@ -133,7 +112,6 @@ export default function BrowsePage() {
   const [category, setCategory] = useState(searchParams.get('category') || '');
   const [sort, setSort] = useState(searchParams.get('sort') || 'deal_score');
 
-  // Build filters for the hook
   const filters = useMemo(() => ({
     query: query || undefined,
     category: category || undefined,
@@ -142,13 +120,11 @@ export default function BrowsePage() {
 
   const { data: apiResults, isLoading } = useProductSearch(filters);
 
-  // Fall back to mock data if API returns nothing
   const products = useMemo(() => {
     if (apiResults && apiResults.length > 0) return apiResults;
 
     let results = [...MOCK_RESULTS];
 
-    // Filter by search query
     if (query) {
       const q = query.toLowerCase();
       results = results.filter(p =>
@@ -157,12 +133,10 @@ export default function BrowsePage() {
       );
     }
 
-    // Filter by category
     if (category) {
       results = results.filter(p => p.category === category);
     }
 
-    // Sort
     switch (sort) {
       case 'price_low':
         results.sort((a, b) => a.best_price - b.best_price);
@@ -173,7 +147,6 @@ export default function BrowsePage() {
       case 'deal_score':
         results.sort((a, b) => b.deal_score - a.deal_score);
         break;
-      case 'newest':
       default:
         break;
     }
@@ -181,7 +154,6 @@ export default function BrowsePage() {
     return results;
   }, [apiResults, query, category, sort]);
 
-  // Sync filters to URL
   useEffect(() => {
     const params = {};
     if (query) params.q = query;
@@ -200,24 +172,24 @@ export default function BrowsePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Search Header */}
-      <div className="sticky top-0 z-30 border-b-2 border-gray-200 bg-white shadow-sm">
-        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+    <div className="min-h-screen bg-[#050505]">
+      {/* Sticky Search Header */}
+      <div className="sticky top-16 z-30 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/5">
+        <div className="mx-auto max-w-6xl px-4 py-4 sm:px-6">
           <form onSubmit={handleSearchSubmit} className="flex gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
               <input
                 type="text"
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Search for any product or brand..."
-                className="w-full rounded-xl border-2 border-gray-200 bg-white py-4 pl-13 pr-4 text-lg text-gray-900 placeholder-gray-400 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+                className="w-full rounded-xl border border-white/10 bg-[#111] py-3 pl-11 pr-4 text-sm text-white placeholder-zinc-500 transition-all focus:border-[#FF6B35]/40 focus:outline-none focus:ring-0"
               />
             </div>
             <button
               type="submit"
-              className="rounded-xl bg-emerald-600 px-8 text-lg font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+              className="rounded-xl bg-[#FF6B35] px-6 text-sm font-semibold text-white transition-all hover:brightness-110"
             >
               Search
             </button>
@@ -225,16 +197,16 @@ export default function BrowsePage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         {/* Category Filter Pills */}
-        <div className="mb-6 overflow-x-auto pb-2">
-          <div className="flex gap-3">
+        <div className="mb-8 overflow-x-auto hide-scrollbar pb-1">
+          <div className="flex gap-2">
             <button
               onClick={() => setCategory('')}
-              className={`flex-shrink-0 rounded-full px-6 py-3 text-base font-bold transition-colors ${
+              className={`flex-shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
                 !category
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'border-2 border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
+                  ? 'bg-[#FF6B35]/10 border border-[#FF6B35]/30 text-[#FF6B35]'
+                  : 'border border-white/5 bg-[#111] text-zinc-400 hover:border-white/10 hover:text-zinc-200'
               }`}
             >
               All
@@ -243,66 +215,60 @@ export default function BrowsePage() {
               <button
                 key={cat.id}
                 onClick={() => handleCategoryToggle(cat.id)}
-                className={`flex flex-shrink-0 items-center gap-2 rounded-full px-6 py-3 text-base font-bold transition-colors ${
+                className={`flex flex-shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
                   category === cat.id
-                    ? 'bg-emerald-600 text-white shadow-md'
-                    : 'border-2 border-gray-200 bg-white text-gray-600 hover:border-emerald-300 hover:text-emerald-700'
+                    ? 'bg-[#FF6B35]/10 border border-[#FF6B35]/30 text-[#FF6B35]'
+                    : 'border border-white/5 bg-[#111] text-zinc-400 hover:border-white/10 hover:text-zinc-200'
                 }`}
               >
-                <span className="text-xl">{cat.emoji}</span>
                 {cat.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Sort & Results Count Bar */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <p className="text-lg font-medium text-gray-700">
+        {/* Sort & Results Count */}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-zinc-500">
             {isLoading
-              ? 'Searching for deals...'
-              : `${products.length} deal${products.length !== 1 ? 's' : ''} found`}
+              ? 'Searching...'
+              : `${products.length} result${products.length !== 1 ? 's' : ''}`}
             {query && (
-              <span className="text-gray-400"> for &ldquo;{query}&rdquo;</span>
+              <span className="text-zinc-600"> for &ldquo;{query}&rdquo;</span>
             )}
           </p>
 
           <div className="relative">
-            <label htmlFor="sort-select" className="mr-2 text-base font-medium text-gray-600">
-              Sort by:
-            </label>
             <select
-              id="sort-select"
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              className="appearance-none rounded-xl border-2 border-gray-200 bg-white py-3 pl-4 pr-12 text-base font-bold text-gray-700 transition-colors hover:border-emerald-300 focus:border-emerald-500 focus:outline-none focus:ring-4 focus:ring-emerald-100"
+              className="appearance-none rounded-xl border border-white/10 bg-[#111] py-2 pl-3 pr-8 text-xs font-medium text-zinc-300 transition-colors hover:border-white/20 focus:border-[#FF6B35]/40 focus:outline-none cursor-pointer"
             >
               {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
+                <option key={opt.value} value={opt.value} className="bg-[#111] text-zinc-300">
                   {opt.label}
                 </option>
               ))}
             </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
           </div>
         </div>
 
         {/* Results Grid */}
         {isLoading ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
               <ProductCardSkeleton key={i} />
             ))}
           </div>
         ) : products.length === 0 ? (
-          /* Empty State */
-          <div className="mx-auto max-w-md py-20 text-center">
-            <PackageSearch className="mx-auto mb-6 h-20 w-20 text-gray-300" />
-            <h2 className="mb-3 text-2xl font-bold text-gray-700">
-              No deals found
-            </h2>
-            <p className="mb-8 text-lg text-gray-500">
-              We couldn&apos;t find any deals matching your search. Try a different product name, brand, or category.
+          <div className="mx-auto max-w-sm py-24 text-center">
+            <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-[#111] border border-white/5">
+              <PackageSearch className="h-10 w-10 text-zinc-700" />
+            </div>
+            <h2 className="mb-2 text-xl font-bold text-zinc-300">No results found</h2>
+            <p className="mb-8 text-sm text-zinc-500 leading-relaxed">
+              Try a different search term or browse categories above.
             </p>
             <button
               onClick={() => {
@@ -311,13 +277,13 @@ export default function BrowsePage() {
                 setCategory('');
                 setSort('deal_score');
               }}
-              className="rounded-xl bg-emerald-600 px-8 py-4 text-lg font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+              className="rounded-xl bg-[#111] border border-white/5 px-6 py-2.5 text-sm font-semibold text-zinc-300 transition-all hover:border-white/10"
             >
-              Clear All Filters
+              Clear Filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}

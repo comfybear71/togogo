@@ -4,7 +4,7 @@ export default function Skeleton({ className = '', count = 1 }) {
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className={`animate-shimmer rounded-[8px] bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 bg-[length:200%_100%] ${className}`}
+          className={`animate-shimmer rounded-xl bg-gradient-to-r from-[#111] via-[#1a1a1a] to-[#111] bg-[length:200%_100%] ${className}`}
         />
       ))}
     </>
