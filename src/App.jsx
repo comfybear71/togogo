@@ -43,12 +43,12 @@ export default function App() {
         <Route path="/auth" element={<AuthPage />} />
 
         <Route path="/assistant" element={<AssistantPage />} />
-        <Route path="/shipping" element={<ShippingPage />} />
-        <Route path="/marketing" element={<MarketingPage />} />
 
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/browse" element={<BrowsePage />} />
+          <Route path="/shipping" element={<ShippingPage />} />
+          <Route path="/marketing" element={<MarketingPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />

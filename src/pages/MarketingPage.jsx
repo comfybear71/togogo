@@ -1,5 +1,4 @@
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Megaphone, Target, TrendingUp, Zap, PenTool } from 'lucide-react'
+import { Megaphone, Target, TrendingUp, Zap, PenTool } from 'lucide-react'
 
 const FEATURES = [
   {
@@ -29,24 +28,14 @@ const FEATURES = [
 ]
 
 export default function MarketingPage() {
-  const navigate = useNavigate()
-
   return (
-    <div className="min-h-[100dvh] bg-[#050505] px-6 py-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-10">
-        <button
-          onClick={() => navigate('/')}
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-all"
-        >
-          <ArrowLeft className="h-4.5 w-4.5" />
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFD23F]/15">
-            <Megaphone className="h-5 w-5 text-[#FFD23F]" />
-          </div>
-          <h1 className="text-xl font-heading font-bold text-white">Marketing</h1>
+    <div className="py-6">
+      {/* Page title */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FFD23F]/15">
+          <Megaphone className="h-5 w-5 text-[#FFD23F]" />
         </div>
+        <h1 className="text-xl font-heading font-bold text-white">Marketing</h1>
       </div>
 
       {/* Hero */}
@@ -92,3 +81,4 @@ export default function MarketingPage() {
     </div>
   )
 }
+

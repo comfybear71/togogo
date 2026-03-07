@@ -1,5 +1,4 @@
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Truck, Package, Globe, Clock, Calculator } from 'lucide-react'
+import { Truck, Package, Globe, Clock, Calculator } from 'lucide-react'
 
 const FEATURES = [
   {
@@ -29,24 +28,14 @@ const FEATURES = [
 ]
 
 export default function ShippingPage() {
-  const navigate = useNavigate()
-
   return (
-    <div className="min-h-[100dvh] bg-[#050505] px-6 py-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-10">
-        <button
-          onClick={() => navigate('/')}
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/[0.1] transition-all"
-        >
-          <ArrowLeft className="h-4.5 w-4.5" />
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06D6A0]/15">
-            <Truck className="h-5 w-5 text-[#06D6A0]" />
-          </div>
-          <h1 className="text-xl font-heading font-bold text-white">Shipping API</h1>
+    <div className="py-6">
+      {/* Page title */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#06D6A0]/15">
+          <Truck className="h-5 w-5 text-[#06D6A0]" />
         </div>
+        <h1 className="text-xl font-heading font-bold text-white">Shipping API</h1>
       </div>
 
       {/* Hero */}
