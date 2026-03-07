@@ -30,12 +30,6 @@
   --shadow-glow-teal: 0 0 40px rgba(6,214,160,0.15);
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
 html {
   font-size: 16px;
 }
