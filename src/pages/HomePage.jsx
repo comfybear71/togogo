@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, ArrowRight, Sparkles, Truck, Megaphone, Bot } from 'lucide-react'
 
@@ -25,7 +25,7 @@ export default function HomePage() {
   ]
 
   return (
-    <div className="relative min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden" style={{ padding: '60px 40px' }}>
+    <div className="relative min-h-[100dvh] overflow-hidden">
 
       {/* Background orbs */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -34,11 +34,11 @@ export default function HomePage() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 h-[400px] w-[400px] rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, #FFD23F 0%, transparent 70%)', animation: 'orb-drift 18s ease-in-out 2s infinite' }} />
       </div>
 
-      {/* Everything centered */}
-      <div className="relative z-10 w-full" style={{ maxWidth: '300px' }}>
+      {/* Content — positioned upper-center, not dead center */}
+      <div className="relative z-10 flex flex-col items-center" style={{ paddingTop: '15vh', paddingBottom: '40px', paddingLeft: '24px', paddingRight: '24px' }}>
 
         {/* Dots */}
-        <div className="flex items-center justify-center gap-4" style={{ marginBottom: '40px' }}>
+        <div className="flex items-center justify-center gap-4" style={{ marginBottom: '32px' }}>
           <div className="dot-animate-1 w-2.5 h-2.5 rounded-full bg-[#FF6B35] shadow-[0_0_12px_rgba(255,107,53,0.4)]" />
           <div className="dot-animate-2 w-2.5 h-2.5 rounded-full bg-[#FFD23F] shadow-[0_0_12px_rgba(255,210,63,0.4)]" />
           <div className="dot-animate-3 w-2.5 h-2.5 rounded-full bg-[#06D6A0] shadow-[0_0_12px_rgba(6,214,160,0.4)]" />
@@ -56,15 +56,15 @@ export default function HomePage() {
         </h1>
 
         {/* Tagline */}
-        <p className="fade-up text-center text-[11px] sm:text-xs tracking-[0.3em] uppercase text-zinc-500 font-semibold" style={{ marginTop: '24px', animationDelay: '0.8s' }}>
+        <p className="fade-up text-center text-[11px] sm:text-xs tracking-[0.3em] uppercase text-zinc-500 font-semibold" style={{ marginTop: '20px', animationDelay: '0.8s' }}>
           Trade &middot; Swap &middot; Connect &middot; Share
         </p>
 
-        {/* Search */}
-        <form onSubmit={handleSearch} className="fade-up" style={{ marginTop: '48px', animationDelay: '1s' }}>
+        {/* === Search — narrower, centrepiece === */}
+        <form onSubmit={handleSearch} className="fade-up" style={{ marginTop: '56px', width: '75%', maxWidth: '260px', animationDelay: '1s' }}>
           <div className={`relative rounded-full transition-all duration-500 ${isFocused ? 'bg-[#0e0e0e] shadow-[0_0_0_1px_rgba(255,107,53,0.25),0_0_40px_rgba(255,107,53,0.06)]' : 'bg-[#0e0e0e] shadow-[0_0_0_1px_rgba(255,255,255,0.06)]'}`}>
             <div className="flex items-center">
-              <div className="pl-5">
+              <div className="pl-4">
                 <Search className={`h-4 w-4 transition-colors duration-300 ${isFocused ? 'text-[#FF6B35]' : 'text-zinc-600'}`} />
               </div>
               <input
@@ -75,10 +75,10 @@ export default function HomePage() {
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder="Search for anything..."
-                className="flex-1 bg-transparent py-3.5 px-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none"
+                className="flex-1 bg-transparent py-3 px-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none"
               />
               {searchQuery.trim() && (
-                <button type="submit" className="mr-2 flex h-8 w-8 items-center justify-center rounded-full bg-[#FF6B35] text-white transition-all hover:scale-110 active:scale-95">
+                <button type="submit" className="mr-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#FF6B35] text-white transition-all hover:scale-110 active:scale-95">
                   <ArrowRight className="h-3.5 w-3.5" />
                 </button>
               )}
@@ -86,14 +86,14 @@ export default function HomePage() {
           </div>
         </form>
 
-        {/* AI Assistant */}
-        <div className="fade-up" style={{ marginTop: '32px', animationDelay: '1.2s' }}>
+        {/* === AI Assistant — narrower to match === */}
+        <div className="fade-up" style={{ marginTop: '28px', width: '75%', maxWidth: '260px', animationDelay: '1.2s' }}>
           <button
             onClick={() => navigate('/assistant')}
             className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all duration-300"
             style={{ background: 'linear-gradient(135deg, #FF6B35, #FFD23F, #06D6A0)', backgroundSize: '200% 200%', animation: 'gradient-shift 4s ease infinite' }}
           >
-            <div className="flex items-center justify-center gap-3 rounded-[15px] bg-[#0a0a0a] px-5 py-4 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
+            <div className="flex items-center gap-3 rounded-[15px] bg-[#0a0a0a] px-4 py-3.5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#06D6A0]/20">
                 <Bot className="h-4.5 w-4.5 text-[#FF6B35]" />
               </div>
@@ -106,31 +106,31 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Shipping + Marketing */}
-        <div className="fade-up flex gap-4" style={{ marginTop: '20px', animationDelay: '1.4s' }}>
+        {/* === Shipping + Marketing — same width === */}
+        <div className="fade-up flex gap-3" style={{ marginTop: '20px', width: '75%', maxWidth: '260px', animationDelay: '1.4s' }}>
           <button
             onClick={() => navigate('/shipping')}
-            className="group flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] py-3.5 transition-all duration-300 hover:border-[#06D6A0]/30"
+            className="group flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] py-3 transition-all duration-300 hover:border-[#06D6A0]/30"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#06D6A0]/10">
-              <Truck className="h-4 w-4 text-[#06D6A0]" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#06D6A0]/10">
+              <Truck className="h-3.5 w-3.5 text-[#06D6A0]" />
             </div>
             <span className="text-sm font-medium text-zinc-300">Shipping</span>
           </button>
 
           <button
             onClick={() => navigate('/marketing')}
-            className="group flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] py-3.5 transition-all duration-300 hover:border-[#FFD23F]/30"
+            className="group flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] py-3 transition-all duration-300 hover:border-[#FFD23F]/30"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFD23F]/10">
-              <Megaphone className="h-4 w-4 text-[#FFD23F]" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FFD23F]/10">
+              <Megaphone className="h-3.5 w-3.5 text-[#FFD23F]" />
             </div>
             <span className="text-sm font-medium text-zinc-300">Marketing</span>
           </button>
         </div>
 
         {/* Footer */}
-        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '48px', animationDelay: '1.6s' }}>
+        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '56px', animationDelay: '1.6s' }}>
           The marketplace for everything
         </p>
 
