@@ -75,7 +75,7 @@ export default function HomePage() {
                 onFocus={() => setIsFocused(true)}
                 onBlur={() => setIsFocused(false)}
                 placeholder="Search for anything..."
-                className="flex-1 bg-transparent py-3 px-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none"
+                className="flex-1 bg-transparent py-4 px-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none"
               />
               {searchQuery.trim() && (
                 <button type="submit" className="mr-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-[#FF6B35] text-white transition-all hover:scale-110 active:scale-95">
@@ -93,7 +93,7 @@ export default function HomePage() {
             className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all duration-300"
             style={{ background: 'linear-gradient(135deg, #FF6B35, #FFD23F, #06D6A0)', backgroundSize: '200% 200%', animation: 'gradient-shift 4s ease infinite' }}
           >
-            <div className="flex items-center gap-3 rounded-[15px] bg-[#0a0a0a] px-4 py-3.5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
+            <div className="flex items-center gap-3 rounded-[15px] bg-[#0a0a0a] px-4 py-5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#06D6A0]/20">
                 <Bot className="h-4.5 w-4.5 text-[#FF6B35]" />
               </div>
@@ -110,9 +110,9 @@ export default function HomePage() {
         <div className="fade-up flex gap-3" style={{ marginTop: '20px', width: '75%', maxWidth: '260px', animationDelay: '1.4s' }}>
           <button
             onClick={() => navigate('/shipping')}
-            className="group flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] py-3 transition-all duration-300 hover:border-[#06D6A0]/30"
+            className="group flex-1 flex items-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] pl-3 pr-4 py-3 transition-all duration-300 hover:border-[#06D6A0]/30"
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#06D6A0]/10">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#06D6A0]/10">
               <Truck className="h-3.5 w-3.5 text-[#06D6A0]" />
             </div>
             <span className="text-sm font-medium text-zinc-300">Shipping</span>
@@ -120,9 +120,9 @@ export default function HomePage() {
 
           <button
             onClick={() => navigate('/marketing')}
-            className="group flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] py-3 transition-all duration-300 hover:border-[#FFD23F]/30"
+            className="group flex-1 flex items-center gap-2 rounded-2xl bg-[#0e0e0e] border border-white/[0.06] pl-3 pr-4 py-3 transition-all duration-300 hover:border-[#FFD23F]/30"
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#FFD23F]/10">
+            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[#FFD23F]/10">
               <Megaphone className="h-3.5 w-3.5 text-[#FFD23F]" />
             </div>
             <span className="text-sm font-medium text-zinc-300">Marketing</span>

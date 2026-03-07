@@ -114,9 +114,9 @@ export default function AssistantPage() {
       </div>
 
       {/* ===== Messages Area ===== */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
         {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <div className="flex flex-col items-center justify-center h-full text-center px-2">
             {/* Welcome state */}
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-5">
               <Bot className="h-8 w-8 text-[#FF6B35]" />
@@ -129,7 +129,7 @@ export default function AssistantPage() {
             </p>
 
             {/* Suggestion chips */}
-            <div className="flex flex-col gap-2 w-full max-w-sm">
+            <div className="flex flex-col gap-2 w-full max-w-xs">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
@@ -197,7 +197,7 @@ export default function AssistantPage() {
       </div>
 
       {/* ===== Input Area ===== */}
-      <div className="border-t border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl px-4 py-3 pb-safe">
+      <div className="border-t border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl px-6 py-3 pb-safe">
         <form onSubmit={handleSubmit} className="flex items-center gap-2">
           <div className="flex-1 flex items-center rounded-2xl bg-[#0e0e0e] border border-white/[0.06] focus-within:border-[#FF6B35]/25 transition-colors">
             <input
