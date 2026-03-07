@@ -46,16 +46,16 @@ const QUICK_STARTS = [
 
 const TOOLS = [
   {
-    id: 'shipping',
-    emoji: '🚚',
-    label: 'Shipping',
-    path: '/shipping',
+    id: 'suppliers',
+    emoji: '🏭',
+    label: 'Suppliers',
+    path: '/suppliers',
   },
   {
-    id: 'marketing',
-    emoji: '📣',
-    label: 'Marketing',
-    path: '/marketing',
+    id: 'platforms',
+    emoji: '🛍️',
+    label: 'Platforms',
+    path: '/platforms',
   },
   {
     id: 'browse',

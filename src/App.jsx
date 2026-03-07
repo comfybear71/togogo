@@ -13,8 +13,8 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'))
 const AuthPage = lazy(() => import('./pages/AuthPage'))
 const AssistantPage = lazy(() => import('./pages/AssistantPage'))
-const ShippingPage = lazy(() => import('./pages/ShippingPage'))
-const MarketingPage = lazy(() => import('./pages/MarketingPage'))
+const SuppliersPage = lazy(() => import('./pages/SuppliersPage'))
+const PlatformsPage = lazy(() => import('./pages/PlatformsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function PageLoader() {
@@ -47,8 +47,8 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<HomePage />} />
           <Route path="/browse" element={<BrowsePage />} />
-          <Route path="/shipping" element={<ShippingPage />} />
-          <Route path="/marketing" element={<MarketingPage />} />
+          <Route path="/suppliers" element={<SuppliersPage />} />
+          <Route path="/platforms" element={<PlatformsPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
