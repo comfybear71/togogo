@@ -12,13 +12,16 @@ const taglineSizes = {
   xl: 'text-base',
 }
 
-export default function Logo({ size = 'md', showTagline = true }) {
+export default function Logo({ size = 'md', showTagline = false }) {
   return (
     <div className="flex flex-col items-center">
       <span className={`${sizeClasses[size]} font-heading font-bold leading-tight tracking-tight`}>
-        <span style={{ color: '#FF6B35' }}>To</span>
-        <span style={{ color: '#FFD23F' }}>Go</span>
-        <span style={{ color: '#06D6A0' }}>Go</span>
+        <span style={{ color: '#FF6B35' }}>T</span>
+        <span className="text-white">o</span>
+        <span style={{ color: '#FFD23F' }}>G</span>
+        <span className="text-white">o</span>
+        <span style={{ color: '#06D6A0' }}>G</span>
+        <span className="text-white">o</span>
       </span>
       {showTagline && (
         <span className={`${taglineSizes[size]} text-zinc-500 tracking-widest uppercase mt-1`}>
