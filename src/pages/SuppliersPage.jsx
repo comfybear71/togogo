@@ -12,6 +12,7 @@ const SORT_OPTIONS = [
 const SUPPLIER_FILTERS = [
   { value: '', label: 'All Suppliers' },
   { value: 'CJ Dropshipping', label: '📦 CJ' },
+  { value: 'AliExpress', label: '🛒 AliExpress' },
   { value: 'Printful', label: '🎨 Printful' },
   { value: 'Printify', label: '🖨️ Printify' },
   { value: 'Gooten', label: '🏭 Gooten' },
