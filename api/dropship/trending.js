@@ -23,9 +23,8 @@ export default async function handler(req, res) {
     const activeSuppliers = parseSuppliers(suppliersParam)
     const terms = TRENDING_TERMS[category] || TRENDING_TERMS['']
 
-    // Pick 3 random terms for variety (more products)
-    const shuffled = [...terms].sort(() => Math.random() - 0.5)
-    const searchTerms = shuffled.slice(0, 3)
+    // Use all terms for maximum product variety
+    const searchTerms = terms
 
     // Only search selected suppliers
     const results = await Promise.allSettled(
@@ -72,7 +71,7 @@ export default async function handler(req, res) {
       return (b.suggestedMargin || 0) - (a.suggestedMargin || 0)
     })
 
-    products = products.slice(0, 60)
+    products = products.slice(0, 200)
 
     return res.status(200).json({ products, live: hasLiveData })
   } catch (error) {

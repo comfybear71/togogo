@@ -14,7 +14,7 @@ async function getCJAccessToken() {
   if (!apiKey) return null
 
   const now = Date.now()
-  if (cjAccessToken && cjTokenExpiry > now + 86400000) {
+  if (cjAccessToken && cjTokenExpiry > now) {
     return cjAccessToken
   }
 
@@ -385,10 +385,10 @@ function signAliExpressRequest(params, appSecret) {
     .map(k => `${k}${params[k]}`)
     .join('')
 
-  const signStr = `${appSecret}${sorted}${appSecret}`
+  // HMAC-SHA256: key is appSecret, message is sorted params (no prefix/suffix)
   return crypto
     .createHmac('sha256', appSecret)
-    .update(signStr)
+    .update(sorted)
     .digest('hex')
     .toUpperCase()
 }
@@ -401,7 +401,7 @@ async function callAliExpressAPI(method, params = {}) {
   const baseParams = {
     app_key: appKey,
     method,
-    sign_method: 'sha256',
+    sign_method: 'hmac',
     timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
     format: 'json',
     v: '2.0',
@@ -410,7 +410,8 @@ async function callAliExpressAPI(method, params = {}) {
 
   baseParams.sign = signAliExpressRequest(baseParams, appSecret)
 
-  const response = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(baseParams).toString()}`, {
+  const qs = new URLSearchParams(baseParams).toString()
+  const response = await fetch(`https://api-sg.aliexpress.com/sync?${qs}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })

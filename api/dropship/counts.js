@@ -12,8 +12,7 @@ function signAliExpressRequest(params, appSecret) {
     .sort()
     .map(k => `${k}${params[k]}`)
     .join('')
-  const signStr = `${appSecret}${sorted}${appSecret}`
-  return crypto.createHmac('sha256', appSecret).update(signStr).digest('hex').toUpperCase()
+  return crypto.createHmac('sha256', appSecret).update(sorted).digest('hex').toUpperCase()
 }
 
 async function getCJCount() {
@@ -54,7 +53,7 @@ async function getAliExpressCount() {
     const params = {
       app_key: appKey,
       method: 'aliexpress.ds.feedname.get',
-      sign_method: 'sha256',
+      sign_method: 'hmac',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
       format: 'json',
       v: '2.0',

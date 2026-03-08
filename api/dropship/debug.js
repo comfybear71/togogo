@@ -64,13 +64,13 @@ export default async function handler(req, res) {
     const params = {
       app_key: aeKey,
       method: 'aliexpress.ds.feedname.get',
-      sign_method: 'sha256',
+      sign_method: 'hmac',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
       format: 'json',
       v: '2.0',
     }
     const sorted = Object.keys(params).filter(k => k !== 'sign').sort().map(k => `${k}${params[k]}`).join('')
-    params.sign = crypto.createHmac('sha256', aeSecret).update(`${aeSecret}${sorted}${aeSecret}`).digest('hex').toUpperCase()
+    params.sign = crypto.createHmac('sha256', aeSecret).update(sorted).digest('hex').toUpperCase()
 
     const aeRes = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(params)}`, {
       method: 'POST',
