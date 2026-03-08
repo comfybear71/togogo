@@ -496,13 +496,67 @@ async function getAliExpressFeedNames() {
   }
 }
 
+// Map search queries to relevant AliExpress feed categories
+const FEED_KEYWORDS = {
+  pet: ['pet', 'dog', 'cat', 'animal'],
+  phone: ['phone', 'mobile', 'case', 'charger', 'cable'],
+  computer: ['computer', 'laptop', 'keyboard', 'mouse', 'usb', 'headphone', 'earbuds'],
+  fashion: ['fashion', 'dress', 'shirt', 'clothing', 'watch', 'sunglasses', 'jewel', 'necklace', 'ring', 'bracelet'],
+  home: ['home', 'kitchen', 'garden', 'light', 'lamp', 'pillow', 'organis', 'decor', 'furniture'],
+  beauty: ['beauty', 'makeup', 'skincare', 'hair', 'nail', 'brush', 'cosmetic'],
+  toy: ['toy', 'puzzle', 'game', 'fidget', 'rc', 'plush', 'doll'],
+  sport: ['sport', 'fitness', 'gym', 'yoga', 'water bottle', 'outdoor', 'camping', 'bike'],
+  auto: ['car', 'auto', 'vehicle', 'dash', 'motor'],
+  baby: ['baby', 'kid', 'child', 'infant'],
+}
+
+function pickBestFeed(feeds, query) {
+  if (!feeds.length) return 'DS bestselling products'
+  if (!query) return feeds[0]?.promo_name || feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+
+  const q = query.toLowerCase()
+
+  // Find which category the query maps to
+  let bestCategory = null
+  for (const [cat, keywords] of Object.entries(FEED_KEYWORDS)) {
+    if (keywords.some(kw => q.includes(kw))) {
+      bestCategory = cat
+      break
+    }
+  }
+
+  // Search feeds for a matching name
+  if (bestCategory) {
+    for (const feed of feeds) {
+      const name = (feed.promo_name || feed.feed_name || feed || '').toLowerCase()
+      if (name.includes(bestCategory)) return feed.promo_name || feed.feed_name || feed
+    }
+  }
+
+  // Also try direct query match against feed names
+  const queryWords = q.split(/\s+/)
+  for (const feed of feeds) {
+    const name = (feed.promo_name || feed.feed_name || feed || '').toLowerCase()
+    if (queryWords.some(w => w.length > 2 && name.includes(w))) return feed.promo_name || feed.feed_name || feed
+  }
+
+  // Fall back to bestselling
+  const bestselling = feeds.find(f => {
+    const n = (f.promo_name || f.feed_name || f || '').toLowerCase()
+    return n.includes('bestsell') || n.includes('best_sell') || n.includes('hot')
+  })
+  return bestselling?.promo_name || bestselling?.feed_name || feeds[0]?.promo_name || feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+}
+
 export async function searchAliExpress(query, page = 1) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
   if (!appKey) return getSampleAliExpressProducts(query)
 
   try {
     const feeds = await getAliExpressFeedNames()
-    const feedName = feeds[0]?.promo_name || feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+
+    // Try to find a feed matching the query
+    const feedName = pickBestFeed(feeds, query)
 
     const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
       feed_name: feedName,
@@ -515,7 +569,6 @@ export async function searchAliExpress(query, page = 1) {
 
     const feedResp = data?.aliexpress_ds_recommend_feed_get_response
     const resp = feedResp?.resp_result?.result || feedResp?.result
-    // AliExpress uses either "product" or "traffic_product_d_t_o" depending on API version
     const productList = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
     if (productList.length === 0) {
       return getSampleAliExpressProducts(query)
@@ -526,11 +579,13 @@ export async function searchAliExpress(query, page = 1) {
     // Client-side keyword filter since feed API doesn't support keyword search
     if (query) {
       const q = query.toLowerCase()
-      const filtered = products.filter(p =>
-        p.title.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q)
-      )
-      if (filtered.length > 0) products = filtered
+      const keywords = q.split(/\s+/)
+      const filtered = products.filter(p => {
+        const text = (p.title + ' ' + p.category).toLowerCase()
+        return keywords.some(kw => text.includes(kw))
+      })
+      // Return filtered results only — don't return irrelevant products
+      if (filtered.length > 0) return filtered
     }
 
     return products
