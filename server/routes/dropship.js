@@ -9,32 +9,40 @@ const router = Router()
 // Searches ALL suppliers through ToGoGo's API keys
 // Users never need their own accounts
 // ============================================
+// Map supplier display names to search functions
+const SUPPLIER_SEARCH_MAP = {
+  'CJ Dropshipping': (q, page) => searchCJ(q, page),
+  'AliExpress': (q, page) => searchAliExpress(q, page),
+  'Printful': (q) => searchPrintful(q),
+  'Printify': (q) => searchPrintify(q),
+  'Gooten': (q) => searchGooten(q),
+}
+
+function parseSuppliers(suppliersParam) {
+  if (!suppliersParam) return Object.keys(SUPPLIER_SEARCH_MAP)
+  return suppliersParam.split(',').filter(s => SUPPLIER_SEARCH_MAP[s])
+}
+
 router.get('/search', async (req, res, next) => {
   try {
-    const { query, page = 1, category, supplier, sort = 'relevance' } = req.query
+    const { query, page = 1, category, suppliers: suppliersParam, sort = 'relevance' } = req.query
 
     if (!query && !category) {
       return res.status(400).json({ error: 'Search query or category is required' })
     }
 
-    // Search all suppliers in parallel through our master keys
-    const results = await Promise.allSettled([
-      searchCJ(query || category, Number(page)),
-      searchAliExpress(query || category, Number(page)),
-      searchPrintful(query || category),
-      searchPrintify(query || category),
-      searchGooten(query || category),
-    ])
+    const activeSuppliers = parseSuppliers(suppliersParam)
+    const searchTerm = query || category
+
+    // Only search selected suppliers
+    const results = await Promise.allSettled(
+      activeSuppliers.map(s => SUPPLIER_SEARCH_MAP[s](searchTerm, Number(page)))
+    )
 
     // Merge and normalise into unified format
     let products = results
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value)
-
-    // Filter by supplier if requested
-    if (supplier) {
-      products = products.filter(p => p.supplier === supplier)
-    }
 
     // Sort
     if (sort === 'price_low') {
@@ -55,7 +63,7 @@ router.get('/search', async (req, res, next) => {
       products,
       total: products.length,
       page: Number(page),
-      suppliers: ['CJ Dropshipping', 'AliExpress', 'Printful', 'Printify', 'Gooten'],
+      suppliers: activeSuppliers,
       live: hasLiveData,
       message: hasLiveData ? null : 'Showing sample data. Live supplier APIs will be connected soon.',
     })
@@ -79,36 +87,43 @@ const TRENDING_TERMS = {
   custom: ['t-shirt', 'mug', 'phone case', 'hoodie', 'poster'],
 }
 
+// Sample data fallback functions by supplier name
+const SUPPLIER_SAMPLE_MAP = {
+  'CJ Dropshipping': getSampleCJProducts,
+  'AliExpress': getSampleAliExpressProducts,
+  'Printful': getSamplePrintfulProducts,
+  'Printify': getSamplePrintifyProducts,
+  'Gooten': getSampleGootenProducts,
+}
+
 router.get('/trending', async (req, res, next) => {
   try {
-    const { category = '' } = req.query
+    const { category = '', suppliers: suppliersParam } = req.query
+    const activeSuppliers = parseSuppliers(suppliersParam)
     const terms = TRENDING_TERMS[category] || TRENDING_TERMS['']
 
     // Pick 2 random terms to get variety
-    const shuffled = terms.sort(() => Math.random() - 0.5)
+    const shuffled = [...terms].sort(() => Math.random() - 0.5)
     const searchTerms = shuffled.slice(0, 2)
 
-    const results = await Promise.allSettled([
-      ...searchTerms.map(term => searchCJ(term, 1)),
-      ...searchTerms.map(term => searchAliExpress(term, 1)),
-      ...searchTerms.map(term => searchPrintful(term)),
-      ...searchTerms.map(term => searchPrintify(term)),
-      ...searchTerms.map(term => searchGooten(term)),
-    ])
+    // Only query selected suppliers
+    const results = await Promise.allSettled(
+      activeSuppliers.flatMap(s =>
+        searchTerms.map(term => SUPPLIER_SEARCH_MAP[s](term, 1))
+      )
+    )
 
     let products = results
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value)
 
-    // If live APIs returned nothing, use sample data from all suppliers
+    const hasLiveData = products.some(p => p._live)
+
+    // If live APIs returned nothing, use sample data from selected suppliers
     if (products.length === 0) {
-      products = [
-        ...getSampleCJProducts(searchTerms[0]),
-        ...getSampleAliExpressProducts(searchTerms[0]),
-        ...getSamplePrintfulProducts(searchTerms[0]),
-        ...getSamplePrintifyProducts(searchTerms[0]),
-        ...getSampleGootenProducts(searchTerms[0]),
-      ]
+      products = activeSuppliers.flatMap(s =>
+        SUPPLIER_SAMPLE_MAP[s] ? SUPPLIER_SAMPLE_MAP[s](searchTerms[0]) : []
+      )
     }
 
     // Deduplicate by id, shuffle, and limit
@@ -118,7 +133,7 @@ router.get('/trending', async (req, res, next) => {
       .sort(() => Math.random() - 0.5)
       .slice(0, 20)
 
-    res.json({ products })
+    res.json({ products, live: hasLiveData })
   } catch (err) {
     next(err)
   }

@@ -47,26 +47,35 @@ export default function SuppliersPage() {
     setSelectedSuppliers(allSelected ? new Set([ALL_SUPPLIERS[0]]) : new Set(ALL_SUPPLIERS))
   }
 
+  // Build comma-separated supplier string for API (only when not all selected)
+  const suppliersParam = allSelected ? undefined : [...selectedSuppliers].join(',')
+
   const { data: searchData, isLoading: searching } = useSupplierSearch({
     query: query || undefined,
     category: selectedCategory || undefined,
+    suppliers: suppliersParam,
     sort,
   })
 
-  const { data: trendingData, isLoading: loadingTrending } = useTrendingProducts(selectedCategory)
+  const { data: trendingData, isLoading: loadingTrending } = useTrendingProducts(selectedCategory, suppliersParam)
   const { data: catData } = useSupplierCategories()
 
   const categories = catData?.categories || []
-  const rawProducts = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
-  // Client-side multi-supplier filtering
-  const products = allSelected ? rawProducts : rawProducts.filter(p => selectedSuppliers.has(p.supplier))
+  const products = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
   const isLoading = searching || loadingTrending
-  const isLive = searchData?.live
+  const isLive = searchData?.live || trendingData?.live
 
   const handleSearch = (e) => {
     e.preventDefault()
-    setQuery(searchInput.trim())
-    setSelectedCategory('')
+    const trimmed = searchInput.trim()
+    if (trimmed) {
+      setQuery(trimmed)
+      setSelectedCategory('')
+    } else {
+      // Refresh — clear query to go back to trending view
+      setQuery('')
+      setSelectedCategory('')
+    }
   }
 
   const handleCategoryClick = (catId) => {
@@ -81,7 +90,7 @@ export default function SuppliersPage() {
       <div className="mb-6">
         <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
         <p className="text-xs text-zinc-500">
-          Browse thousands of products from {SUPPLIER_FILTERS.length - 1} suppliers — we handle setup for you
+          Browse thousands of products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you
         </p>
       </div>
 
@@ -95,11 +104,9 @@ export default function SuppliersPage() {
           placeholder="Search products (e.g. phone cases, t-shirts, LED lights...)"
           className="w-full rounded-xl bg-[#111] border border-white/[0.06] pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#FF6B35]/40 transition-colors"
         />
-        {searchInput && (
-          <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-semibold bg-[#FF6B35] text-white rounded-lg hover:bg-[#FF6B35]/90 transition-colors">
-            Search
-          </button>
-        )}
+        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-semibold bg-[#FF6B35] text-white rounded-lg hover:bg-[#FF6B35]/90 transition-colors">
+          {searchInput ? 'Search' : 'Refresh'}
+        </button>
       </form>
 
       {/* Filter bar */}
@@ -219,7 +226,7 @@ export default function SuppliersPage() {
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Loader2 className="h-6 w-6 text-[#FF6B35] animate-spin" />
-          <p className="text-xs text-zinc-500">Searching {SUPPLIER_FILTERS.length - 1} suppliers...</p>
+          <p className="text-xs text-zinc-500">Searching {selectedSuppliers.size} supplier{selectedSuppliers.size !== 1 ? 's' : ''}...</p>
         </div>
       )}
 

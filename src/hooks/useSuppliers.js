@@ -6,15 +6,15 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 
 // Search products across all suppliers via ToGoGo gateway
 export function useSupplierSearch(filters = {}) {
-  const { query, category, supplier, sort, page = 1 } = filters
+  const { query, category, suppliers, sort, page = 1 } = filters
 
   return useQuery({
-    queryKey: ['supplier-search', filters],
+    queryKey: ['supplier-search', query, category, suppliers, sort, page],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (query) params.set('query', query)
       if (category) params.set('category', category)
-      if (supplier) params.set('supplier', supplier)
+      if (suppliers) params.set('suppliers', suppliers)
       if (sort) params.set('sort', sort)
       params.set('page', String(page))
 
@@ -28,18 +28,19 @@ export function useSupplierSearch(filters = {}) {
 }
 
 // Get trending products
-export function useTrendingProducts(category) {
+export function useTrendingProducts(category, suppliers) {
   return useQuery({
-    queryKey: ['supplier-trending', category],
+    queryKey: ['supplier-trending', category, suppliers],
     queryFn: async () => {
       const params = new URLSearchParams()
       if (category) params.set('category', category)
+      if (suppliers) params.set('suppliers', suppliers)
 
       const res = await fetch(`${API_BASE}/api/dropship/trending?${params}`)
       if (!res.ok) throw new Error('Failed to fetch trending products')
       return res.json()
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
   })
 }
 
