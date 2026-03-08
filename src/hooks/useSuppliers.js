@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+// On Vercel, API routes are on the same domain (relative paths work)
+// For local dev, fall back to Express server
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 // Search products across all suppliers via ToGoGo gateway
 export function useSupplierSearch(filters = {}) {
