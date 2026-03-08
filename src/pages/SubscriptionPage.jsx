@@ -4,14 +4,14 @@ import Button from '../components/ui/Button';
 import { useAuthStore } from '../stores/authStore';
 
 const FEATURES = [
-  'Every product in the world',
-  'Every platform in the world',
-  'Every type of marketing',
-  'Unlimited listings',
-  'AI assistant',
-  'All suppliers unlocked',
+  'Your own website & custom URL',
+  'Hosting fully included',
+  'Automated marketing across all social channels',
+  'Auto-list products on eBay, Etsy, Amazon & more',
+  'Dashboard with earnings, trends & stats',
+  'All 5 suppliers (CJ, AliExpress, Printful, Printify, Gooten)',
   'Print-on-demand included',
-  'Advanced analytics',
+  'Unlimited product listings',
 ];
 
 export default function SubscriptionPage() {

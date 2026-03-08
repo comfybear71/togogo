@@ -150,20 +150,42 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* === $19.99 — simple price + button === */}
-        <div className="fade-up w-full text-center" style={{ marginTop: '24px', maxWidth: '360px', animationDelay: '1s' }}>
-          <p className="text-zinc-400 text-sm mb-2">Everything. One price.</p>
-          <div className="mb-4">
-            <span className="font-heading text-5xl font-bold text-white">$19.99</span>
-            <span className="text-sm text-zinc-500">/mo</span>
+        {/* === $19.99 — what's included + button === */}
+        <div className="fade-up w-full" style={{ marginTop: '24px', maxWidth: '360px', animationDelay: '1s' }}>
+          <div className="rounded-2xl bg-[#0e0e0e] border border-white/[0.06] p-5">
+            <p className="text-zinc-400 text-xs text-center mb-1">Everything automated. One price.</p>
+            <div className="text-center mb-4">
+              <span className="font-heading text-5xl font-bold text-white">$19.99</span>
+              <span className="text-sm text-zinc-500">/mo</span>
+            </div>
+
+            {/* What's included grid */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-5">
+              {[
+                { icon: '🌐', text: 'Your own website & URL' },
+                { icon: '🖥️', text: 'Hosting included' },
+                { icon: '📣', text: 'Automated marketing' },
+                { icon: '🛒', text: 'Auto-list on platforms' },
+                { icon: '📊', text: 'Dashboard & analytics' },
+                { icon: '📦', text: 'All 5 suppliers' },
+                { icon: '🖨️', text: 'Print-on-demand' },
+                { icon: '♾️', text: 'Unlimited products' },
+              ].map((f) => (
+                <div key={f.text} className="flex items-center gap-2">
+                  <span className="text-xs">{f.icon}</span>
+                  <span className="text-[10px] text-zinc-300">{f.text}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleGetStarted}
+              className="w-full rounded-2xl bg-[#FF6B35] py-4 text-base font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
+            >
+              Get Started
+            </button>
+            <p className="text-[10px] text-zinc-600 mt-2 text-center">Cancel anytime. No commitment.</p>
           </div>
-          <button
-            onClick={handleGetStarted}
-            className="w-full rounded-2xl bg-[#FF6B35] py-4 text-base font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
-          >
-            Get Started
-          </button>
-          <p className="text-[10px] text-zinc-600 mt-2">Cancel anytime</p>
         </div>
 
         {/* === Guides button === */}
