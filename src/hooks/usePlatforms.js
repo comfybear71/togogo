@@ -4,14 +4,13 @@ import { useAuthStore } from '../stores/authStore'
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 function getAuthHeaders() {
-  const session = useAuthStore.getState().session
-  const token = session?.access_token
+  const token = localStorage.getItem('togogo-token')
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 // Get all platform connections for the current user
 export function usePlatformConnections() {
-  const session = useAuthStore((s) => s.session)
+  const user = useAuthStore((s) => s.user)
 
   return useQuery({
     queryKey: ['platform-connections'],
@@ -22,7 +21,7 @@ export function usePlatformConnections() {
       if (!res.ok) throw new Error('Failed to fetch platform connections')
       return res.json()
     },
-    enabled: Boolean(session),
+    enabled: Boolean(user),
     staleTime: 30 * 1000,
   })
 }

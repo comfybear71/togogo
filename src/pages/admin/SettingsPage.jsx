@@ -112,7 +112,7 @@ const SECTIONS = [
 ]
 
 export default function SettingsPage() {
-  const session = useAuthStore((s) => s.session)
+  const user = useAuthStore((s) => s.user)
   const [settings, setSettings] = useState({})
   const [activeSection, setActiveSection] = useState('referral_links')
   const [loading, setLoading] = useState(true)
@@ -124,11 +124,11 @@ export default function SettingsPage() {
 
   // Load settings from API
   useEffect(() => {
-    if (!session) return
+    if (!user) return
     const loadSettings = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/admin/settings`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
+          headers: { Authorization: `Bearer ${localStorage.getItem('togogo-token')}` },
         })
         if (!res.ok) throw new Error('Failed to load settings')
         const data = await res.json()
@@ -145,7 +145,7 @@ export default function SettingsPage() {
       }
     }
     loadSettings()
-  }, [session])
+  }, [user])
 
   const handleChange = (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }))
@@ -171,7 +171,7 @@ export default function SettingsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${localStorage.getItem('togogo-token')}`,
         },
         body: JSON.stringify({ settings: rows }),
       })

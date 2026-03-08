@@ -11,7 +11,7 @@ export default function DomainSearch({ onDomainPurchased }) {
   const [searching, setSearching] = useState(false)
   const [purchasing, setPurchasing] = useState(null)
   const [error, setError] = useState(null)
-  const session = useAuthStore((s) => s.session)
+  const user = useAuthStore((s) => s.user)
   const navigate = useNavigate()
 
   const handleSearch = async (e) => {
@@ -35,14 +35,14 @@ export default function DomainSearch({ onDomainPurchased }) {
   }
 
   const handlePurchase = async (domain) => {
-    if (!session) {
+    if (!user) {
       navigate('/auth?redirect=/setup')
       return
     }
 
     setPurchasing(domain)
     try {
-      const token = session?.access_token
+      const token = localStorage.getItem('togogo-token')
       const res = await fetch(`${API_BASE}/api/domains/purchase`, {
         method: 'POST',
         headers: {

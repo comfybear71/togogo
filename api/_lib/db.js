@@ -120,6 +120,24 @@ export async function initializeSchema() {
     )
   `
 
+  // User domains — domains purchased through ToGoGo
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_domains (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      domain TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'transferred')),
+      registrar TEXT DEFAULT 'namecheap',
+      nameservers TEXT[] DEFAULT '{}',
+      registered_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ,
+      auto_renew BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, domain)
+    )
+  `
+
   // Admin settings (key-value config)
   await sql`
     CREATE TABLE IF NOT EXISTS admin_settings (
@@ -145,4 +163,5 @@ export async function initializeSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_platform_connections_user ON platform_connections(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_admin_settings_key ON admin_settings(key)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_domains_user ON user_domains(user_id)`
 }

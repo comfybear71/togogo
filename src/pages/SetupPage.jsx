@@ -41,7 +41,7 @@ const STEPS = [
 export default function SetupPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const session = useAuthStore((s) => s.session)
+  const user = useAuthStore((s) => s.user)
   const [currentStep, setCurrentStep] = useState(0)
   const [selectedPlatforms, setSelectedPlatforms] = useState([])
   const [selectedProducts, setSelectedProducts] = useState([])
@@ -105,7 +105,7 @@ export default function SetupPage() {
   }
 
   const handleConnect = async (platform) => {
-    if (!session) {
+    if (!user) {
       navigate('/auth?redirect=/setup')
       return
     }
@@ -291,8 +291,8 @@ export default function SetupPage() {
         )}
         {currentStep === 2 && (
           <p className="text-xs text-zinc-500 max-w-[300px] mx-auto">
-            {session
-              ? "Click 'Connect' and we'll handle the rest. No need to leave Togogo."
+            {user
+              ? "Click 'Connect' and we'll handle the rest. No need to leave ToGoGo."
               : 'Sign in to connect your selling platforms.'}
           </p>
         )}
@@ -391,7 +391,7 @@ export default function SetupPage() {
         {/* Step 3: Connect platforms */}
         {currentStep === 2 && (
           <div className="space-y-3">
-            {!session && (
+            {!user && (
               <button
                 onClick={() => navigate('/auth?redirect=/setup')}
                 className="w-full flex items-center justify-center gap-2 p-4 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold hover:bg-[#FF6B35]/90 transition-colors mb-4"
@@ -447,7 +447,7 @@ export default function SetupPage() {
                     ) : (
                       <button
                         onClick={() => handleConnect(p.id)}
-                        disabled={isConnecting || !session}
+                        disabled={isConnecting || !user}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors disabled:opacity-50"
                       >
                         {isConnecting ? (

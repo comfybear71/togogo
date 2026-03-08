@@ -3,28 +3,16 @@ import { Link } from 'react-router-dom'
 import {
   DollarSign, Package, ShoppingBag, TrendingUp, Clock,
   Store, ExternalLink, Plus, ArrowUpRight, ArrowDownRight,
-  Settings, User, LogOut, ChevronRight, Eye, BarChart3,
+  Settings, Globe, Link2, Unlink, Rocket, CheckCircle2,
+  AlertCircle, Loader2, BarChart3, ChevronRight, Zap,
 } from 'lucide-react'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer,
 } from 'recharts'
 import { useAuthStore, authFetch } from '../stores/authStore'
 
-// Placeholder data — will be replaced with real API data
-const earningsData = Array.from({ length: 14 }, (_, i) => ({
-  date: new Date(Date.now() - (13 - i) * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-  earnings: Math.floor(Math.random() * 150 + 30),
-  orders: Math.floor(Math.random() * 8 + 1),
-}))
-
-const recentOrders = [
-  { id: 'ORD-001', product: 'Wireless Earbuds Pro', customer: 'Sarah M.', salePrice: 29.99, cost: 8.50, profit: 21.49, status: 'delivered', date: '2 days ago', supplier: 'CJ Dropshipping' },
-  { id: 'ORD-002', product: 'Custom T-Shirt — Logo', customer: 'James K.', salePrice: 27.99, cost: 12.50, profit: 15.49, status: 'shipped', date: '3 days ago', supplier: 'Printful' },
-  { id: 'ORD-003', product: 'LED Strip Lights RGB', customer: 'Aisha R.', salePrice: 19.99, cost: 4.70, profit: 15.29, status: 'processing', date: '1 day ago', supplier: 'CJ Dropshipping' },
-  { id: 'ORD-004', product: 'Custom Mug — Birthday', customer: 'Miguel L.', salePrice: 22.99, cost: 9.50, profit: 13.49, status: 'processing', date: 'Today', supplier: 'Printify' },
-  { id: 'ORD-005', product: 'Phone Case Clear', customer: 'Emily C.', salePrice: 14.99, cost: 3.20, profit: 11.79, status: 'pending', date: 'Today', supplier: 'AliExpress' },
-]
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const statusColors = {
   pending: 'bg-yellow-500/20 text-yellow-400',
@@ -34,33 +22,70 @@ const statusColors = {
   cancelled: 'bg-red-500/20 text-red-400',
 }
 
-const topProducts = [
-  { name: 'Wireless Earbuds Pro', sold: 47, revenue: 1409.53, margin: '71%' },
-  { name: 'Custom T-Shirt — Logo', sold: 32, revenue: 895.68, margin: '55%' },
-  { name: 'LED Strip Lights RGB', sold: 28, revenue: 559.72, margin: '76%' },
-  { name: 'Custom 11oz Mug', sold: 24, revenue: 551.76, margin: '58%' },
-  { name: 'Vintage Sunglasses', sold: 19, revenue: 284.81, margin: '81%' },
-]
+const platformColors = {
+  woocommerce: '#7F54B3',
+  ebay: '#E53238',
+  etsy: '#F56400',
+  amazon: '#FF9900',
+  tiktok: '#000000',
+  shopify: '#95BF47',
+}
+
+const platformNames = {
+  woocommerce: 'WooCommerce',
+  ebay: 'eBay',
+  etsy: 'Etsy',
+  amazon: 'Amazon',
+  tiktok: 'TikTok Shop',
+  shopify: 'Shopify',
+}
 
 export default function DashboardPage() {
   const profile = useAuthStore(s => s.profile)
   const [tab, setTab] = useState('overview')
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Summary stats
-  const totalRevenue = 3701.50
-  const totalProfit = 2412.80
-  const totalOrders = 150
-  const activeProducts = 23
-  const avgMargin = 65
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const data = await authFetch('/api/dashboard/stats')
+        setStats(data)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchStats()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#FF6B35]" />
+      </div>
+    )
+  }
+
+  const connections = stats?.connections || []
+  const activeConnections = connections.filter(c => c.status === 'active')
+  const domains = stats?.domains || []
+  const orders = stats?.orders || { total: 0, revenue: 0, profit: 0 }
+  const products = stats?.products || { total: 0, active: 0 }
+  const recentOrders = stats?.recentOrders || []
+  const earnings = stats?.earnings || []
+
+  const hasSetup = activeConnections.length > 0
+  const avgMargin = orders.revenue > 0 ? Math.round((orders.profit / orders.revenue) * 100) : 0
 
   return (
     <div className="py-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-heading text-2xl font-bold text-white">
-            Dashboard
-          </h1>
+          <h1 className="font-heading text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-xs text-zinc-500 mt-0.5">
             Welcome back, {profile?.name || 'Seller'}
           </p>
@@ -76,6 +101,141 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Setup Status Card — show if no connections yet */}
+      {!hasSetup && (
+        <div className="rounded-2xl bg-gradient-to-r from-[#FF6B35]/10 to-[#FFD23F]/10 border border-[#FF6B35]/20 p-5 mb-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF6B35]/15 flex-shrink-0">
+              <Rocket className="h-5 w-5 text-[#FF6B35]" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-white mb-1">Get started — launch your store</h3>
+              <p className="text-xs text-zinc-400 mb-3">
+                Connect a selling platform to start listing products and making sales.
+              </p>
+              <Link
+                to="/launch-store"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors"
+              >
+                <Rocket className="h-3.5 w-3.5" />
+                Launch Store
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* My Setup Panel */}
+      <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+            <Store className="h-3.5 w-3.5 text-[#FF6B35]" />
+            My Setup
+          </h3>
+          <Link to="/launch-store" className="text-[10px] text-[#FF6B35] font-medium flex items-center gap-0.5">
+            Manage <ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
+
+        {/* Connected Platforms */}
+        {activeConnections.length > 0 ? (
+          <div className="space-y-2 mb-3">
+            {activeConnections.map((conn) => (
+              <div key={conn.platform} className="flex items-center gap-3 py-2 border-b border-white/[0.04] last:border-0">
+                <div
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold flex-shrink-0"
+                  style={{
+                    backgroundColor: `${platformColors[conn.platform] || '#666'}15`,
+                    color: platformColors[conn.platform] || '#666',
+                  }}
+                >
+                  {(platformNames[conn.platform] || conn.platform).charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-white truncate">
+                      {platformNames[conn.platform] || conn.platform}
+                    </p>
+                    <span className="flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                      <CheckCircle2 className="h-2.5 w-2.5" /> Connected
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {conn.shop_name && (
+                      <span className="text-[10px] text-zinc-500 truncate">{conn.shop_name}</span>
+                    )}
+                    {conn.shop_url && (
+                      <a
+                        href={conn.shop_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-zinc-600 hover:text-zinc-400 flex items-center gap-0.5 flex-shrink-0"
+                      >
+                        <ExternalLink className="h-2.5 w-2.5" />
+                        {conn.shop_url.replace(/^https?:\/\//, '').replace(/\/+$/, '')}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[10px] text-zinc-600">
+                    {conn.products_synced || 0} products
+                  </p>
+                  {conn.connected_at && (
+                    <p className="text-[9px] text-zinc-700">
+                      Since {new Date(conn.connected_at).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-600 mb-3">No platforms connected yet</p>
+        )}
+
+        {/* Domains */}
+        {domains.length > 0 && (
+          <div className="pt-2 border-t border-white/[0.04]">
+            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Domains</p>
+            {domains.map((d) => (
+              <div key={d.domain} className="flex items-center gap-2 py-1.5">
+                <Globe className="h-3.5 w-3.5 text-[#06D6A0]" />
+                <span className="text-xs text-white font-medium">{d.domain}</span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                  d.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-yellow-500/15 text-yellow-400'
+                }`}>
+                  {d.status}
+                </span>
+                {d.expires_at && (
+                  <span className="text-[9px] text-zinc-600 ml-auto">
+                    Expires {new Date(d.expires_at).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Quick actions */}
+        <div className="flex gap-2 mt-3 pt-3 border-t border-white/[0.04]">
+          {activeConnections.length === 0 && (
+            <Link
+              to="/launch-store"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#FF6B35]/10 border border-[#FF6B35]/20 text-[10px] font-semibold text-[#FF6B35] hover:bg-[#FF6B35]/15 transition-colors"
+            >
+              <Link2 className="h-3 w-3" /> Connect a Platform
+            </Link>
+          )}
+          <Link
+            to="/suppliers"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] font-semibold text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+          >
+            <Plus className="h-3 w-3" /> Add Products
+          </Link>
+        </div>
+      </div>
+
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
@@ -85,11 +245,13 @@ export default function DashboardPage() {
             </div>
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Revenue</span>
           </div>
-          <p className="text-xl font-bold text-white">${totalRevenue.toLocaleString()}</p>
-          <div className="flex items-center gap-1 mt-1">
-            <ArrowUpRight className="h-3 w-3 text-[#06D6A0]" />
-            <span className="text-[10px] text-[#06D6A0]">+12% this week</span>
-          </div>
+          <p className="text-xl font-bold text-white">${orders.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          {orders.total > 0 && (
+            <div className="flex items-center gap-1 mt-1">
+              <ArrowUpRight className="h-3 w-3 text-[#06D6A0]" />
+              <span className="text-[10px] text-[#06D6A0]">{orders.total} orders</span>
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
@@ -99,11 +261,13 @@ export default function DashboardPage() {
             </div>
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Profit</span>
           </div>
-          <p className="text-xl font-bold text-white">${totalProfit.toLocaleString()}</p>
-          <div className="flex items-center gap-1 mt-1">
-            <ArrowUpRight className="h-3 w-3 text-[#06D6A0]" />
-            <span className="text-[10px] text-[#06D6A0]">{avgMargin}% avg margin</span>
-          </div>
+          <p className="text-xl font-bold text-white">${orders.profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          {avgMargin > 0 && (
+            <div className="flex items-center gap-1 mt-1">
+              <ArrowUpRight className="h-3 w-3 text-[#06D6A0]" />
+              <span className="text-[10px] text-[#06D6A0]">{avgMargin}% avg margin</span>
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
@@ -113,10 +277,11 @@ export default function DashboardPage() {
             </div>
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Orders</span>
           </div>
-          <p className="text-xl font-bold text-white">{totalOrders}</p>
+          <p className="text-xl font-bold text-white">{orders.total}</p>
           <div className="flex items-center gap-1 mt-1">
-            <ArrowUpRight className="h-3 w-3 text-[#06D6A0]" />
-            <span className="text-[10px] text-[#06D6A0]">8 today</span>
+            {orders.pending > 0 && <span className="text-[10px] text-yellow-400">{orders.pending} pending</span>}
+            {orders.processing > 0 && <span className="text-[10px] text-blue-400">{orders.processing} processing</span>}
+            {orders.pending === 0 && orders.processing === 0 && <span className="text-[10px] text-zinc-600">No pending</span>}
           </div>
         </div>
 
@@ -127,7 +292,7 @@ export default function DashboardPage() {
             </div>
             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Products</span>
           </div>
-          <p className="text-xl font-bold text-white">{activeProducts}</p>
+          <p className="text-xl font-bold text-white">{products.active}</p>
           <div className="flex items-center gap-1 mt-1">
             <span className="text-[10px] text-zinc-500">Active listings</span>
           </div>
@@ -136,7 +301,7 @@ export default function DashboardPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 bg-[#111] rounded-xl p-1 border border-white/[0.06]">
-        {['overview', 'orders', 'products', 'stores'].map(t => (
+        {['overview', 'orders', 'stores'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -153,49 +318,73 @@ export default function DashboardPage() {
       {tab === 'overview' && (
         <div className="space-y-4">
           {/* Earnings chart */}
-          <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
-            <h3 className="text-xs font-semibold text-white mb-3 flex items-center gap-2">
-              <BarChart3 className="h-3.5 w-3.5 text-[#06D6A0]" />
-              Earnings — Last 14 Days
-            </h3>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={earningsData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                  <Tooltip
-                    contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 11 }}
-                    labelStyle={{ color: '#999' }}
-                    formatter={(value) => [`$${value}`, 'Earnings']}
-                  />
-                  <Bar dataKey="earnings" fill="#06D6A0" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          {earnings.length > 0 ? (
+            <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
+              <h3 className="text-xs font-semibold text-white mb-3 flex items-center gap-2">
+                <BarChart3 className="h-3.5 w-3.5 text-[#06D6A0]" />
+                Earnings — Last 14 Days
+              </h3>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={earnings.map(e => ({
+                    date: new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                    earnings: e.profit,
+                    revenue: e.revenue,
+                  }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 11 }}
+                      labelStyle={{ color: '#999' }}
+                      formatter={(value, name) => [`$${value.toFixed(2)}`, name === 'earnings' ? 'Profit' : 'Revenue']}
+                    />
+                    <Bar dataKey="earnings" fill="#06D6A0" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-8 text-center">
+              <BarChart3 className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
+              <p className="text-sm text-zinc-400">No earnings yet</p>
+              <p className="text-xs text-zinc-600 mt-1">Sales data will appear here once orders come in</p>
+            </div>
+          )}
 
-          {/* Top products */}
+          {/* Recent orders */}
           <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
             <h3 className="text-xs font-semibold text-white mb-3 flex items-center gap-2">
-              <TrendingUp className="h-3.5 w-3.5 text-[#FFD23F]" />
-              Top Selling Products
+              <ShoppingBag className="h-3.5 w-3.5 text-[#FF6B35]" />
+              Recent Orders
             </h3>
-            <div className="space-y-2">
-              {topProducts.map((p, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-white/[0.04] last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-zinc-600 w-4">#{i + 1}</span>
-                    <span className="text-xs text-white">{p.name}</span>
+            {recentOrders.length > 0 ? (
+              <div className="space-y-2">
+                {recentOrders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="flex items-start justify-between py-2 border-b border-white/[0.04] last:border-0">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-xs font-semibold text-white truncate">{order.product_title}</h4>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-zinc-500">{order.platform || order.supplier}</span>
+                        {order.customer_name && <span className="text-[10px] text-zinc-600">· {order.customer_name}</span>}
+                        <span className="text-[10px] text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-3">
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${statusColors[order.status] || statusColors.pending}`}>
+                        {order.status}
+                      </span>
+                      <p className="text-xs font-bold text-[#06D6A0] mt-1">+${Number(order.profit).toFixed(2)}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 text-[10px]">
-                    <span className="text-zinc-500">{p.sold} sold</span>
-                    <span className="text-[#06D6A0] font-semibold">${p.revenue.toFixed(0)}</span>
-                    <span className="text-zinc-600">{p.margin}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                <ShoppingBag className="h-6 w-6 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">No orders yet</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -203,88 +392,146 @@ export default function DashboardPage() {
       {/* Orders tab */}
       {tab === 'orders' && (
         <div className="space-y-2">
-          {recentOrders.map((order) => (
-            <div key={order.id} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h4 className="text-xs font-semibold text-white">{order.product}</h4>
-                  <p className="text-[10px] text-zinc-500 mt-0.5">{order.id} · {order.customer} · {order.date}</p>
+          {recentOrders.length > 0 ? (
+            recentOrders.map((order) => (
+              <div key={order.id} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-xs font-semibold text-white truncate">{order.product_title}</h4>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      {order.platform || order.supplier}
+                      {order.customer_name && ` · ${order.customer_name}`}
+                      {' · '}{new Date(order.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[order.status] || statusColors.pending}`}>
+                    {order.status}
+                  </span>
                 </div>
-                <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full capitalize ${statusColors[order.status]}`}>
-                  {order.status}
-                </span>
+                <div className="flex items-center gap-4 text-[10px]">
+                  <span className="text-zinc-500">Sold: <span className="text-white font-medium">${Number(order.sale_price).toFixed(2)}</span></span>
+                  <span className="text-zinc-500">Cost: <span className="text-zinc-300">${Number(order.supplier_cost).toFixed(2)}</span></span>
+                  <span className="text-[#06D6A0] font-semibold">+${Number(order.profit).toFixed(2)} profit</span>
+                </div>
+                {order.tracking_number && (
+                  <p className="text-[10px] text-zinc-500 mt-1">Tracking: {order.tracking_number}</p>
+                )}
               </div>
-              <div className="flex items-center gap-4 text-[10px]">
-                <span className="text-zinc-500">Sold: <span className="text-white font-medium">${order.salePrice}</span></span>
-                <span className="text-zinc-500">Cost: <span className="text-zinc-300">${order.cost}</span></span>
-                <span className="text-[#06D6A0] font-semibold">+${order.profit} profit</span>
-                <span className="text-zinc-600 ml-auto">{order.supplier}</span>
-              </div>
-            </div>
-          ))}
-          {recentOrders.length === 0 && (
+            ))
+          ) : (
             <div className="text-center py-12">
               <ShoppingBag className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
               <p className="text-sm text-zinc-400">No orders yet</p>
-              <p className="text-xs text-zinc-600 mt-1">Start selling products to see orders here</p>
+              <p className="text-xs text-zinc-600 mt-1">Orders will appear here when customers buy from your store</p>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Products tab */}
-      {tab === 'products' && (
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <p className="text-xs text-zinc-500">{activeProducts} active products</p>
-            <Link to="/suppliers" className="text-xs text-[#FF6B35] font-medium flex items-center gap-1">
-              <Plus className="h-3 w-3" />
-              Add more
-            </Link>
-          </div>
-          {topProducts.map((p, i) => (
-            <div key={i} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4 flex items-center justify-between">
-              <div>
-                <h4 className="text-xs font-semibold text-white">{p.name}</h4>
-                <p className="text-[10px] text-zinc-500 mt-0.5">{p.sold} sold · {p.margin} margin</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-[#06D6A0]">${p.revenue.toFixed(0)}</p>
-                <p className="text-[9px] text-zinc-600">revenue</p>
-              </div>
-            </div>
-          ))}
-          <Link
-            to="/suppliers"
-            className="block w-full py-3 rounded-xl text-center text-xs font-semibold bg-[#FF6B35]/10 border border-[#FF6B35]/20 text-[#FF6B35] hover:bg-[#FF6B35]/15 transition-colors"
-          >
-            Browse Products to Sell
-          </Link>
         </div>
       )}
 
       {/* Stores tab */}
       {tab === 'stores' && (
         <div className="space-y-3">
-          <p className="text-xs text-zinc-500">Connect your selling platforms</p>
+          <div className="flex justify-between items-center">
+            <p className="text-xs text-zinc-500">
+              {activeConnections.length} connected platform{activeConnections.length !== 1 ? 's' : ''}
+            </p>
+            <Link to="/launch-store" className="text-xs text-[#FF6B35] font-medium flex items-center gap-1">
+              <Plus className="h-3 w-3" />
+              Add more
+            </Link>
+          </div>
 
-          {['Shopify', 'Etsy', 'eBay', 'TikTok Shop', 'Amazon'].map((platform) => (
-            <div key={platform} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Store className="h-4 w-4 text-zinc-500" />
-                <div>
-                  <h4 className="text-xs font-semibold text-white">{platform}</h4>
-                  <p className="text-[10px] text-zinc-600">Not connected</p>
+          {activeConnections.length > 0 ? (
+            activeConnections.map((conn) => (
+              <div key={conn.platform} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold flex-shrink-0"
+                    style={{
+                      backgroundColor: `${platformColors[conn.platform] || '#666'}15`,
+                      color: platformColors[conn.platform] || '#666',
+                    }}
+                  >
+                    {(platformNames[conn.platform] || conn.platform).charAt(0)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-white">
+                      {platformNames[conn.platform] || conn.platform}
+                    </h4>
+                    {conn.shop_name && (
+                      <p className="text-[10px] text-zinc-400 truncate">{conn.shop_name}</p>
+                    )}
+                  </div>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                    Active
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 ml-[52px]">
+                  {conn.shop_url && (
+                    <div>
+                      <p className="text-[9px] text-zinc-600 uppercase tracking-wider">URL</p>
+                      <a
+                        href={conn.shop_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-zinc-400 hover:text-white flex items-center gap-0.5 truncate"
+                      >
+                        <ExternalLink className="h-2.5 w-2.5 flex-shrink-0" />
+                        {conn.shop_url.replace(/^https?:\/\//, '').replace(/\/+$/, '')}
+                      </a>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Products</p>
+                    <p className="text-[10px] text-zinc-400">{conn.products_synced || 0} synced</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-zinc-600 uppercase tracking-wider">Connected</p>
+                    <p className="text-[10px] text-zinc-400">
+                      {conn.connected_at ? new Date(conn.connected_at).toLocaleDateString() : '—'}
+                    </p>
+                  </div>
                 </div>
               </div>
+            ))
+          ) : (
+            <div className="rounded-2xl bg-[#111] border border-dashed border-white/[0.06] p-8 text-center">
+              <Store className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
+              <p className="text-sm text-zinc-400 mb-1">No stores connected</p>
+              <p className="text-xs text-zinc-600 mb-4">Connect a selling platform to start making sales</p>
               <Link
-                to="/platforms"
-                className="px-3 py-1 rounded-lg text-[10px] font-semibold bg-white/5 border border-white/[0.08] text-zinc-400 hover:text-white transition-colors"
+                to="/launch-store"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors"
               >
-                Connect
+                <Rocket className="h-3.5 w-3.5" /> Launch Your Store
               </Link>
             </div>
-          ))}
+          )}
+
+          {/* Domains section */}
+          {domains.length > 0 && (
+            <>
+              <p className="text-xs text-zinc-500 mt-4">Your domains</p>
+              {domains.map((d) => (
+                <div key={d.domain} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4 flex items-center gap-3">
+                  <Globe className="h-5 w-5 text-[#06D6A0]" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">{d.domain}</p>
+                    <p className="text-[10px] text-zinc-500">
+                      {d.status === 'active' ? 'Registered' : d.status}
+                      {d.expires_at && ` · Expires ${new Date(d.expires_at).toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                    d.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-yellow-500/15 text-yellow-400'
+                  }`}>
+                    {d.status}
+                  </span>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

@@ -110,7 +110,7 @@ const HOSTING_PROVIDERS = [
 export default function LaunchStorePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const session = useAuthStore((s) => s.session)
+  const user = useAuthStore((s) => s.user)
   const { data: connectionsData, refetch: refetchConnections } = usePlatformConnections()
   const connectMutation = useConnectPlatform()
 
@@ -171,13 +171,13 @@ export default function LaunchStorePage() {
   }
 
   const purchaseDomain = async (domain) => {
-    if (!session) { navigate('/auth?redirect=/launch-store'); return }
+    if (!user) { navigate('/auth?redirect=/launch-store'); return }
     try {
       const res = await fetch(`${API_BASE}/api/domains/purchase`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${localStorage.getItem('togogo-token')}`,
         },
         body: JSON.stringify({ domain }),
       })
@@ -187,7 +187,7 @@ export default function LaunchStorePage() {
   }
 
   const connectWooCommerce = async () => {
-    if (!session) { navigate('/auth?redirect=/launch-store'); return }
+    if (!user) { navigate('/auth?redirect=/launch-store'); return }
     if (!storeUrl.trim()) return
     setConnecting(true)
     setError(null)
@@ -485,7 +485,7 @@ export default function LaunchStorePage() {
                         </a>
                         <button
                           onClick={() => {
-                            if (!session) { navigate('/auth?redirect=/launch-store'); return }
+                            if (!user) { navigate('/auth?redirect=/launch-store'); return }
                             // TODO: Start OAuth for this marketplace
                             setError(`${m.name} OAuth coming soon. Sign up on ${m.name} first, then we'll connect it.`)
                           }}

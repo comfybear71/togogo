@@ -117,7 +117,7 @@ const SETUP_STEPS = [
 
 export default function PromotionsPage() {
   const navigate = useNavigate()
-  const session = useAuthStore((s) => s.session)
+  const user = useAuthStore((s) => s.user)
   const [expandedStep, setExpandedStep] = useState(0)
 
   return (
