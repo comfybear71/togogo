@@ -6,6 +6,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  // FIRST: return raw debug
+  if (req.query?.debug === '1') {
+    return res.status(200).json({ bodyType: typeof req.body, body: req.body, method: req.method })
+  }
+
   try {
     // Debug: return raw body info
     const rawBodyType = typeof req.body
