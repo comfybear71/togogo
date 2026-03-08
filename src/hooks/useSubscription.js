@@ -17,7 +17,7 @@ export function useSubscription() {
         .limit(1)
         .maybeSingle()
       if (error) throw error
-      return data || { plan: 'free' }
+      return data || { plan: 'paid' }
     },
     enabled: !!user,
   })

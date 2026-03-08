@@ -91,7 +91,7 @@ export default function ProfilePage() {
 
   const displayName = profile?.name || profile?.full_name || user?.email?.split('@')[0] || 'User'
   const avatarUrl = profile?.avatar_url || ''
-  const subscriptionPlan = profile?.subscription_plan || 'Free'
+  const subscriptionPlan = profile?.subscription_plan || 'Pro'
 
   // Compute setup progress
   const connections = stats?.connections || []

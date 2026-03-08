@@ -4,8 +4,9 @@ import { ArrowLeft } from 'lucide-react'
 const SUPPLIERS = [
   {
     name: 'CJ Dropshipping',
-    emoji: '📦',
+    initials: 'CJ',
     color: '#FF6B35',
+    glow: 'rgba(255,107,53,0.15)',
     what: 'Massive product catalogue with warehouses worldwide. Fast shipping, quality control, and custom packaging.',
     products: 'Electronics, fashion, home, beauty, gadgets — millions of products',
     shipping: '5-15 days (US/EU warehouses available for 3-5 day delivery)',
@@ -13,8 +14,9 @@ const SUPPLIERS = [
   },
   {
     name: 'AliExpress',
-    emoji: '🛒',
+    initials: 'Ali',
     color: '#E53238',
+    glow: 'rgba(229,50,56,0.15)',
     what: 'The world\'s biggest wholesale marketplace. Endless product selection at rock-bottom prices.',
     products: 'Literally everything — 100+ million products across every category',
     shipping: '7-20 days standard, 3-7 days with AliExpress Premium',
@@ -22,8 +24,9 @@ const SUPPLIERS = [
   },
   {
     name: 'Printful',
-    emoji: '🎨',
+    initials: 'PF',
     color: '#29AB51',
+    glow: 'rgba(41,171,81,0.15)',
     what: 'Print-on-demand. Upload your designs, they print and ship when someone orders. Zero inventory.',
     products: 'T-shirts, hoodies, mugs, phone cases, posters, hats, bags, and more',
     shipping: '3-5 business days (printed in US, EU, or AU)',
@@ -31,8 +34,9 @@ const SUPPLIERS = [
   },
   {
     name: 'Printify',
-    emoji: '🖨️',
+    initials: 'Pi',
     color: '#39B54A',
+    glow: 'rgba(57,181,74,0.15)',
     what: 'Print-on-demand with 80+ print providers worldwide. More options and competitive pricing.',
     products: 'Apparel, accessories, home decor, drinkware, stationery',
     shipping: '3-7 business days (multiple print locations)',
@@ -40,8 +44,9 @@ const SUPPLIERS = [
   },
   {
     name: 'Gooten',
-    emoji: '🏭',
+    initials: 'Go',
     color: '#00A9E0',
+    glow: 'rgba(0,169,224,0.15)',
     what: 'Enterprise print-on-demand with automated routing to the nearest manufacturer.',
     products: 'Apparel, wall art, photo books, home goods, accessories',
     shipping: '3-8 business days (smart routing for fastest delivery)',
@@ -76,26 +81,78 @@ export default function SuppliersPage() {
       </div>
 
       {/* Supplier cards */}
-      <div className="space-y-3">
+      <div className="space-y-4">
         {SUPPLIERS.map((s) => (
-          <div key={s.name} className="rounded-2xl bg-[#111] border border-white/[0.06] p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-2xl">{s.emoji}</span>
-              <h3 className="text-sm font-bold text-white">{s.name}</h3>
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed mb-3">{s.what}</p>
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <span className="text-[10px] text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0 pt-0.5">Products</span>
-                <span className="text-[11px] text-zinc-300">{s.products}</span>
+          <div
+            key={s.name}
+            className="relative rounded-2xl overflow-hidden"
+          >
+            {/* Glowing border effect */}
+            <div
+              className="absolute inset-0 rounded-2xl opacity-60"
+              style={{
+                background: `linear-gradient(135deg, ${s.color}30, transparent 50%, ${s.color}15)`,
+              }}
+            />
+            <div
+              className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-30"
+              style={{ backgroundColor: s.color }}
+            />
+
+            <div className="relative rounded-2xl bg-[#0c0c0c]/90 border border-white/[0.08] p-5" style={{ borderColor: `${s.color}25` }}>
+              {/* Logo + Name */}
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center w-11 h-11 rounded-xl text-sm font-extrabold tracking-tight"
+                  style={{
+                    backgroundColor: `${s.color}20`,
+                    color: s.color,
+                    boxShadow: `0 0 20px ${s.glow}, inset 0 0 20px ${s.glow}`,
+                  }}
+                >
+                  {s.initials}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">{s.name}</h3>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color, boxShadow: `0 0 6px ${s.color}` }} />
+                    <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: s.color }}>Active Partner</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <span className="text-[10px] text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0 pt-0.5">Shipping</span>
-                <span className="text-[11px] text-zinc-300">{s.shipping}</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-[10px] text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0 pt-0.5">Cost</span>
-                <span className="text-[11px] text-zinc-300">{s.cost}</span>
+
+              {/* Description */}
+              <p className="text-xs text-zinc-400 leading-relaxed mb-4">{s.what}</p>
+
+              {/* Info rows with colored accents */}
+              <div className="space-y-2.5">
+                <div className="flex gap-3 items-start">
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider w-[60px] flex-shrink-0 pt-0.5"
+                    style={{ color: s.color }}
+                  >
+                    Products
+                  </span>
+                  <span className="text-[11px] text-zinc-300 leading-relaxed">{s.products}</span>
+                </div>
+                <div className="flex gap-3 items-start">
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider w-[60px] flex-shrink-0 pt-0.5"
+                    style={{ color: s.color }}
+                  >
+                    Shipping
+                  </span>
+                  <span className="text-[11px] text-zinc-300 leading-relaxed">{s.shipping}</span>
+                </div>
+                <div className="flex gap-3 items-start">
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider w-[60px] flex-shrink-0 pt-0.5"
+                    style={{ color: s.color }}
+                  >
+                    Cost
+                  </span>
+                  <span className="text-[11px] text-zinc-300 leading-relaxed">{s.cost}</span>
+                </div>
               </div>
             </div>
           </div>

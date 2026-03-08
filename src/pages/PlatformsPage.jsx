@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 const MARKETPLACES = [
   {
     name: 'eBay',
-    emoji: '🏷️',
+    initials: 'eB',
     color: '#E53238',
     desc: 'The easiest place to start. List for free, 130M+ buyers worldwide. Auctions or fixed price.',
     fees: 'Free to list. 10-15% when you sell.',
@@ -12,7 +12,7 @@ const MARKETPLACES = [
   },
   {
     name: 'Etsy',
-    emoji: '🎨',
+    initials: 'Et',
     color: '#F56400',
     desc: 'Perfect for handmade, vintage, and creative products. 90M+ active buyers.',
     fees: '20c per listing + 6.5% when you sell.',
@@ -20,7 +20,7 @@ const MARKETPLACES = [
   },
   {
     name: 'Amazon',
-    emoji: '📦',
+    initials: 'Az',
     color: '#FF9900',
     desc: 'The biggest marketplace. FBA (Fulfilled by Amazon) handles storage and shipping for you.',
     fees: '$39.99/mo + 8-15% referral fee.',
@@ -28,15 +28,15 @@ const MARKETPLACES = [
   },
   {
     name: 'TikTok Shop',
-    emoji: '🎵',
-    color: '#000000',
+    initials: 'TT',
+    color: '#ff0050',
     desc: 'Sell through videos and livestreams. Huge Gen Z audience. Products go viral here.',
     fees: 'Free to join. 5% when you sell.',
     bestFor: 'Trendy products, impulse buys, anything visual',
   },
   {
     name: 'Facebook Marketplace',
-    emoji: '👥',
+    initials: 'FB',
     color: '#1877F2',
     desc: 'Sell locally or ship nationwide. No listing fees. Massive audience.',
     fees: 'Free locally. 5% for shipped items.',
@@ -44,7 +44,7 @@ const MARKETPLACES = [
   },
   {
     name: 'Depop',
-    emoji: '👗',
+    initials: 'Dp',
     color: '#FF2300',
     desc: 'Social-first marketplace for fashion and streetwear. Big with younger buyers.',
     fees: '10% when you sell.',
@@ -55,23 +55,64 @@ const MARKETPLACES = [
 const STOREFRONTS = [
   {
     name: 'Shopify',
-    emoji: '🛒',
+    initials: 'Sh',
+    color: '#95BF47',
     desc: 'The #1 platform for building your own branded online store. Integrates with everything.',
     cost: 'From $39/mo',
   },
   {
     name: 'WooCommerce',
-    emoji: '🔧',
+    initials: 'Wc',
+    color: '#7F54B3',
     desc: 'Free WordPress plugin. Full control over your store. Thousands of extensions.',
     cost: 'Free (hosting from $2.95/mo)',
   },
   {
     name: 'Wix',
-    emoji: '✨',
+    initials: 'Wx',
+    color: '#0C6EFC',
     desc: 'Drag-and-drop builder with AI design tools. Great for beginners.',
     cost: 'From $27/mo',
   },
 ]
+
+function GlowCard({ initials, color, name, children }) {
+  const glow = `${color}25`
+  return (
+    <div className="relative rounded-2xl overflow-hidden">
+      <div
+        className="absolute inset-0 rounded-2xl opacity-60"
+        style={{ background: `linear-gradient(135deg, ${color}30, transparent 50%, ${color}15)` }}
+      />
+      <div
+        className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-3xl opacity-30"
+        style={{ backgroundColor: color }}
+      />
+      <div className="relative rounded-2xl bg-[#0c0c0c]/90 border p-4" style={{ borderColor: `${color}25` }}>
+        <div className="flex items-center gap-3 mb-3">
+          <div
+            className="flex items-center justify-center w-10 h-10 rounded-xl text-xs font-extrabold tracking-tight"
+            style={{
+              backgroundColor: `${color}20`,
+              color: color,
+              boxShadow: `0 0 20px ${glow}, inset 0 0 20px ${glow}`,
+            }}
+          >
+            {initials}
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-white">{name}</h3>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 6px ${color}` }} />
+              <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color }}>Supported</span>
+            </div>
+          </div>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export default function PlatformsPage() {
   const navigate = useNavigate()
@@ -100,41 +141,40 @@ export default function PlatformsPage() {
       </div>
 
       {/* Marketplaces */}
-      <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">Marketplaces (sell where the buyers already are)</h2>
-      <div className="space-y-3 mb-6">
+      <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">Marketplaces</h2>
+      <div className="space-y-4 mb-6">
         {MARKETPLACES.map((p) => (
-          <div key={p.name} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-xl">{p.emoji}</span>
-              <h3 className="text-sm font-bold text-white">{p.name}</h3>
+          <GlowCard key={p.name} initials={p.initials} color={p.color} name={p.name}>
+            <p className="text-xs text-zinc-400 leading-relaxed mb-3">{p.desc}</p>
+            <div className="space-y-1.5">
+              <div className="flex gap-3 items-start">
+                <span className="text-[9px] font-bold uppercase tracking-wider w-[52px] flex-shrink-0" style={{ color: p.color }}>Fees</span>
+                <span className="text-[11px] text-zinc-300">{p.fees}</span>
+              </div>
+              <div className="flex gap-3 items-start">
+                <span className="text-[9px] font-bold uppercase tracking-wider w-[52px] flex-shrink-0" style={{ color: p.color }}>Best for</span>
+                <span className="text-[11px] text-zinc-300">{p.bestFor}</span>
+              </div>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed mb-2">{p.desc}</p>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <span className="text-[10px] text-zinc-500"><span className="text-zinc-300 font-medium">Fees:</span> {p.fees}</span>
-              <span className="text-[10px] text-zinc-500"><span className="text-zinc-300 font-medium">Best for:</span> {p.bestFor}</span>
-            </div>
-          </div>
+          </GlowCard>
         ))}
       </div>
 
       {/* Own store */}
-      <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">Your own store (build your brand)</h2>
-      <div className="space-y-3">
+      <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">Your own store</h2>
+      <div className="space-y-4">
         {STOREFRONTS.map((p) => (
-          <div key={p.name} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
-            <div className="flex items-center gap-3 mb-2">
-              <span className="text-xl">{p.emoji}</span>
-              <div>
-                <h3 className="text-sm font-bold text-white">{p.name}</h3>
-                <span className="text-[10px] text-zinc-500">{p.cost}</span>
-              </div>
+          <GlowCard key={p.name} initials={p.initials} color={p.color} name={p.name}>
+            <p className="text-xs text-zinc-400 leading-relaxed mb-2">{p.desc}</p>
+            <div className="flex gap-3 items-start">
+              <span className="text-[9px] font-bold uppercase tracking-wider w-[52px] flex-shrink-0" style={{ color: p.color }}>Cost</span>
+              <span className="text-[11px] text-zinc-300">{p.cost}</span>
             </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">{p.desc}</p>
-          </div>
+          </GlowCard>
         ))}
       </div>
 
-      <div className="h-20" />
+      <div className="h-8" />
     </div>
   )
 }

@@ -34,10 +34,10 @@ export default function MyShopPage() {
   })
 
   // Determine user tier
-  const tier = profile?.subscription_plan?.toLowerCase() || 'free'
-  const isPaid = tier === 'paid' || tier === 'basic' || tier === 'premium'
-  const productLimit = isPaid ? Infinity : 1
-  const canAddMore = listedProducts.length < productLimit
+  const tier = profile?.subscription_plan?.toLowerCase() || 'paid'
+  const isPaid = true // all users are on the paid plan ($19.99/mo)
+  const productLimit = Infinity
+  const canAddMore = true
 
   // Save to localStorage whenever listed products change
   const saveProducts = (products) => {
