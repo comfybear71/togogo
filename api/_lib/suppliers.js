@@ -2,6 +2,7 @@
 // Searches ALL suppliers through ToGoGo's master API keys
 // Users never need their own supplier accounts
 import crypto from 'crypto'
+import { sql } from './db.js'
 
 // ============================================
 // CJ DROPSHIPPING
@@ -9,6 +10,31 @@ import crypto from 'crypto'
 let cjAccessToken = null
 let cjTokenExpiry = 0
 let cjAuthPromise = null
+
+async function loadCJTokenFromDB() {
+  try {
+    const result = await sql`SELECT value FROM admin_settings WHERE key = 'cj_access_token'`
+    if (result.rows.length > 0) {
+      const stored = JSON.parse(result.rows[0].value)
+      if (stored.token && stored.expiry > Date.now()) {
+        cjAccessToken = stored.token
+        cjTokenExpiry = stored.expiry
+        return stored.token
+      }
+    }
+  } catch { /* DB not available, continue to API */ }
+  return null
+}
+
+async function saveCJTokenToDB(token, expiry) {
+  try {
+    await sql`
+      INSERT INTO admin_settings (key, value, category, label, is_secret)
+      VALUES ('cj_access_token', ${JSON.stringify({ token, expiry })}, 'supplier', 'CJ Access Token', true)
+      ON CONFLICT (key) DO UPDATE SET value = ${JSON.stringify({ token, expiry })}, updated_at = NOW()
+    `
+  } catch { /* DB save failed, token still works in memory */ }
+}
 
 async function getCJAccessToken() {
   const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
@@ -18,6 +44,10 @@ async function getCJAccessToken() {
   if (cjAccessToken && cjTokenExpiry > now) {
     return cjAccessToken
   }
+
+  // Try loading from DB (persists across cold starts)
+  const dbToken = await loadCJTokenFromDB()
+  if (dbToken) return dbToken
 
   // Deduplicate concurrent auth requests (CJ rate limits to 1/300s)
   if (cjAuthPromise) return cjAuthPromise
@@ -31,9 +61,8 @@ async function getCJAccessToken() {
       })
 
       if (!response.ok) {
-        // Rate limited — if we had a previous token, reuse it even if expired
         if (response.status === 429 && cjAccessToken) {
-          cjTokenExpiry = now + 300000 // extend 5 min
+          cjTokenExpiry = now + 300000
           return cjAccessToken
         }
         throw new Error(`CJ auth failed: ${response.status}`)
@@ -41,7 +70,6 @@ async function getCJAccessToken() {
 
       const data = await response.json()
       if (data.code === 1600200 && cjAccessToken) {
-        // Rate limit error in response body — reuse old token
         cjTokenExpiry = now + 300000
         return cjAccessToken
       }
@@ -51,6 +79,9 @@ async function getCJAccessToken() {
       cjTokenExpiry = data.data.accessTokenExpiryDate
         ? new Date(data.data.accessTokenExpiryDate).getTime()
         : now + 14 * 86400000
+
+      // Persist to DB so other cold starts can use it
+      await saveCJTokenToDB(cjAccessToken, cjTokenExpiry)
 
       return cjAccessToken
     } finally {
