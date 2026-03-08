@@ -497,15 +497,16 @@ async function getAliExpressFeedNames() {
 }
 
 // Map our category system to AliExpress first_level_category_name values
+// These must be specific enough to avoid false matches (e.g. "accessories" alone matches auto)
 const ALIEXPRESS_CATEGORY_FILTER = {
-  pets: ['pet', 'dog', 'cat', 'animal', 'aquarium', 'bird', 'reptile'],
-  sports: ['sport', 'entertainment', 'outdoor', 'camping', 'fitness', 'cycling', 'fishing'],
-  electronics: ['consumer electronics', 'computer', 'office', 'phone', 'telecommunication', 'electronic'],
-  fashion: ['apparel', 'women', 'men', 'shoes', 'accessories', 'bags', 'luggage', 'jewelry', 'watch'],
-  home: ['home', 'garden', 'furniture', 'improvement', 'kitchen', 'household'],
-  beauty: ['beauty', 'health', 'hair', 'makeup', 'personal care'],
-  toys: ['toys', 'hobbies', 'hobby', 'game'],
-  automotive: ['automobile', 'motorcycl', 'car', 'vehicle', 'automotive'],
+  pets: ['pet supplies', 'pet product', 'dog', 'cat supplies'],
+  sports: ['sports & entertainment', 'sports shoes', 'outdoor', 'camping', 'fitness', 'cycling', 'fishing'],
+  electronics: ['consumer electronics', 'computer & office', 'phones & telecom', 'electronic component', 'security & protection'],
+  fashion: ['women\'s clothing', 'men\'s clothing', 'shoes', 'jewelry & accessor', 'watches', 'apparel accessor', 'luggage & bags', 'hair extensions'],
+  home: ['home & garden', 'home appliance', 'home improvement', 'furniture', 'lights & lighting', 'kitchen'],
+  beauty: ['beauty & health', 'hair extensions & wigs'],
+  toys: ['toys & hobbies', 'mother & kids'],
+  automotive: ['automobiles, parts', 'motorcycle'],
 }
 
 // Map search queries to relevant AliExpress feed categories
@@ -536,9 +537,15 @@ async function getAliExpressProductPool() {
   const feeds = await getAliExpressFeedNames()
   if (feeds.length === 0) return []
 
-  // Fetch from up to 10 different feeds in parallel for variety
+  // Fetch from up to 20 different feeds in parallel for maximum category coverage
   const getName = (f) => f?.promo_name || f?.feed_name || f || ''
-  const feedsToFetch = feeds.slice(0, Math.min(feeds.length, 10)).map(getName)
+  // Spread feed selection across the list for variety (not just first 20)
+  const step = Math.max(1, Math.floor(feeds.length / 20))
+  const selectedFeeds = []
+  for (let i = 0; i < feeds.length && selectedFeeds.length < 20; i += step) {
+    selectedFeeds.push(feeds[i])
+  }
+  const feedsToFetch = selectedFeeds.map(getName)
 
   const feedResults = await Promise.allSettled(
     feedsToFetch.map(feedName =>
