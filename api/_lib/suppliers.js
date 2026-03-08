@@ -8,6 +8,7 @@ import crypto from 'crypto'
 // ============================================
 let cjAccessToken = null
 let cjTokenExpiry = 0
+let cjAuthPromise = null
 
 async function getCJAccessToken() {
   const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
@@ -18,23 +19,46 @@ async function getCJAccessToken() {
     return cjAccessToken
   }
 
-  const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apiKey }),
-  })
+  // Deduplicate concurrent auth requests (CJ rate limits to 1/300s)
+  if (cjAuthPromise) return cjAuthPromise
 
-  if (!response.ok) throw new Error(`CJ auth failed: ${response.status}`)
+  cjAuthPromise = (async () => {
+    try {
+      const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey }),
+      })
 
-  const data = await response.json()
-  if (!data.data?.accessToken) throw new Error(`CJ auth error: ${data.message || 'no token'}`)
+      if (!response.ok) {
+        // Rate limited — if we had a previous token, reuse it even if expired
+        if (response.status === 429 && cjAccessToken) {
+          cjTokenExpiry = now + 300000 // extend 5 min
+          return cjAccessToken
+        }
+        throw new Error(`CJ auth failed: ${response.status}`)
+      }
 
-  cjAccessToken = data.data.accessToken
-  cjTokenExpiry = data.data.accessTokenExpiryDate
-    ? new Date(data.data.accessTokenExpiryDate).getTime()
-    : now + 14 * 86400000
+      const data = await response.json()
+      if (data.code === 1600200 && cjAccessToken) {
+        // Rate limit error in response body — reuse old token
+        cjTokenExpiry = now + 300000
+        return cjAccessToken
+      }
+      if (!data.data?.accessToken) throw new Error(`CJ auth error: ${data.message || 'no token'}`)
 
-  return cjAccessToken
+      cjAccessToken = data.data.accessToken
+      cjTokenExpiry = data.data.accessTokenExpiryDate
+        ? new Date(data.data.accessTokenExpiryDate).getTime()
+        : now + 14 * 86400000
+
+      return cjAccessToken
+    } finally {
+      cjAuthPromise = null
+    }
+  })()
+
+  return cjAuthPromise
 }
 
 export async function searchCJ(query, page = 1) {
