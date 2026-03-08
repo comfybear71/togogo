@@ -187,6 +187,32 @@ create table if not exists public.referrals (
 );
 
 -- ============================================
+-- PLATFORM CONNECTIONS TABLE
+-- Stores OAuth tokens for selling platforms (Shopify, Etsy, eBay, etc.)
+-- Togogo connects on behalf of users so they never leave the app
+-- ============================================
+create table if not exists public.platform_connections (
+  id uuid default uuid_generate_v4() primary key,
+  user_id uuid references public.users(id) on delete cascade not null,
+  platform text not null,
+  status text not null default 'pending' check (status in ('pending', 'active', 'expired', 'error')),
+  shop_name text,
+  shop_url text,
+  access_token text,
+  refresh_token text,
+  token_expires_at timestamptz,
+  token_data jsonb default '{}',
+  oauth_state text,
+  oauth_verifier text,
+  products_synced integer default 0,
+  last_sync_at timestamptz,
+  connected_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(user_id, platform)
+);
+
+-- ============================================
 -- INDEXES
 -- ============================================
 create index if not exists idx_products_category on public.products(category);
@@ -220,6 +246,10 @@ create index if not exists idx_retailers_country on public.retailers(country);
 create index if not exists idx_retailers_active on public.retailers(is_active) where is_active = true;
 
 create index if not exists idx_categories_parent on public.categories(parent_id);
+
+create index if not exists idx_platform_connections_user on public.platform_connections(user_id);
+create index if not exists idx_platform_connections_platform on public.platform_connections(user_id, platform);
+create index if not exists idx_platform_connections_status on public.platform_connections(status) where status = 'active';
 
 -- ============================================
 -- RLS POLICIES
@@ -280,6 +310,13 @@ create policy "Users can update own notifications" on public.notifications for u
 
 -- Promo codes: anyone can read active
 create policy "Active promos viewable" on public.promo_codes for select using (is_active = true);
+
+-- Platform connections: users manage own
+alter table public.platform_connections enable row level security;
+create policy "Users can view own platform connections" on public.platform_connections for select using (auth.uid() = user_id);
+create policy "Users can insert own platform connections" on public.platform_connections for insert with check (auth.uid() = user_id);
+create policy "Users can update own platform connections" on public.platform_connections for update using (auth.uid() = user_id);
+create policy "Users can delete own platform connections" on public.platform_connections for delete using (auth.uid() = user_id);
 
 -- Referrals: users can see own
 create policy "Users can view own referrals" on public.referrals for select using (auth.uid() = referrer_id or auth.uid() = referred_id);

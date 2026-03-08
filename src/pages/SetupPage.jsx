@@ -2,25 +2,27 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, Check, Zap, Store, ShoppingBag,
-  Globe, ExternalLink, Rocket, ChevronRight, Package,
-  CreditCard, Truck, Star, Sparkles
+  Globe, ExternalLink, Rocket, Package, Link2, Unlink,
+  Truck, Star, Sparkles, Loader2, AlertCircle, X, KeyRound
 } from 'lucide-react'
+import { usePlatformConnections, useConnectPlatform, useConnectPlatformKeys, useDisconnectPlatform } from '../hooks/usePlatforms'
+import { useAuthStore } from '../stores/authStore'
 
 const ALL_PLATFORMS = [
-  { id: 'shopify', name: 'Shopify', color: '#95BF47', category: 'storefront', signupUrl: 'https://shopify.com/free-trial', desc: 'Own branded store' },
-  { id: 'woocommerce', name: 'WooCommerce', color: '#7F54B3', category: 'storefront', signupUrl: 'https://woocommerce.com/start', desc: 'WordPress store' },
-  { id: 'squarespace', name: 'Squarespace', color: '#000000', category: 'storefront', signupUrl: 'https://squarespace.com', desc: 'Beautiful templates' },
-  { id: 'bigcommerce', name: 'BigCommerce', color: '#34313F', category: 'storefront', signupUrl: 'https://bigcommerce.com/start-your-trial', desc: 'Enterprise scale' },
-  { id: 'wix', name: 'Wix', color: '#0C6EFC', category: 'storefront', signupUrl: 'https://wix.com/ecommerce/website', desc: 'Drag & drop builder' },
-  { id: 'prestashop', name: 'PrestaShop', color: '#DF0067', category: 'storefront', signupUrl: 'https://prestashop.com/editions', desc: 'Open source (EU)' },
-  { id: 'bigcartel', name: 'Big Cartel', color: '#222222', category: 'storefront', signupUrl: 'https://bigcartel.com/signup', desc: 'Artists & makers' },
-  { id: 'amazon', name: 'Amazon', color: '#FF9900', category: 'marketplace', signupUrl: 'https://sell.amazon.com', desc: 'Biggest marketplace' },
-  { id: 'ebay', name: 'eBay', color: '#E53238', category: 'marketplace', signupUrl: 'https://ebay.com/sl/sell', desc: 'Auctions & fixed' },
-  { id: 'etsy', name: 'Etsy', color: '#F56400', category: 'marketplace', signupUrl: 'https://etsy.com/sell', desc: 'Handmade & creative' },
-  { id: 'tiktok', name: 'TikTok Shop', color: '#000000', category: 'marketplace', signupUrl: 'https://seller.tiktok.com', desc: 'Social commerce' },
-  { id: 'facebook', name: 'Facebook Marketplace', color: '#1877F2', category: 'marketplace', signupUrl: 'https://facebook.com/marketplace/create', desc: 'Local & shipping' },
-  { id: 'depop', name: 'Depop', color: '#FF2300', category: 'marketplace', signupUrl: 'https://depop.com/sell', desc: 'Fashion & streetwear' },
-  { id: 'popup', name: 'Pop-Up Shop', color: '#9333EA', category: 'other', signupUrl: null, desc: 'In-person events' },
+  { id: 'shopify', name: 'Shopify', color: '#95BF47', category: 'storefront', authType: 'oauth', needsShopName: true, desc: 'Own branded store' },
+  { id: 'woocommerce', name: 'WooCommerce', color: '#7F54B3', category: 'storefront', authType: 'api_keys', desc: 'WordPress store' },
+  { id: 'squarespace', name: 'Squarespace', color: '#000000', category: 'storefront', authType: 'oauth', desc: 'Beautiful templates' },
+  { id: 'bigcommerce', name: 'BigCommerce', color: '#34313F', category: 'storefront', authType: 'oauth', desc: 'Enterprise scale' },
+  { id: 'wix', name: 'Wix', color: '#0C6EFC', category: 'storefront', authType: 'oauth', desc: 'Drag & drop builder' },
+  { id: 'prestashop', name: 'PrestaShop', color: '#DF0067', category: 'storefront', authType: 'api_keys', desc: 'Open source (EU)' },
+  { id: 'bigcartel', name: 'Big Cartel', color: '#222222', category: 'storefront', authType: 'oauth', desc: 'Artists & makers' },
+  { id: 'amazon', name: 'Amazon', color: '#FF9900', category: 'marketplace', authType: 'oauth', desc: 'Biggest marketplace' },
+  { id: 'ebay', name: 'eBay', color: '#E53238', category: 'marketplace', authType: 'oauth', desc: 'Auctions & fixed' },
+  { id: 'etsy', name: 'Etsy', color: '#F56400', category: 'marketplace', authType: 'oauth', desc: 'Handmade & creative' },
+  { id: 'tiktok', name: 'TikTok Shop', color: '#000000', category: 'marketplace', authType: 'oauth', desc: 'Social commerce' },
+  { id: 'facebook', name: 'Facebook Marketplace', color: '#1877F2', category: 'marketplace', authType: 'oauth', desc: 'Local & shipping' },
+  { id: 'depop', name: 'Depop', color: '#FF2300', category: 'marketplace', authType: 'api_keys', desc: 'Fashion & streetwear' },
+  { id: 'popup', name: 'Pop-Up Shop', color: '#9333EA', category: 'other', authType: 'none', desc: 'In-person events' },
 ]
 
 const PRODUCT_TYPES = [
@@ -33,21 +35,49 @@ const PRODUCT_TYPES = [
 const STEPS = [
   { id: 'platforms', title: 'Choose Platforms', subtitle: 'Where will you sell?' },
   { id: 'products', title: 'Product Type', subtitle: 'What will you sell?' },
-  { id: 'connect', title: 'Set Up & Connect', subtitle: 'Get started on each platform' },
+  { id: 'connect', title: 'Connect', subtitle: "Let's connect your platforms" },
 ]
 
 export default function SetupPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const session = useAuthStore((s) => s.session)
   const [currentStep, setCurrentStep] = useState(0)
   const [selectedPlatforms, setSelectedPlatforms] = useState([])
   const [selectedProducts, setSelectedProducts] = useState([])
-  const [completedSetups, setCompletedSetups] = useState([])
+  const [connectingPlatform, setConnectingPlatform] = useState(null)
+  const [apiKeyModal, setApiKeyModal] = useState(null)
+  const [shopNameModal, setShopNameModal] = useState(null)
+  const [apiKeyForm, setApiKeyForm] = useState({})
+  const [shopNameInput, setShopNameInput] = useState('')
+  const [error, setError] = useState(null)
+
+  const { data: connectionsData, refetch: refetchConnections } = usePlatformConnections()
+  const connectMutation = useConnectPlatform()
+  const connectKeysMutation = useConnectPlatformKeys()
+  const disconnectMutation = useDisconnectPlatform()
+
+  const connections = connectionsData?.connections || []
+
+  // Handle OAuth redirect back
+  useEffect(() => {
+    const connected = searchParams.get('connected')
+    const errorParam = searchParams.get('error')
+    const platform = searchParams.get('platform')
+
+    if (connected) {
+      refetchConnections()
+      setCurrentStep(2)
+    }
+    if (errorParam) {
+      setError(`Failed to connect ${platform || 'platform'}: ${errorParam}`)
+    }
+  }, [searchParams, refetchConnections])
 
   // Pre-select platform from URL param
   useEffect(() => {
     const preselected = searchParams.get('platform')
-    if (preselected) {
+    if (preselected && !searchParams.get('error')) {
       const found = ALL_PLATFORMS.find(
         (p) => p.name.toLowerCase() === preselected.toLowerCase()
       )
@@ -56,6 +86,9 @@ export default function SetupPage() {
       }
     }
   }, [searchParams])
+
+  const isConnected = (platformId) =>
+    connections.some((c) => c.platform === platformId && c.status === 'active')
 
   const togglePlatform = (id) => {
     setSelectedPlatforms((prev) =>
@@ -69,10 +102,92 @@ export default function SetupPage() {
     )
   }
 
-  const markSetupDone = (id) => {
-    setCompletedSetups((prev) =>
-      prev.includes(id) ? prev : [...prev, id]
-    )
+  const handleConnect = async (platform) => {
+    if (!session) {
+      navigate('/auth?redirect=/setup')
+      return
+    }
+
+    setError(null)
+    const platformData = ALL_PLATFORMS.find((p) => p.id === platform)
+
+    // Pop-up shop doesn't need connection
+    if (platformData?.authType === 'none') {
+      return
+    }
+
+    // Shopify needs shop name first
+    if (platformData?.needsShopName) {
+      setShopNameModal(platform)
+      return
+    }
+
+    // API key platforms show a form
+    if (platformData?.authType === 'api_keys') {
+      setApiKeyModal(platform)
+      setApiKeyForm({})
+      return
+    }
+
+    // OAuth platforms — start the flow
+    await startOAuthConnect(platform)
+  }
+
+  const startOAuthConnect = async (platform, shopName) => {
+    setConnectingPlatform(platform)
+    try {
+      const result = await connectMutation.mutateAsync({
+        platform,
+        shop_name: shopName,
+      })
+
+      if (result.type === 'oauth' && result.url) {
+        // Redirect to platform's OAuth page
+        window.location.href = result.url
+      } else if (result.type === 'api_keys') {
+        setApiKeyModal(platform)
+        setApiKeyForm({})
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setConnectingPlatform(null)
+    }
+  }
+
+  const handleApiKeySubmit = async (platform) => {
+    setConnectingPlatform(platform)
+    try {
+      await connectKeysMutation.mutateAsync({
+        platform,
+        api_key: apiKeyForm.api_key,
+        api_secret: apiKeyForm.api_secret,
+        store_url: apiKeyForm.store_url,
+      })
+      setApiKeyModal(null)
+      setApiKeyForm({})
+      refetchConnections()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setConnectingPlatform(null)
+    }
+  }
+
+  const handleShopNameSubmit = () => {
+    if (!shopNameInput.trim()) return
+    setShopNameModal(null)
+    startOAuthConnect(shopNameModal, shopNameInput.trim().replace('.myshopify.com', ''))
+    setShopNameInput('')
+  }
+
+  const handleDisconnect = async (platform) => {
+    try {
+      await disconnectMutation.mutateAsync(platform)
+      refetchConnections()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   const canAdvance =
@@ -83,6 +198,8 @@ export default function SetupPage() {
   const selectedPlatformData = ALL_PLATFORMS.filter((p) =>
     selectedPlatforms.includes(p.id)
   )
+
+  const connectedCount = selectedPlatforms.filter((id) => isConnected(id) || ALL_PLATFORMS.find((p) => p.id === id)?.authType === 'none').length
 
   return (
     <div className="py-6 min-h-[80vh]">
@@ -127,6 +244,17 @@ export default function SetupPage() {
         ))}
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div className="max-w-lg mx-auto mb-6 flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+          <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
+          <p className="text-xs text-red-400 flex-1">{error}</p>
+          <button onClick={() => setError(null)}>
+            <X className="h-3.5 w-3.5 text-red-400" />
+          </button>
+        </div>
+      )}
+
       {/* Step title */}
       <div className="text-center mb-8">
         <h2 className="font-heading text-2xl font-bold text-white mb-2">
@@ -134,7 +262,7 @@ export default function SetupPage() {
         </h2>
         {currentStep === 0 && (
           <p className="text-xs text-zinc-500 max-w-[300px] mx-auto">
-            Select all the platforms you want to sell on. You can always add more later.
+            Select all the platforms you want to sell on. We'll connect them for you.
           </p>
         )}
         {currentStep === 1 && (
@@ -144,7 +272,9 @@ export default function SetupPage() {
         )}
         {currentStep === 2 && (
           <p className="text-xs text-zinc-500 max-w-[300px] mx-auto">
-            Click each platform to open their signup. Come back and mark it done when you're set up.
+            {session
+              ? "Click 'Connect' and we'll handle the rest. No need to leave Togogo."
+              : 'Sign in to connect your selling platforms.'}
           </p>
         )}
       </div>
@@ -154,98 +284,52 @@ export default function SetupPage() {
         {/* Step 1: Select platforms */}
         {currentStep === 0 && (
           <div>
-            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-              Your Own Store
-            </p>
-            <div className="grid grid-cols-2 gap-2 mb-6">
-              {ALL_PLATFORMS.filter((p) => p.category === 'storefront').map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => togglePlatform(p.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-                    selectedPlatforms.includes(p.id)
-                      ? 'bg-[#FF6B35]/10 border-[#FF6B35]/40'
-                      : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
-                  }`}
-                >
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 text-sm font-bold"
-                    style={{ backgroundColor: `${p.color}15`, color: p.color }}
-                  >
-                    {p.name.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{p.name}</p>
-                    <p className="text-[10px] text-zinc-500 truncate">{p.desc}</p>
-                  </div>
-                  {selectedPlatforms.includes(p.id) && (
-                    <Check className="h-4 w-4 text-[#FF6B35] flex-shrink-0 ml-auto" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-              Marketplaces
-            </p>
-            <div className="grid grid-cols-2 gap-2 mb-6">
-              {ALL_PLATFORMS.filter((p) => p.category === 'marketplace').map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => togglePlatform(p.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-                    selectedPlatforms.includes(p.id)
-                      ? 'bg-[#FF6B35]/10 border-[#FF6B35]/40'
-                      : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
-                  }`}
-                >
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 text-sm font-bold"
-                    style={{ backgroundColor: `${p.color}15`, color: p.color }}
-                  >
-                    {p.name.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{p.name}</p>
-                    <p className="text-[10px] text-zinc-500 truncate">{p.desc}</p>
-                  </div>
-                  {selectedPlatforms.includes(p.id) && (
-                    <Check className="h-4 w-4 text-[#FF6B35] flex-shrink-0 ml-auto" />
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
-              Other
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {ALL_PLATFORMS.filter((p) => p.category === 'other').map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => togglePlatform(p.id)}
-                  className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
-                    selectedPlatforms.includes(p.id)
-                      ? 'bg-[#FF6B35]/10 border-[#FF6B35]/40'
-                      : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
-                  }`}
-                >
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 text-sm font-bold"
-                    style={{ backgroundColor: `${p.color}15`, color: p.color }}
-                  >
-                    {p.name.charAt(0)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-white truncate">{p.name}</p>
-                    <p className="text-[10px] text-zinc-500 truncate">{p.desc}</p>
-                  </div>
-                  {selectedPlatforms.includes(p.id) && (
-                    <Check className="h-4 w-4 text-[#FF6B35] flex-shrink-0 ml-auto" />
-                  )}
-                </button>
-              ))}
-            </div>
+            {[
+              { key: 'storefront', label: 'Your Own Store' },
+              { key: 'marketplace', label: 'Marketplaces' },
+              { key: 'other', label: 'Other' },
+            ].map((group) => (
+              <div key={group.key}>
+                <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+                  {group.label}
+                </p>
+                <div className="grid grid-cols-2 gap-2 mb-6">
+                  {ALL_PLATFORMS.filter((p) => p.category === group.key).map((p) => {
+                    const connected = isConnected(p.id)
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => togglePlatform(p.id)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all duration-200 text-left ${
+                          selectedPlatforms.includes(p.id)
+                            ? 'bg-[#FF6B35]/10 border-[#FF6B35]/40'
+                            : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
+                        }`}
+                      >
+                        <div
+                          className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0 text-sm font-bold"
+                          style={{ backgroundColor: `${p.color}15`, color: p.color }}
+                        >
+                          {p.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-semibold text-white truncate">{p.name}</p>
+                            {connected && (
+                              <div className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-[10px] text-zinc-500 truncate">{p.desc}</p>
+                        </div>
+                        {selectedPlatforms.includes(p.id) && (
+                          <Check className="h-4 w-4 text-[#FF6B35] flex-shrink-0" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -285,21 +369,33 @@ export default function SetupPage() {
           </div>
         )}
 
-        {/* Step 3: Connect / Setup checklist */}
+        {/* Step 3: Connect platforms */}
         {currentStep === 2 && (
           <div className="space-y-3">
+            {!session && (
+              <button
+                onClick={() => navigate('/auth?redirect=/setup')}
+                className="w-full flex items-center justify-center gap-2 p-4 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold hover:bg-[#FF6B35]/90 transition-colors mb-4"
+              >
+                Sign in to connect platforms
+              </button>
+            )}
+
             {selectedPlatformData.map((p) => {
-              const isDone = completedSetups.includes(p.id)
+              const connected = isConnected(p.id)
+              const isConnecting = connectingPlatform === p.id
+              const isPopup = p.authType === 'none'
+
               return (
                 <div
                   key={p.id}
                   className={`rounded-xl border p-4 transition-all duration-300 ${
-                    isDone
+                    connected || isPopup
                       ? 'bg-emerald-500/5 border-emerald-500/20'
                       : 'bg-[#111] border-white/[0.06]'
                   }`}
                 >
-                  <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-3">
                     <div
                       className="flex h-10 w-10 items-center justify-center rounded-lg flex-shrink-0 text-sm font-bold"
                       style={{ backgroundColor: `${p.color}15`, color: p.color }}
@@ -309,57 +405,68 @@ export default function SetupPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="text-sm font-semibold text-white">{p.name}</h3>
-                        {isDone && (
+                        {(connected || isPopup) && (
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
-                            Connected
+                            {isPopup ? 'Ready' : 'Connected'}
                           </span>
                         )}
                       </div>
                       <p className="text-[10px] text-zinc-500">{p.desc}</p>
                     </div>
+
+                    {isPopup ? (
+                      <Check className="h-5 w-5 text-emerald-400" />
+                    ) : connected ? (
+                      <button
+                        onClick={() => handleDisconnect(p.id)}
+                        disabled={disconnectMutation.isPending}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] text-xs font-medium text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        Disconnect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleConnect(p.id)}
+                        disabled={isConnecting || !session}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors disabled:opacity-50"
+                      >
+                        {isConnecting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Link2 className="h-3.5 w-3.5" />
+                        )}
+                        {isConnecting ? 'Connecting...' : 'Connect'}
+                      </button>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-2 ml-[52px]">
-                    {p.signupUrl ? (
-                      <a
-                        href={p.signupUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.06] text-xs font-semibold text-white hover:bg-white/[0.1] transition-colors"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Open {p.name}
-                      </a>
-                    ) : (
-                      <span className="text-xs text-zinc-500 italic">
-                        No signup needed — manage through Togogo
-                      </span>
-                    )}
-                    <button
-                      onClick={() => markSetupDone(p.id)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                        isDone
-                          ? 'bg-emerald-500/15 text-emerald-400'
-                          : 'bg-[#FF6B35]/15 text-[#FF6B35] hover:bg-[#FF6B35]/25'
-                      }`}
-                    >
-                      <Check className="h-3.5 w-3.5" />
-                      {isDone ? 'Done' : 'Mark Done'}
-                    </button>
-                  </div>
+                  {/* Show connection details */}
+                  {connected && (
+                    <div className="mt-2 ml-[52px]">
+                      {connections
+                        .filter((c) => c.platform === p.id && c.status === 'active')
+                        .map((c) => (
+                          <p key={c.id} className="text-[10px] text-zinc-500">
+                            {c.shop_name && `Store: ${c.shop_name}`}
+                            {c.products_synced > 0 && ` · ${c.products_synced} products synced`}
+                          </p>
+                        ))}
+                    </div>
+                  )}
                 </div>
               )
             })}
 
             {/* All done summary */}
-            {completedSetups.length === selectedPlatforms.length && selectedPlatforms.length > 0 && (
+            {connectedCount === selectedPlatforms.length && selectedPlatforms.length > 0 && (
               <div className="rounded-xl bg-gradient-to-r from-[#FF6B35]/10 to-[#FFD23F]/10 border border-[#FF6B35]/20 p-6 text-center mt-6">
                 <Sparkles className="h-8 w-8 text-[#FFD23F] mx-auto mb-3" />
                 <h3 className="text-lg font-heading font-bold text-white mb-2">
                   You're All Set!
                 </h3>
                 <p className="text-xs text-zinc-400 mb-4 max-w-[260px] mx-auto">
-                  All your platforms are connected. Head to Suppliers to find products to sell.
+                  Your platforms are connected. Find products and we'll list them everywhere for you.
                 </p>
                 <button
                   onClick={() => navigate('/suppliers')}
@@ -407,6 +514,151 @@ export default function SetupPage() {
           </button>
         )}
       </div>
+
+      {/* Shopify shop name modal */}
+      {shopNameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-[#111] border border-white/[0.08] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#95BF47]/15">
+                <Store className="h-5 w-5 text-[#95BF47]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Connect Shopify</h3>
+                <p className="text-[10px] text-zinc-500">Enter your Shopify store name</p>
+              </div>
+            </div>
+            <div className="mb-4">
+              <div className="flex items-center rounded-xl bg-[#0a0a0a] border border-white/[0.06] overflow-hidden">
+                <input
+                  type="text"
+                  value={shopNameInput}
+                  onChange={(e) => setShopNameInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleShopNameSubmit()}
+                  placeholder="mystore"
+                  className="flex-1 px-3 py-3 bg-transparent text-sm text-white placeholder-zinc-600 focus:outline-none"
+                  autoFocus
+                />
+                <span className="text-xs text-zinc-500 pr-3">.myshopify.com</span>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShopNameModal(null); setShopNameInput('') }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-400 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleShopNameSubmit}
+                disabled={!shopNameInput.trim()}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#95BF47] hover:bg-[#95BF47]/90 transition-colors disabled:opacity-50"
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API keys modal (WooCommerce, PrestaShop, etc.) */}
+      {apiKeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-[#111] border border-white/[0.08] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF6B35]/15">
+                <KeyRound className="h-5 w-5 text-[#FF6B35]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  Connect {ALL_PLATFORMS.find((p) => p.id === apiKeyModal)?.name}
+                </h3>
+                <p className="text-[10px] text-zinc-500">Enter your API credentials</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-4">
+              {apiKeyModal === 'woocommerce' && (
+                <>
+                  <input
+                    type="text"
+                    value={apiKeyForm.store_url || ''}
+                    onChange={(e) => setApiKeyForm((f) => ({ ...f, store_url: e.target.value }))}
+                    placeholder="https://yourstore.com"
+                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                  />
+                  <input
+                    type="text"
+                    value={apiKeyForm.api_key || ''}
+                    onChange={(e) => setApiKeyForm((f) => ({ ...f, api_key: e.target.value }))}
+                    placeholder="Consumer Key (ck_...)"
+                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                  />
+                  <input
+                    type="password"
+                    value={apiKeyForm.api_secret || ''}
+                    onChange={(e) => setApiKeyForm((f) => ({ ...f, api_secret: e.target.value }))}
+                    placeholder="Consumer Secret (cs_...)"
+                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                  />
+                </>
+              )}
+              {apiKeyModal === 'prestashop' && (
+                <>
+                  <input
+                    type="text"
+                    value={apiKeyForm.store_url || ''}
+                    onChange={(e) => setApiKeyForm((f) => ({ ...f, store_url: e.target.value }))}
+                    placeholder="https://yourstore.com"
+                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                  />
+                  <input
+                    type="text"
+                    value={apiKeyForm.api_key || ''}
+                    onChange={(e) => setApiKeyForm((f) => ({ ...f, api_key: e.target.value }))}
+                    placeholder="Webservice Key"
+                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                  />
+                </>
+              )}
+              {apiKeyModal !== 'woocommerce' && apiKeyModal !== 'prestashop' && (
+                <input
+                  type="text"
+                  value={apiKeyForm.api_key || ''}
+                  onChange={(e) => setApiKeyForm((f) => ({ ...f, api_key: e.target.value }))}
+                  placeholder="API Key"
+                  className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                />
+              )}
+            </div>
+
+            <p className="text-[10px] text-zinc-600 mb-4">
+              Your credentials are encrypted and stored securely. We only use them to list products and sync orders.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setApiKeyModal(null); setApiKeyForm({}) }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-400 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleApiKeySubmit(apiKeyModal)}
+                disabled={!apiKeyForm.api_key || connectingPlatform}
+                className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#FF6B35] hover:bg-[#FF6B35]/90 transition-colors disabled:opacity-50"
+              >
+                {connectingPlatform ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Link2 className="h-4 w-4" />
+                )}
+                {connectingPlatform ? 'Connecting...' : 'Connect'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

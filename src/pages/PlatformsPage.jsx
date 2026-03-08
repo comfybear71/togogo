@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Store, ArrowRight, Users, Percent, BarChart3, Palette,
-  ExternalLink, Check, Search, Filter, ChevronDown,
-  ShoppingBag, Globe, Zap, Star, TrendingUp
+  ExternalLink, Check, Search, Link2,
+  ShoppingBag, Globe, Zap
 } from 'lucide-react'
+import { usePlatformConnections } from '../hooks/usePlatforms'
 
 const PLATFORMS = [
   // Storefronts - Build your own store
@@ -200,6 +201,11 @@ export default function PlatformsPage() {
   const navigate = useNavigate()
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const { data: connectionsData } = usePlatformConnections()
+  const connections = connectionsData?.connections || []
+
+  const isConnected = (name) =>
+    connections.some((c) => c.platform_name === name && c.status === 'active')
 
   const filteredPlatforms = PLATFORMS.filter((p) => {
     const matchesCategory = activeCategory === 'all' || p.category === activeCategory
@@ -294,7 +300,12 @@ export default function PlatformsPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <h3 className="text-sm font-semibold text-white">{p.name}</h3>
-                  {p.monthlyFrom === 'Free' || p.monthlyFrom.includes('Free') ? (
+                  {isConnected(p.name) && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
+                      CONNECTED
+                    </span>
+                  )}
+                  {!isConnected(p.name) && (p.monthlyFrom === 'Free' || p.monthlyFrom.includes('Free')) ? (
                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
                       FREE
                     </span>
@@ -348,9 +359,17 @@ export default function PlatformsPage() {
                 )}
                 <button
                   onClick={() => navigate(`/setup?platform=${encodeURIComponent(p.name)}`)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#FF6B35]/15 text-[#FF6B35] text-[10px] font-semibold hover:bg-[#FF6B35]/25 transition-colors"
+                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-colors ${
+                    isConnected(p.name)
+                      ? 'bg-emerald-500/15 text-emerald-400'
+                      : 'bg-[#FF6B35]/15 text-[#FF6B35] hover:bg-[#FF6B35]/25'
+                  }`}
                 >
-                  Set Up <ArrowRight className="h-3 w-3" />
+                  {isConnected(p.name) ? (
+                    <><Check className="h-3 w-3" /> Connected</>
+                  ) : (
+                    <><Link2 className="h-3 w-3" /> Connect</>
+                  )}
                 </button>
               </div>
             </div>
