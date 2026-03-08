@@ -958,6 +958,12 @@ const SAMPLE_IMAGES = {
   'car organiser': 'https://images.unsplash.com/photo-1502877338535-766e1452684a?w=400&h=400&fit=crop',
   'dash cam': 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400&h=400&fit=crop',
   'car': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
+  // Category name fallbacks (when search term is just the category name)
+  'fashion': 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop',
+  'electronics': 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=400&h=400&fit=crop',
+  'sports': 'https://images.unsplash.com/photo-1461896836934-bd45ba74d23f?w=400&h=400&fit=crop',
+  'automotive': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
+  'custom': 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop',
 }
 
 function getImageForQuery(query) {

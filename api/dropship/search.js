@@ -1,4 +1,4 @@
-import { searchAllSuppliers, groupByProduct, parseSuppliers } from '../_lib/suppliers.js'
+import { searchAllSuppliers, groupByProduct, parseSuppliers, TRENDING_TERMS } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -13,7 +13,33 @@ export default async function handler(req, res) {
     }
 
     const activeSuppliers = parseSuppliers(suppliersParam)
-    const { products: rawProducts, hasLiveData } = await searchAllSuppliers(query || category, Number(page), suppliersParam)
+
+    let rawProducts, hasLiveData
+
+    if (!query && category) {
+      // Category browse: search using relevant terms instead of the raw category name
+      const terms = TRENDING_TERMS[category] || [category]
+      const results = await Promise.allSettled(
+        terms.map(term => searchAllSuppliers(term, Number(page), suppliersParam))
+      )
+      rawProducts = []
+      hasLiveData = false
+      const seen = new Set()
+      for (const r of results) {
+        if (r.status !== 'fulfilled') continue
+        if (r.value.hasLiveData) hasLiveData = true
+        for (const p of r.value.products) {
+          if (!seen.has(p.id)) {
+            seen.add(p.id)
+            rawProducts.push(p)
+          }
+        }
+      }
+    } else {
+      const result = await searchAllSuppliers(query, Number(page), suppliersParam)
+      rawProducts = result.products
+      hasLiveData = result.hasLiveData
+    }
 
     let products = rawProducts
 
