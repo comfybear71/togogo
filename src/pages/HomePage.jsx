@@ -46,6 +46,12 @@ const QUICK_STARTS = [
 
 const TOOLS = [
   {
+    id: 'launch',
+    emoji: '🚀',
+    label: 'Launch Store',
+    path: '/launch-store',
+  },
+  {
     id: 'suppliers',
     emoji: '🏭',
     label: 'Suppliers',
