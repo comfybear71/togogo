@@ -1,6 +1,23 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { supabase } from '../lib/supabase'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+// Helper to make authenticated API calls
+async function authFetch(url, options = {}) {
+  const token = localStorage.getItem('togogo-token')
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  }
+  const res = await fetch(`${API_BASE}${url}`, { ...options, headers })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Request failed')
+  return data
+}
+
+export { authFetch }
 
 export const useAuthStore = create(
   persist(
@@ -10,75 +27,72 @@ export const useAuthStore = create(
       loading: true,
 
       initialize: async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.user) {
-            const { data: profile } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', session.user.id)
-              .single()
-            set({ user: session.user, profile, loading: false })
-          } else {
-            set({ user: null, profile: null, loading: false })
-          }
-        } catch {
-          set({ loading: false })
+        const token = localStorage.getItem('togogo-token')
+        if (!token) {
+          set({ user: null, profile: null, loading: false })
+          return
         }
 
-        supabase.auth.onAuthStateChange(async (event, session) => {
-          if (session?.user) {
-            const { data: profile } = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', session.user.id)
-              .single()
-            set({ user: session.user, profile })
-          } else {
-            set({ user: null, profile: null })
-          }
-        })
+        try {
+          const data = await authFetch('/api/auth/me')
+          set({ user: data.user, profile: data.user, loading: false })
+        } catch {
+          // Token invalid or expired
+          localStorage.removeItem('togogo-token')
+          set({ user: null, profile: null, loading: false })
+        }
       },
 
       signUp: async (email, password, metadata) => {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: metadata }
+        const data = await authFetch('/api/auth/signup', {
+          method: 'POST',
+          body: JSON.stringify({ email, password, name: metadata?.name }),
         })
-        if (error) throw error
+        localStorage.setItem('togogo-token', data.token)
+        set({ user: data.user, profile: data.user })
         return data
       },
 
       signIn: async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
+        const data = await authFetch('/api/auth/signin', {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        })
+        localStorage.setItem('togogo-token', data.token)
+        set({ user: data.user, profile: data.user })
         return data
       },
 
       signInWithGoogle: async () => {
-        const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google' })
-        if (error) throw error
-        return data
+        // Redirect to our Google OAuth endpoint
+        window.location.href = `${API_BASE}/api/auth/google`
+      },
+
+      // Called when returning from Google OAuth callback
+      handleAuthCallback: async (token) => {
+        localStorage.setItem('togogo-token', token)
+        try {
+          const data = await authFetch('/api/auth/me')
+          set({ user: data.user, profile: data.user })
+          return data.user
+        } catch {
+          localStorage.removeItem('togogo-token')
+          throw new Error('Failed to authenticate')
+        }
       },
 
       signOut: async () => {
-        await supabase.auth.signOut()
+        localStorage.removeItem('togogo-token')
         set({ user: null, profile: null })
       },
 
       updateProfile: async (updates) => {
-        const user = get().user
-        if (!user) return
-        const { data, error } = await supabase
-          .from('users')
-          .update(updates)
-          .eq('id', user.id)
-          .select()
-          .single()
-        if (error) throw error
-        set({ profile: data })
-        return data
+        const data = await authFetch('/api/auth/profile', {
+          method: 'PUT',
+          body: JSON.stringify(updates),
+        })
+        set({ profile: data.user })
+        return data.user
       },
     }),
     { name: 'togogo-auth', partialize: (state) => ({ profile: state.profile }) }

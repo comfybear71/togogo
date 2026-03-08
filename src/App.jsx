@@ -24,6 +24,8 @@ const AdminProducts = lazy(() => import('./pages/admin/ProductsPage'))
 const AdminOrders = lazy(() => import('./pages/admin/OrdersPage'))
 const AdminMarketing = lazy(() => import('./pages/admin/MarketingPage'))
 const AdminSettings = lazy(() => import('./pages/admin/SettingsPage'))
+const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function PageLoader() {
@@ -50,6 +52,7 @@ export default function App() {
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         <Route path="/assistant" element={<AssistantPage />} />
 
@@ -65,6 +68,7 @@ export default function App() {
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         </Route>
 
         {/* Admin routes — no AppLayout (admin has its own) */}

@@ -1,21 +1,34 @@
 import { NavLink } from 'react-router-dom'
-import { House, Search, Heart, User } from 'lucide-react'
+import { House, Search, Heart, User, LayoutDashboard } from 'lucide-react'
 import { useWatchlistStore } from '../../stores/cartStore'
+import { useAuthStore } from '../../stores/authStore'
 
 const tabs = [
   { to: '/', icon: House },
   { to: '/browse', icon: Search },
   { to: '/watchlist', icon: Heart, badge: true },
-  { to: '/profile', icon: User },
+  { to: '/profile', icon: User, authOnly: false },
 ]
 
 export default function BottomNav() {
   const watchlistCount = useWatchlistStore((s) => s.items.length)
+  const user = useAuthStore((s) => s.user)
+
+  // Show dashboard tab if logged in, profile tab for the last icon
+  const activeTabs = user
+    ? [
+        { to: '/', icon: House },
+        { to: '/browse', icon: Search },
+        { to: '/dashboard', icon: LayoutDashboard },
+        { to: '/watchlist', icon: Heart, badge: true },
+        { to: '/profile', icon: User },
+      ]
+    : tabs
 
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-t border-white/5 pb-[env(safe-area-inset-bottom)] lg:hidden">
       <div className="flex items-center justify-around h-16 px-2">
-        {tabs.map((tab) => {
+        {activeTabs.map((tab) => {
           const Icon = tab.icon
           return (
             <NavLink

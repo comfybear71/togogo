@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2, ArrowDownUp } from 'lucide-react'
-import { useSupplierSearch, useTrendingProducts, useSupplierCategories } from '../hooks/useSuppliers'
+import { useSupplierSearch, useTrendingProducts, useSupplierCategories, useSupplierCounts } from '../hooks/useSuppliers'
 
 const SORT_OPTIONS = [
   { value: 'relevance', label: 'Most Relevant' },
@@ -18,6 +18,14 @@ const SUPPLIER_FILTERS = [
   { value: 'Printify', label: '🖨️ Printify' },
   { value: 'Gooten', label: '🏭 Gooten' },
 ]
+
+function formatCount(n) {
+  if (n >= 10000000) return '10M+'
+  if (n >= 1000000) return `${(n / 1000000).toFixed(0)}M+`
+  if (n >= 100000) return `${(n / 1000).toFixed(0)}k+`
+  if (n >= 1000) return `${(n / 1000).toFixed(0)}k+`
+  return String(n)
+}
 
 export default function SuppliersPage() {
   const [searchInput, setSearchInput] = useState('')
@@ -59,6 +67,8 @@ export default function SuppliersPage() {
 
   const { data: trendingData, isLoading: loadingTrending } = useTrendingProducts(selectedCategory, suppliersParam)
   const { data: catData } = useSupplierCategories()
+  const { data: countsData } = useSupplierCounts()
+  const supplierCounts = countsData?.counts || {}
 
   const categories = catData?.categories || []
   const products = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
@@ -90,7 +100,11 @@ export default function SuppliersPage() {
       <div className="mb-6">
         <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
         <p className="text-xs text-zinc-500">
-          Browse thousands of products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you
+          {supplierCounts['CJ Dropshipping'] ? (
+            <>Browse {formatCount(Object.values(supplierCounts).reduce((sum, c) => sum + (c?.count || 0), 0))} products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
+          ) : (
+            <>Browse millions of products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
+          )}
         </p>
       </div>
 
@@ -124,13 +138,16 @@ export default function SuppliersPage() {
           <div className="flex items-center gap-1 flex-wrap">
             {[...selectedSuppliers].map(s => {
               const filter = SUPPLIER_FILTERS.find(f => f.value === s)
+              const countInfo = supplierCounts[s]
               return (
                 <button
                   key={s}
                   onClick={() => toggleSupplier(s)}
                   className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-[#06D6A0]/15 border border-[#06D6A0]/30 text-[#06D6A0]"
                 >
-                  {filter?.label || s} &times;
+                  {filter?.label || s}
+                  {countInfo && <span className="text-[8px] opacity-70">({formatCount(countInfo.count)})</span>}
+                  &times;
                 </button>
               )
             })}
@@ -168,15 +185,24 @@ export default function SuppliersPage() {
               >
                 All Suppliers
               </button>
-              {SUPPLIER_FILTERS.map((s) => (
-                <button
-                  key={s.value}
-                  onClick={() => toggleSupplier(s.value)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${selectedSuppliers.has(s.value) ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  {s.label}
-                </button>
-              ))}
+              {SUPPLIER_FILTERS.map((s) => {
+                const countInfo = supplierCounts[s.value]
+                const countLabel = countInfo ? formatCount(countInfo.count) : null
+                return (
+                  <button
+                    key={s.value}
+                    onClick={() => toggleSupplier(s.value)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${selectedSuppliers.has(s.value) ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
+                  >
+                    {s.label}
+                    {countLabel && (
+                      <span className="ml-1 text-[9px] text-zinc-500 font-normal">
+                        ({countLabel})
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div>

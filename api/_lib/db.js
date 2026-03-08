@@ -1,0 +1,148 @@
+// Vercel Postgres (Neon) database connection
+// Uses @vercel/postgres which auto-connects via POSTGRES_URL env var
+import { sql } from '@vercel/postgres'
+
+export { sql }
+
+// Initialize schema — run once on first deploy
+export async function initializeSchema() {
+  await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`
+
+  // Users table — standalone, no dependency on Supabase auth
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT,
+      name TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT,
+      bio TEXT DEFAULT '',
+      location_suburb TEXT DEFAULT '',
+      location_country TEXT DEFAULT 'Australia',
+      role TEXT NOT NULL DEFAULT 'buyer' CHECK (role IN ('buyer', 'subscriber', 'both', 'admin')),
+      trust_score NUMERIC(5,2) DEFAULT 0,
+      stripe_account_id TEXT,
+      wallet_balance NUMERIC(10,2) DEFAULT 0,
+      verification_level INTEGER DEFAULT 1 CHECK (verification_level BETWEEN 1 AND 3),
+      phone TEXT,
+      google_id TEXT UNIQUE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  // User orders — tracks items sold through the platform
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_orders (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      supplier TEXT NOT NULL,
+      supplier_order_id TEXT,
+      product_title TEXT NOT NULL,
+      product_image TEXT,
+      supplier_cost NUMERIC(10,2) NOT NULL DEFAULT 0,
+      sale_price NUMERIC(10,2) NOT NULL DEFAULT 0,
+      profit NUMERIC(10,2) NOT NULL DEFAULT 0,
+      platform TEXT,
+      platform_order_id TEXT,
+      customer_name TEXT,
+      customer_email TEXT,
+      shipping_address JSONB DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded')),
+      tracking_number TEXT,
+      tracking_url TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  // User products — products the user has listed for sale
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_products (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      image TEXT,
+      images TEXT[] DEFAULT '{}',
+      supplier TEXT NOT NULL,
+      supplier_product_id TEXT,
+      supplier_url TEXT,
+      supplier_cost NUMERIC(10,2) NOT NULL DEFAULT 0,
+      sale_price NUMERIC(10,2) NOT NULL DEFAULT 0,
+      category TEXT DEFAULT '',
+      is_active BOOLEAN DEFAULT true,
+      platforms_listed JSONB DEFAULT '[]',
+      total_sold INTEGER DEFAULT 0,
+      total_revenue NUMERIC(10,2) DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  // Subscriptions
+  await sql`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'basic', 'premium')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'expired')),
+      stripe_subscription_id TEXT,
+      price_per_month NUMERIC(10,2) DEFAULT 0,
+      started_at TIMESTAMPTZ DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  // Platform connections (selling platforms)
+  await sql`
+    CREATE TABLE IF NOT EXISTS platform_connections (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      platform TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'error')),
+      shop_name TEXT,
+      shop_url TEXT,
+      access_token TEXT,
+      refresh_token TEXT,
+      token_expires_at TIMESTAMPTZ,
+      token_data JSONB DEFAULT '{}',
+      oauth_state TEXT,
+      oauth_verifier TEXT,
+      products_synced INTEGER DEFAULT 0,
+      last_sync_at TIMESTAMPTZ,
+      connected_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, platform)
+    )
+  `
+
+  // Admin settings (key-value config)
+  await sql`
+    CREATE TABLE IF NOT EXISTS admin_settings (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      key TEXT UNIQUE NOT NULL,
+      value TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL,
+      label TEXT,
+      is_secret BOOLEAN DEFAULT false,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  // Indexes
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_orders_user ON user_orders(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_orders_status ON user_orders(status)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_orders_created ON user_orders(created_at DESC)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_products_user ON user_products(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_products_active ON user_products(is_active) WHERE is_active = true`
+  await sql`CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_platform_connections_user ON platform_connections(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_admin_settings_key ON admin_settings(key)`
+}

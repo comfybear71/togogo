@@ -54,7 +54,7 @@ export async function searchCJ(query, page = 1) {
       body: JSON.stringify({
         productNameEn: query,
         pageNum: page,
-        pageSize: 20,
+        pageSize: 50,
       }),
     })
 
@@ -129,7 +129,7 @@ export async function searchPrintful(query) {
     const q = (query || '').toLowerCase().trim()
 
     if (!q || q.length < 2) {
-      const popular = catalog.filter(p => !p.is_discontinued).slice(0, 10)
+      const popular = catalog.filter(p => !p.is_discontinued).slice(0, 30)
       return popular.map(p => normalisePrintfulProduct(p))
     }
 
@@ -142,7 +142,7 @@ export async function searchPrintful(query) {
           .map(f => (f || '').toLowerCase()).join(' ')
         return words.some(w => text.includes(w)) || text.includes(q)
       })
-      .slice(0, 15)
+      .slice(0, 40)
 
     if (filtered.length === 0 && words.length > 0) {
       const loose = catalog
@@ -151,7 +151,7 @@ export async function searchPrintful(query) {
           const text = [p.title, p.type_name].map(f => (f || '').toLowerCase()).join(' ')
           return text.includes(words[0]) || text.includes(q.slice(0, 3))
         })
-        .slice(0, 10)
+        .slice(0, 30)
       return loose.map(p => normalisePrintfulProduct(p))
     }
 
@@ -237,7 +237,7 @@ export async function searchPrintify(query) {
     const q = (query || '').toLowerCase().trim()
 
     if (!q || q.length < 2) {
-      return catalog.slice(0, 10).map(p => normalisePrintifyProduct(p))
+      return catalog.slice(0, 30).map(p => normalisePrintifyProduct(p))
     }
 
     const words = q.split(/\s+/).filter(w => w.length >= 2)
@@ -247,7 +247,7 @@ export async function searchPrintify(query) {
         const text = [p.title, p.description].map(f => (f || '').toLowerCase()).join(' ')
         return words.some(w => text.includes(w)) || text.includes(q)
       })
-      .slice(0, 15)
+      .slice(0, 40)
 
     if (filtered.length === 0) return getSamplePrintifyProducts(query)
     return filtered.map(p => normalisePrintifyProduct(p))
@@ -325,16 +325,17 @@ export async function searchGooten(query) {
 
     const q = (query || '').toLowerCase().trim()
     if (!q || q.length < 2) {
-      return gootenCatalogCache.slice(0, 10).map(p => normaliseGootenProduct(p))
+      return gootenCatalogCache.slice(0, 30).map(p => normaliseGootenProduct(p))
     }
 
     const words = q.split(/\s+/).filter(w => w.length >= 2)
     const filtered = gootenCatalogCache
       .filter(p => {
-        const text = [p.Name, p.Description, p.Category].map(f => (f || '').toLowerCase()).join(' ')
+        const text = [p.Name, p.name, p.Description, p.description, p.Category, p.category]
+          .map(f => (f || '').toLowerCase()).join(' ')
         return words.some(w => text.includes(w)) || text.includes(q)
       })
-      .slice(0, 15)
+      .slice(0, 40)
 
     if (filtered.length === 0) return getSampleGootenProducts(query)
     return filtered.map(p => normaliseGootenProduct(p))
@@ -450,7 +451,7 @@ export async function searchAliExpress(query, page = 1) {
       target_currency: 'USD',
       target_language: 'EN',
       page_no: String(page),
-      page_size: '20',
+      page_size: '50',
       sort: 'volumeDesc',
     })
 

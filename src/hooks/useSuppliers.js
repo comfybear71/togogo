@@ -44,6 +44,19 @@ export function useTrendingProducts(category, suppliers) {
   })
 }
 
+// Get product counts per supplier (catalog sizes)
+export function useSupplierCounts() {
+  return useQuery({
+    queryKey: ['supplier-counts'],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/dropship/counts`)
+      if (!res.ok) throw new Error('Failed to fetch supplier counts')
+      return res.json()
+    },
+    staleTime: 60 * 60 * 1000, // 1 hour cache
+  })
+}
+
 // Get product categories
 export function useSupplierCategories() {
   return useQuery({
