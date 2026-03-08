@@ -49,11 +49,6 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     console.error('Signup error:', error)
-    return res.status(500).json({
-      error: 'Failed to create account',
-      details: error.message,
-      name: error.name,
-      code: error.code,
-    })
+    return res.status(500).json({ error: 'Failed to create account' })
   }
 }

@@ -8,9 +8,7 @@ export default async function handler(req, res) {
 
   try {
     const user = await requireAuth(req)
-    let body = req.body
-    if (typeof body === 'string') body = JSON.parse(body)
-    const { name, bio, avatar_url, location_suburb, location_country, phone } = body || {}
+    const { name, bio, avatar_url, location_suburb, location_country, phone } = req.body || {}
 
     const { rows } = await sql`
       UPDATE users SET
