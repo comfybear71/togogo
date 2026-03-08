@@ -2,7 +2,7 @@ import {
   searchCJ, searchAliExpress, searchPrintful, searchPrintify, searchGooten,
   getSampleCJProducts, getSampleAliExpressProducts, getSamplePrintfulProducts, getSamplePrintifyProducts, getSampleGootenProducts,
   getCuratedTrending, groupByProduct, TRENDING_TERMS,
-  parseSuppliers, getSampleForSuppliers,
+  parseSuppliers, getSampleForSuppliers, filterNSFW,
 } from '../_lib/suppliers.js'
 
 const SUPPLIER_SEARCH_FNS = {
@@ -70,6 +70,9 @@ export default async function handler(req, res) {
       if (aHasImg !== bHasImg) return aHasImg - bHasImg
       return (b.suggestedMargin || 0) - (a.suggestedMargin || 0)
     })
+
+    // Filter out NSFW/inappropriate products
+    products = filterNSFW(products)
 
     products = products.slice(0, 200)
 

@@ -5,6 +5,23 @@ import crypto from 'crypto'
 import { sql } from './db.js'
 
 // ============================================
+// NSFW / INAPPROPRIATE CONTENT FILTER
+// ============================================
+const BLOCKED_TERMS = [
+  'sex toy', 'sex doll', 'sex machine', 'vibrator', 'dildo', 'masturbat',
+  'adult toy', 'erotic', 'bondage', 'lingerie set', 'butt plug', 'anal',
+  'penis', 'vagina', 'fleshlight', 'blow up doll', 'nipple', 'fetish',
+  'stripper', 'prostate massag', 'cock ring', 'love doll', 'sexy underwear',
+]
+
+export function filterNSFW(products) {
+  return products.filter(p => {
+    const text = ((p.title || '') + ' ' + (p.description || '') + ' ' + (p.name || '')).toLowerCase()
+    return !BLOCKED_TERMS.some(term => text.includes(term))
+  })
+}
+
+// ============================================
 // CJ DROPSHIPPING
 // ============================================
 let cjAccessToken = null
@@ -1143,7 +1160,7 @@ export async function searchAllSuppliers(query, page = 1, suppliersParam) {
     r.status === 'fulfilled' && r.value.length > 0 && r.value[0]._live
   )
 
-  return { products, hasLiveData }
+  return { products: filterNSFW(products), hasLiveData }
 }
 
 // ============================================
