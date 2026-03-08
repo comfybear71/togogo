@@ -77,12 +77,54 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
     const aeData = await aeRes.json()
+    const respResult = aeData?.aliexpress_ds_feedname_get_response?.resp_result?.result
+    const promos = respResult?.promos?.promo || []
+    const feedName = promos[0]?.promo_name || 'DS bestselling products'
     results.aliexpressRaw = {
       status: aeRes.status,
-      feeds: aeData?.aliexpress_ds_feedname_get_response?.result?.feed_names?.feed_name?.length || 0,
+      feeds: promos.length,
+      firstFeed: feedName,
       error: aeData?.error_response?.msg,
       code: aeData?.error_response?.code,
       raw: JSON.stringify(aeData).slice(0, 500),
+    }
+
+    // Also test feed product fetch
+    if (promos.length > 0) {
+      try {
+        const feedParams = {
+          app_key: aeKey,
+          method: 'aliexpress.ds.recommend.feed.get',
+          sign_method: 'hmac-sha256',
+          timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          format: 'json',
+          v: '2.0',
+          feed_name: feedName,
+          target_currency: 'USD',
+          target_language: 'EN',
+          page_no: '1',
+          page_size: '5',
+          sort: 'volumeDesc',
+        }
+        const feedSorted = Object.keys(feedParams).filter(k => k !== 'sign').sort().map(k => `${k}${feedParams[k]}`).join('')
+        feedParams.sign = crypto.createHmac('sha256', aeSecret).update(feedSorted).digest('hex').toUpperCase()
+        const feedRes = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(feedParams)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        })
+        const feedData = await feedRes.json()
+        const feedResp = feedData?.aliexpress_ds_recommend_feed_get_response
+        const feedResult = feedResp?.resp_result?.result || feedResp?.result
+        results.aliexpressFeed = {
+          status: feedRes.status,
+          productCount: feedResult?.products?.product?.length || 0,
+          firstTitle: feedResult?.products?.product?.[0]?.product_title?.slice(0, 60),
+          error: feedData?.error_response?.msg,
+          raw: JSON.stringify(feedData).slice(0, 500),
+        }
+      } catch (e2) {
+        results.aliexpressFeed = { error: e2.message }
+      }
     }
   } catch (e) {
     results.aliexpressRaw = { error: e.message }
