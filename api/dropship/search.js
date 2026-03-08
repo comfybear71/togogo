@@ -1,4 +1,4 @@
-import { searchCJ, searchPrintful } from '../_lib/suppliers.js'
+import { searchAllSuppliers, groupByProduct } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -12,40 +12,34 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Search query or category is required' })
     }
 
-    const results = await Promise.allSettled([
-      searchCJ(query || category, Number(page)),
-      searchPrintful(query || category),
-    ])
+    const { products: rawProducts, hasLiveData } = await searchAllSuppliers(query || category, Number(page))
 
-    let products = results
-      .filter(r => r.status === 'fulfilled')
-      .flatMap(r => r.value)
+    let products = rawProducts
 
     // Filter by supplier if requested
     if (supplier) {
       products = products.filter(p => p.supplier === supplier)
     }
 
+    // Group similar products for price comparison
+    products = groupByProduct(products)
+
     // Sort
     if (sort === 'price_low') {
-      products.sort((a, b) => a.cost - b.cost)
+      products.sort((a, b) => a.totalCost - b.totalCost)
     } else if (sort === 'price_high') {
-      products.sort((a, b) => b.cost - a.cost)
+      products.sort((a, b) => b.totalCost - a.totalCost)
     } else if (sort === 'fastest') {
       products.sort((a, b) => a.deliveryDays - b.deliveryDays)
     } else if (sort === 'margin') {
       products.sort((a, b) => b.suggestedMargin - a.suggestedMargin)
     }
 
-    const hasLiveData = results.some(r =>
-      r.status === 'fulfilled' && r.value.length > 0 && r.value[0]._live
-    )
-
     return res.status(200).json({
       products,
       total: products.length,
       page: Number(page),
-      suppliers: ['CJ Dropshipping', 'Printful'],
+      suppliers: ['CJ Dropshipping', 'Printful', 'Printify', 'Gooten'],
       live: hasLiveData,
       message: hasLiveData ? null : 'Showing sample data. Live supplier APIs will be connected soon.',
     })

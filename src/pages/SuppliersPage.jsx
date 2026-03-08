@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2 } from 'lucide-react'
+import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2, ArrowDownUp } from 'lucide-react'
 import { useSupplierSearch, useTrendingProducts, useSupplierCategories } from '../hooks/useSuppliers'
 
 const SORT_OPTIONS = [
@@ -11,8 +11,10 @@ const SORT_OPTIONS = [
 
 const SUPPLIER_FILTERS = [
   { value: '', label: 'All Suppliers' },
-  { value: 'CJ Dropshipping', label: '📦 CJ Dropshipping' },
+  { value: 'CJ Dropshipping', label: '📦 CJ' },
   { value: 'Printful', label: '🎨 Printful' },
+  { value: 'Printify', label: '🖨️ Printify' },
+  { value: 'Gooten', label: '🏭 Gooten' },
 ]
 
 export default function SuppliersPage() {
@@ -56,7 +58,7 @@ export default function SuppliersPage() {
       <div className="mb-6">
         <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
         <p className="text-xs text-zinc-500">
-          Browse thousands of products — we handle the supplier setup for you
+          Browse thousands of products from {SUPPLIER_FILTERS.length - 1} suppliers — we handle setup for you
         </p>
       </div>
 
@@ -99,7 +101,7 @@ export default function SuppliersPage() {
 
         {query && (
           <span className="text-[10px] text-zinc-500">
-            {searchData?.total || 0} results for "{query}"
+            {searchData?.total || 0} results for &ldquo;{query}&rdquo;
           </span>
         )}
 
@@ -174,7 +176,7 @@ export default function SuppliersPage() {
       {isLoading && (
         <div className="flex flex-col items-center justify-center py-16 gap-3">
           <Loader2 className="h-6 w-6 text-[#FF6B35] animate-spin" />
-          <p className="text-xs text-zinc-500">Searching suppliers...</p>
+          <p className="text-xs text-zinc-500">Searching {SUPPLIER_FILTERS.length - 1} suppliers...</p>
         </div>
       )}
 
@@ -219,9 +221,11 @@ export default function SuppliersPage() {
   )
 }
 
-// Product card component
+// Product card with price comparison support
 function ProductCard({ product }) {
+  const [showAlts, setShowAlts] = useState(false)
   const hasImage = product.image && product.image.length > 0
+  const hasAlternatives = product._alternatives && product._alternatives.length > 0
 
   return (
     <div className="group rounded-2xl bg-[#111] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all duration-300">
@@ -247,12 +251,30 @@ function ProductCard({ product }) {
           </span>
         </div>
 
+        {/* Best deal badge */}
+        {product._bestDeal && hasAlternatives && (
+          <div className="absolute bottom-2 left-2">
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[#06D6A0]/90 text-black backdrop-blur-sm">
+              Best Price
+            </span>
+          </div>
+        )}
+
         {/* Customisable badge */}
         {product.customisable && (
           <div className="absolute top-2 right-2">
             <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#a78bfa]/20 text-[#a78bfa] backdrop-blur-sm flex items-center gap-0.5">
               <Palette className="h-2.5 w-2.5" />
               Custom
+            </span>
+          </div>
+        )}
+
+        {/* Multi-supplier indicator */}
+        {hasAlternatives && !product.customisable && (
+          <div className="absolute top-2 right-2">
+            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#FFD23F]/20 text-[#FFD23F] backdrop-blur-sm">
+              {product._supplierCount} suppliers
             </span>
           </div>
         )}
@@ -295,6 +317,38 @@ function ProductCard({ product }) {
             {product.deliveryDays <= 7 ? '🚀' : '📦'} {product.deliveryDays} day delivery
           </span>
         </div>
+
+        {/* Price comparison toggle */}
+        {hasAlternatives && (
+          <button
+            onClick={() => setShowAlts(!showAlts)}
+            className="w-full mt-2 flex items-center justify-center gap-1 py-1 text-[10px] font-medium text-[#FFD23F] hover:text-[#FFD23F]/80 transition-colors"
+          >
+            <ArrowDownUp className="h-3 w-3" />
+            Compare {product._supplierCount} suppliers
+          </button>
+        )}
+
+        {/* Alternative suppliers comparison */}
+        {showAlts && product._alternatives && (
+          <div className="mt-2 space-y-1.5 border-t border-white/[0.06] pt-2">
+            {/* Current supplier */}
+            <div className="flex items-center justify-between text-[10px] bg-[#06D6A0]/10 rounded-lg px-2 py-1.5">
+              <span className="font-semibold text-[#06D6A0]">{product.supplierLogo} {product.supplier}</span>
+              <span className="font-bold text-[#06D6A0]">${product.totalCost.toFixed(2)}</span>
+            </div>
+            {/* Alternatives */}
+            {product._alternatives.map((alt) => (
+              <div key={alt.id} className="flex items-center justify-between text-[10px] bg-white/[0.03] rounded-lg px-2 py-1.5">
+                <div>
+                  <span className="text-zinc-300">{alt.supplierLogo} {alt.supplier}</span>
+                  <span className="text-zinc-600 ml-1">({alt.deliveryDays}d)</span>
+                </div>
+                <span className="font-semibold text-zinc-300">${alt.totalCost.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Sell button */}
         <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90 active:scale-[0.97] transition-all">
