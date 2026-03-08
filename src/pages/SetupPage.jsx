@@ -10,7 +10,7 @@ import { useAuthStore } from '../stores/authStore'
 
 const ALL_PLATFORMS = [
   { id: 'shopify', name: 'Shopify', color: '#95BF47', category: 'storefront', authType: 'oauth', needsShopName: true, desc: 'Own branded store' },
-  { id: 'woocommerce', name: 'WooCommerce', color: '#7F54B3', category: 'storefront', authType: 'api_keys', desc: 'WordPress store' },
+  { id: 'woocommerce', name: 'WooCommerce', color: '#7F54B3', category: 'storefront', authType: 'wc_auth', needsStoreUrl: true, desc: 'WordPress store' },
   { id: 'squarespace', name: 'Squarespace', color: '#000000', category: 'storefront', authType: 'oauth', desc: 'Beautiful templates' },
   { id: 'bigcommerce', name: 'BigCommerce', color: '#34313F', category: 'storefront', authType: 'oauth', desc: 'Enterprise scale' },
   { id: 'wix', name: 'Wix', color: '#0C6EFC', category: 'storefront', authType: 'oauth', desc: 'Drag & drop builder' },
@@ -50,6 +50,8 @@ export default function SetupPage() {
   const [shopNameModal, setShopNameModal] = useState(null)
   const [apiKeyForm, setApiKeyForm] = useState({})
   const [shopNameInput, setShopNameInput] = useState('')
+  const [storeUrlModal, setStoreUrlModal] = useState(null)
+  const [storeUrlInput, setStoreUrlInput] = useState('')
   const [error, setError] = useState(null)
 
   const { data: connectionsData, refetch: refetchConnections } = usePlatformConnections()
@@ -122,6 +124,13 @@ export default function SetupPage() {
       return
     }
 
+    // WooCommerce needs store URL, then auto-redirects to WC Auth
+    if (platformData?.needsStoreUrl) {
+      setStoreUrlModal(platform)
+      setStoreUrlInput('')
+      return
+    }
+
     // API key platforms show a form
     if (platformData?.authType === 'api_keys') {
       setApiKeyModal(platform)
@@ -133,12 +142,13 @@ export default function SetupPage() {
     await startOAuthConnect(platform)
   }
 
-  const startOAuthConnect = async (platform, shopName) => {
+  const startOAuthConnect = async (platform, shopName, shopUrl) => {
     setConnectingPlatform(platform)
     try {
       const result = await connectMutation.mutateAsync({
         platform,
         shop_name: shopName,
+        shop_url: shopUrl,
       })
 
       if (result.type === 'oauth' && result.url) {
@@ -179,6 +189,15 @@ export default function SetupPage() {
     setShopNameModal(null)
     startOAuthConnect(shopNameModal, shopNameInput.trim().replace('.myshopify.com', ''))
     setShopNameInput('')
+  }
+
+  const handleStoreUrlSubmit = () => {
+    if (!storeUrlInput.trim()) return
+    let url = storeUrlInput.trim().replace(/\/+$/, '')
+    if (!url.startsWith('http')) url = 'https://' + url
+    setStoreUrlModal(null)
+    startOAuthConnect(storeUrlModal, null, url)
+    setStoreUrlInput('')
   }
 
   const handleDisconnect = async (platform) => {
@@ -561,7 +580,53 @@ export default function SetupPage() {
         </div>
       )}
 
-      {/* API keys modal (WooCommerce, PrestaShop, etc.) */}
+      {/* WooCommerce store URL modal */}
+      {storeUrlModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-[#111] border border-white/[0.08] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#7F54B3]/15">
+                <Globe className="h-5 w-5 text-[#7F54B3]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Connect WooCommerce</h3>
+                <p className="text-[10px] text-zinc-500">Enter your WordPress store URL</p>
+              </div>
+            </div>
+            <div className="mb-3">
+              <input
+                type="text"
+                value={storeUrlInput}
+                onChange={(e) => setStoreUrlInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleStoreUrlSubmit()}
+                placeholder="https://yourstore.com"
+                className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
+                autoFocus
+              />
+            </div>
+            <p className="text-[10px] text-zinc-600 mb-4">
+              You'll be redirected to your WordPress site to approve the connection. API keys are generated automatically — no copy-pasting needed.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setStoreUrlModal(null); setStoreUrlInput('') }}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-zinc-400 bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStoreUrlSubmit}
+                disabled={!storeUrlInput.trim()}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-[#7F54B3] hover:bg-[#7F54B3]/90 transition-colors disabled:opacity-50"
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API keys modal (PrestaShop, Depop, etc.) */}
       {apiKeyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-2xl bg-[#111] border border-white/[0.08] p-6">
@@ -578,31 +643,6 @@ export default function SetupPage() {
             </div>
 
             <div className="space-y-3 mb-4">
-              {apiKeyModal === 'woocommerce' && (
-                <>
-                  <input
-                    type="text"
-                    value={apiKeyForm.store_url || ''}
-                    onChange={(e) => setApiKeyForm((f) => ({ ...f, store_url: e.target.value }))}
-                    placeholder="https://yourstore.com"
-                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
-                  />
-                  <input
-                    type="text"
-                    value={apiKeyForm.api_key || ''}
-                    onChange={(e) => setApiKeyForm((f) => ({ ...f, api_key: e.target.value }))}
-                    placeholder="Consumer Key (ck_...)"
-                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
-                  />
-                  <input
-                    type="password"
-                    value={apiKeyForm.api_secret || ''}
-                    onChange={(e) => setApiKeyForm((f) => ({ ...f, api_secret: e.target.value }))}
-                    placeholder="Consumer Secret (cs_...)"
-                    className="w-full px-3 py-3 rounded-xl bg-[#0a0a0a] border border-white/[0.06] text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-white/[0.15]"
-                  />
-                </>
-              )}
               {apiKeyModal === 'prestashop' && (
                 <>
                   <input
@@ -621,7 +661,7 @@ export default function SetupPage() {
                   />
                 </>
               )}
-              {apiKeyModal !== 'woocommerce' && apiKeyModal !== 'prestashop' && (
+              {apiKeyModal !== 'prestashop' && (
                 <input
                   type="text"
                   value={apiKeyForm.api_key || ''}

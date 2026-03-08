@@ -33,13 +33,13 @@ export function useConnectPlatform() {
 
   return useMutation({
     mutationFn: async ({ platform, shop_name, shop_url }) => {
-      const res = await fetch(`${API_BASE}/api/platforms/connect/${platform}`, {
+      const res = await fetch(`${API_BASE}/api/platforms/connect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({ shop_name, shop_url }),
+        body: JSON.stringify({ platform, shop_name, shop_url }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -53,19 +53,19 @@ export function useConnectPlatform() {
   })
 }
 
-// Save API keys for platforms that use direct auth (WooCommerce, PrestaShop)
+// Save API keys for platforms that use direct auth (PrestaShop, Depop)
 export function useConnectPlatformKeys() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ platform, api_key, api_secret, store_url }) => {
-      const res = await fetch(`${API_BASE}/api/platforms/connect/${platform}/keys`, {
+      const res = await fetch(`${API_BASE}/api/platforms/connect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({ api_key, api_secret, store_url }),
+        body: JSON.stringify({ platform, api_key, api_secret, store_url, type: 'api_keys' }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -85,7 +85,7 @@ export function useDisconnectPlatform() {
 
   return useMutation({
     mutationFn: async (platform) => {
-      const res = await fetch(`${API_BASE}/api/platforms/disconnect/${platform}`, {
+      const res = await fetch(`${API_BASE}/api/platforms/disconnect?platform=${encodeURIComponent(platform)}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       })
@@ -102,13 +102,13 @@ export function useDisconnectPlatform() {
 export function usePushProduct() {
   return useMutation({
     mutationFn: async ({ platform, product }) => {
-      const res = await fetch(`${API_BASE}/api/platforms/push-product/${platform}`, {
+      const res = await fetch(`${API_BASE}/api/platforms/push-product`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({ product }),
+        body: JSON.stringify({ platform, product }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -123,13 +123,13 @@ export function usePushProduct() {
 export function usePushProductAll() {
   return useMutation({
     mutationFn: async (product) => {
-      const res = await fetch(`${API_BASE}/api/platforms/push-product-all`, {
+      const res = await fetch(`${API_BASE}/api/platforms/push-product`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({ product }),
+        body: JSON.stringify({ product, all: true }),
       })
       if (!res.ok) {
         const err = await res.json()

@@ -57,11 +57,11 @@ const GUIDES = {
   woocommerce: {
     name: 'WooCommerce',
     color: '#7F54B3',
-    timeEstimate: '1 hour',
+    timeEstimate: '30 minutes',
     cost: 'Free plugin (hosting ~$5-15/month)',
-    overview: "WooCommerce is a free plugin for WordPress. If you already have a WordPress website, you can add a store to it in minutes. If you don't have WordPress yet, you'll need to set up hosting first. Togogo connects using your store's API keys.",
+    overview: "WooCommerce is a free plugin for WordPress. If you already have a WordPress website, you can add a store to it in minutes. If you don't have WordPress yet, you'll need to set up hosting first. Togogo connects automatically — just enter your store URL, approve the connection on your WordPress site, and you're done. No API keys to copy.",
     beforeYouStart: [
-      'A WordPress website (or a web host to create one)',
+      'A WordPress website with WooCommerce installed',
       'Admin access to your WordPress dashboard',
       'A payment processor (PayPal, Stripe, or similar)',
     ],
@@ -82,15 +82,10 @@ const GUIDES = {
         tip: "WooCommerce Payments (Stripe) is the easiest. You just need an email and bank details.",
       },
       {
-        title: 'Generate API keys for Togogo',
-        detail: "Go to WooCommerce then Settings then 'Advanced' then 'REST API'. Click 'Add Key'. For the description, type 'Togogo'. Set permissions to 'Read/Write'. Click 'Generate API Key'. You'll see a Consumer Key (starts with ck_) and Consumer Secret (starts with cs_). Copy both — you'll need them in the next step.",
-        tip: "Keep your API keys safe. Don't share them with anyone except Togogo. If you lose them, you can always generate new ones.",
+        title: 'Connect WooCommerce to Togogo (automatic)',
+        detail: "Go back to Togogo, head to Platforms, and click 'Connect' on WooCommerce. Enter your store URL (e.g., https://yourstore.com). Togogo will redirect you to your WordPress site where you'll see an approval screen. Click 'Approve' and the API keys are created and sent back to Togogo automatically. No copying or pasting needed — it's all done for you.",
+        tip: "Make sure you're logged into your WordPress admin in the same browser before clicking Connect.",
         important: true,
-      },
-      {
-        title: 'Connect WooCommerce to Togogo',
-        detail: "Go back to Togogo, head to Platforms, and click 'Connect' on WooCommerce. Enter your store URL (e.g., https://yourstore.com), your Consumer Key, and your Consumer Secret. Togogo will test the connection. If it works, you'll see a success message and your store is connected.",
-        tip: "Make sure your store URL starts with https:// and doesn't have a trailing slash.",
       },
     ],
     connectAction: 'woocommerce',

@@ -55,9 +55,9 @@ const PLATFORM_CONFIGS = {
   },
   woocommerce: {
     name: 'WooCommerce',
-    authType: 'rest_keys',
-    // WooCommerce uses REST API keys generated on the user's site
-    // We guide them through generating keys and entering them
+    authType: 'wc_auth',
+    // WooCommerce has a built-in auth endpoint (wc-auth/v1/authorize)
+    // that auto-generates API keys and sends them to our callback
   },
   bigcommerce: {
     name: 'BigCommerce',
@@ -176,8 +176,8 @@ router.post('/connect/:platform', requireAuth, async (req, res, next) => {
     )
 
     // Handle different auth types
-    if (config.authType === 'rest_keys' || config.authType === 'api_key') {
-      // For WooCommerce, PrestaShop etc — user provides API keys directly
+    if (config.authType === 'api_key') {
+      // For PrestaShop, Depop etc — user provides API keys directly
       return res.json({
         type: 'api_keys',
         platform,
@@ -190,7 +190,32 @@ router.post('/connect/:platform', requireAuth, async (req, res, next) => {
     let authUrl
     const redirectUri = `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/platforms/callback/${platform}`
 
-    if (platform === 'shopify') {
+    if (platform === 'woocommerce') {
+      // WooCommerce built-in auth endpoint — auto-generates and returns API keys
+      const storeUrl = req.body.shop_url
+      if (!storeUrl) {
+        return res.status(400).json({ error: 'Store URL is required (e.g., https://yourstore.com)' })
+      }
+      // Normalize URL
+      const cleanUrl = storeUrl.replace(/\/+$/, '')
+      const callbackUrl = `${process.env.API_BASE_URL || 'https://togogo.me'}/api/platforms/callback/woocommerce`
+      const returnUrl = `${process.env.FRONTEND_URL || 'https://togogo.me'}/setup?connected=woocommerce`
+
+      // Store the URL for the callback
+      await supabase
+        .from('platform_connections')
+        .update({ shop_url: cleanUrl })
+        .eq('user_id', req.user.id)
+        .eq('platform', 'woocommerce')
+
+      authUrl = `${cleanUrl}/wc-auth/v1/authorize?` + new URLSearchParams({
+        app_name: 'ToGoGo',
+        scope: 'read_write',
+        user_id: state, // We use the state token as user_id so we can look it up in callback
+        return_url: returnUrl,
+        callback_url: callbackUrl,
+      }).toString()
+    } else if (platform === 'shopify') {
       const shop = req.body.shop_name
       if (!shop) {
         return res.status(400).json({ error: 'Shopify store name required (e.g., "mystore" from mystore.myshopify.com)' })
@@ -287,6 +312,64 @@ router.post('/connect/:platform/keys', requireAuth, async (req, res, next) => {
     })
   } catch (err) {
     next(err)
+  }
+})
+
+// WooCommerce auth callback — WC Auth sends API keys via POST
+router.post('/callback/woocommerce', async (req, res, next) => {
+  try {
+    const { user_id: state, consumer_key, consumer_secret, key_permissions } = req.body
+
+    if (!state || !consumer_key || !consumer_secret) {
+      return res.status(400).json({ error: 'Missing required fields from WooCommerce auth' })
+    }
+
+    // Look up the pending connection by state token (stored as oauth_state)
+    const { data: conn } = await supabase
+      .from('platform_connections')
+      .select('*')
+      .eq('oauth_state', state)
+      .eq('platform', 'woocommerce')
+      .single()
+
+    if (!conn) {
+      return res.status(400).json({ error: 'Invalid or expired auth state' })
+    }
+
+    // Validate the keys work by making a test call
+    const credentials = Buffer.from(`${consumer_key}:${consumer_secret}`).toString('base64')
+    let shopName = conn.shop_url
+    try {
+      const testRes = await fetch(`${conn.shop_url}/wp-json/wc/v3/system_status`, {
+        headers: { 'Authorization': `Basic ${credentials}` },
+      })
+      if (testRes.ok) {
+        const data = await testRes.json()
+        shopName = data.environment?.site_title || conn.shop_url
+      }
+    } catch {
+      // Validation is best-effort — keys came directly from WooCommerce so they should work
+    }
+
+    // Save the connection as active
+    await supabase
+      .from('platform_connections')
+      .update({
+        status: 'active',
+        access_token: consumer_key,
+        refresh_token: consumer_secret,
+        shop_name: shopName,
+        token_data: { consumer_key, consumer_secret, key_permissions, store_url: conn.shop_url },
+        connected_at: new Date().toISOString(),
+        oauth_state: null,
+      })
+      .eq('id', conn.id)
+
+    // WC Auth expects a 200 response to confirm we received the keys
+    res.json({ success: true })
+  } catch (err) {
+    console.error('WooCommerce auth callback error:', err.message)
+    res.status(500).json({ error: err.message })
   }
 })
 
