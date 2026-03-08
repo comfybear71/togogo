@@ -38,10 +38,10 @@ export default async function handler(req, res) {
     }
 
     if (cjAuthData.data?.accessToken) {
-      const cjSearch = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': cjAuthData.data.accessToken },
-        body: JSON.stringify({ productNameEn: query, pageNum: 1, pageSize: 5 }),
+      const cjParams = new URLSearchParams({ productNameEn: query, pageNum: '1', pageSize: '5' })
+      const cjSearch = await fetch(`https://developers.cjdropshipping.com/api2.0/v1/product/list?${cjParams}`, {
+        method: 'GET',
+        headers: { 'CJ-Access-Token': cjAuthData.data.accessToken },
       })
       const cjSearchData = await cjSearch.json()
       results.cjSearch = {
@@ -64,7 +64,7 @@ export default async function handler(req, res) {
     const params = {
       app_key: aeKey,
       method: 'aliexpress.ds.feedname.get',
-      sign_method: 'hmac',
+      sign_method: 'hmac-sha256',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
       format: 'json',
       v: '2.0',

@@ -53,7 +53,7 @@ async function getAliExpressCount() {
     const params = {
       app_key: appKey,
       method: 'aliexpress.ds.feedname.get',
-      sign_method: 'hmac',
+      sign_method: 'hmac-sha256',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
       format: 'json',
       v: '2.0',

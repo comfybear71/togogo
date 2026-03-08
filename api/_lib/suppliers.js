@@ -45,23 +45,22 @@ export async function searchCJ(query, page = 1) {
     const token = await getCJAccessToken()
     if (!token) return getSampleCJProducts(query)
 
-    const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'CJ-Access-Token': token,
-      },
-      body: JSON.stringify({
-        productNameEn: query,
-        pageNum: page,
-        pageSize: 50,
-      }),
+    const params = new URLSearchParams({
+      productNameEn: query,
+      pageNum: String(page),
+      pageSize: '50',
     })
 
-    if (!response.ok) throw new Error('CJ API error')
+    const response = await fetch(`https://developers.cjdropshipping.com/api2.0/v1/product/list?${params}`, {
+      method: 'GET',
+      headers: { 'CJ-Access-Token': token },
+    })
+
+    if (!response.ok) throw new Error(`CJ API ${response.status}`)
 
     const data = await response.json()
-    const products = (data.data?.list || []).map(p => normaliseCJProduct(p))
+    const list = data.data?.list || data.data?.pageList || []
+    const products = list.map(p => normaliseCJProduct(p))
 
     if (products.length === 0) return getSampleCJProducts(query)
     return products
@@ -401,7 +400,7 @@ async function callAliExpressAPI(method, params = {}) {
   const baseParams = {
     app_key: appKey,
     method,
-    sign_method: 'hmac',
+    sign_method: 'hmac-sha256',
     timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
     format: 'json',
     v: '2.0',
