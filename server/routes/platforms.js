@@ -107,6 +107,15 @@ const PLATFORM_CONFIGS = {
     authType: 'api_key',
     // Depop's API is limited — we use their seller tools integration
   },
+  aliexpress: {
+    name: 'AliExpress',
+    authType: 'oauth',
+    // AliExpress Open Platform — Drop Shipping category
+    authUrl: 'https://api-sg.aliexpress.com/oauth/authorize',
+    tokenUrl: 'https://api-sg.aliexpress.com/auth/token/create',
+    refreshUrl: 'https://api-sg.aliexpress.com/auth/token/refresh',
+    apiBase: 'https://api-sg.aliexpress.com/sync',
+  },
 }
 
 // List which platforms the user has already connected
@@ -218,6 +227,8 @@ router.post('/connect/:platform', requireAuth, async (req, res, next) => {
       authUrl = `${config.authUrl}?client_id=${process.env.BIGCARTEL_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(config.scopes)}&state=${state}`
     } else if (platform === 'facebook') {
       authUrl = `${config.authUrl}?client_id=${process.env.FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${config.scopes}&state=${state}&response_type=code`
+    } else if (platform === 'aliexpress') {
+      authUrl = `${config.authUrl}?response_type=code&force_auth=true&redirect_uri=${encodeURIComponent(redirectUri)}&client_id=${process.env.ALIEXPRESS_APP_KEY}&state=${state}`
     } else {
       return res.status(400).json({ error: `OAuth not yet configured for ${config.name}` })
     }
@@ -352,6 +363,23 @@ router.get('/callback/:platform', async (req, res, next) => {
         }),
       })
       tokenData = await tokenRes.json()
+    } else if (platform === 'aliexpress') {
+      // AliExpress uses a custom token endpoint (not standard OAuth2 form)
+      const params = new URLSearchParams({
+        app_key: process.env.ALIEXPRESS_APP_KEY,
+        app_secret: process.env.ALIEXPRESS_APP_SECRET,
+        code,
+        grant_type: 'authorization_code',
+      })
+      const tokenRes = await fetch(`${config.tokenUrl}?${params.toString()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      })
+      tokenData = await tokenRes.json()
+      // AliExpress returns tokens at top level: access_token, refresh_token, expire_time, etc.
+      if (tokenData.access_token) {
+        tokenData.expires_in = Math.floor((tokenData.expire_time - Date.now()) / 1000)
+      }
     } else {
       // Generic OAuth2 token exchange for other platforms
       const envPrefix = platform.toUpperCase().replace(/-/g, '_')
@@ -683,6 +711,43 @@ async function pushProductToPlatform(platform, conn, product) {
     return { id: data.id, url: data.permalink || conn.shop_url }
   }
 
+  if (platform === 'aliexpress') {
+    // Ensure token is fresh (1-day expiry)
+    const freshToken = await refreshAliExpressTokenIfNeeded(conn)
+    const apiToken = freshToken || token
+
+    // AliExpress DS product listing via aliexpress.ds.product.post
+    const params = {
+      app_key: process.env.ALIEXPRESS_APP_KEY,
+      method: 'aliexpress.ds.product.post',
+      sign_method: 'sha256',
+      session: apiToken,
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      format: 'json',
+      v: '2.0',
+    }
+
+    // Sign the request
+    params.sign = signAliExpressRequest(params, process.env.ALIEXPRESS_APP_SECRET)
+
+    const apiRes = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(params).toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        product_title: product.title,
+        product_description: product.description,
+        product_price: String(product.suggestedPrice || product.price),
+        image_urls: (product.images || []).join(';'),
+        category_id: product.aliexpressCategoryId || 0,
+      }),
+    })
+    const data = await apiRes.json()
+    return {
+      id: data.aliexpress_ds_product_post_response?.product_id || `ae_${Date.now()}`,
+      url: data.aliexpress_ds_product_post_response?.product_url || null,
+    }
+  }
+
   // Generic fallback — store listing intent for platforms we push to later
   return {
     id: `pending_${platform}_${Date.now()}`,
@@ -690,6 +755,77 @@ async function pushProductToPlatform(platform, conn, product) {
     status: 'queued',
     message: `Product queued for ${PLATFORM_CONFIGS[platform]?.name}. Will be listed when API integration is fully live.`,
   }
+}
+
+// ============================================
+// ALIEXPRESS HELPERS
+// ============================================
+
+// Refresh AliExpress access token if expired (1-day access, 2-day refresh)
+async function refreshAliExpressTokenIfNeeded(conn) {
+  if (!conn.token_expires_at) return null
+
+  const expiresAt = new Date(conn.token_expires_at).getTime()
+  const now = Date.now()
+
+  // Refresh if token expires within 1 hour
+  if (expiresAt - now > 3600000) return null
+
+  const refreshToken = conn.refresh_token || conn.token_data?.refresh_token
+  if (!refreshToken) return null
+
+  try {
+    const params = new URLSearchParams({
+      app_key: process.env.ALIEXPRESS_APP_KEY,
+      app_secret: process.env.ALIEXPRESS_APP_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    })
+
+    const res = await fetch(`https://api-sg.aliexpress.com/auth/token/refresh?${params.toString()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    })
+
+    const data = await res.json()
+
+    if (data.access_token) {
+      // Update stored tokens
+      await supabase
+        .from('platform_connections')
+        .update({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || refreshToken,
+          token_expires_at: data.expire_time
+            ? new Date(data.expire_time).toISOString()
+            : new Date(now + 86400000).toISOString(),
+          token_data: { ...conn.token_data, ...data },
+        })
+        .eq('id', conn.id)
+
+      return data.access_token
+    }
+  } catch (err) {
+    console.error('AliExpress token refresh failed:', err.message)
+  }
+
+  return null
+}
+
+// Sign AliExpress API requests (HMAC-SHA256)
+function signAliExpressRequest(params, appSecret) {
+  const sorted = Object.keys(params)
+    .filter(k => k !== 'sign')
+    .sort()
+    .map(k => `${k}${params[k]}`)
+    .join('')
+
+  const signStr = `${appSecret}${sorted}${appSecret}`
+  return crypto
+    .createHmac('sha256', appSecret)
+    .update(signStr)
+    .digest('hex')
+    .toUpperCase()
 }
 
 export default router

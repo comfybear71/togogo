@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import crypto from 'crypto'
 import { requireAuth, supabase } from '../middleware/auth.js'
 
 const router = Router()
@@ -19,6 +20,7 @@ router.get('/search', async (req, res, next) => {
     // Search all suppliers in parallel through our master keys
     const results = await Promise.allSettled([
       searchCJ(query || category, Number(page)),
+      searchAliExpress(query || category, Number(page)),
       searchPrintful(query || category),
       searchPrintify(query || category),
       searchGooten(query || category),
@@ -53,7 +55,7 @@ router.get('/search', async (req, res, next) => {
       products,
       total: products.length,
       page: Number(page),
-      suppliers: ['CJ Dropshipping', 'Printful', 'Printify', 'Gooten'],
+      suppliers: ['CJ Dropshipping', 'AliExpress', 'Printful', 'Printify', 'Gooten'],
       live: hasLiveData,
       message: hasLiveData ? null : 'Showing sample data. Live supplier APIs will be connected soon.',
     })
@@ -88,6 +90,7 @@ router.get('/trending', async (req, res, next) => {
 
     const results = await Promise.allSettled([
       ...searchTerms.map(term => searchCJ(term, 1)),
+      ...searchTerms.map(term => searchAliExpress(term, 1)),
       ...searchTerms.map(term => searchPrintful(term)),
       ...searchTerms.map(term => searchPrintify(term)),
       ...searchTerms.map(term => searchGooten(term)),
@@ -180,6 +183,23 @@ router.get('/cj/search', requireAuth, async (req, res, next) => {
   }
 })
 
+// Search AliExpress products
+router.get('/aliexpress/search', async (req, res, next) => {
+  try {
+    const { query, page = 1 } = req.query
+    const products = await searchAliExpress(query, Number(page))
+    const hasLiveData = products.length > 0 && products[0]._live
+
+    res.json({
+      products,
+      source: hasLiveData ? 'aliexpress_api' : 'sample_data',
+      message: hasLiveData ? null : 'AliExpress API keys not configured. Showing sample data.',
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // Search Printful products
 router.get('/printful/search', async (req, res, next) => {
   try {
@@ -204,6 +224,7 @@ router.post('/compare', requireAuth, async (req, res, next) => {
 
     const results = await Promise.allSettled([
       searchCJ(productName, 1),
+      searchAliExpress(productName, 1),
       searchPrintful(productName),
       searchPrintify(productName),
       searchGooten(productName),
@@ -681,16 +702,212 @@ function normaliseGootenProduct(p) {
   }
 }
 
-// --- AliExpress (placeholder for future) ---
-async function importFromAliExpress(url) {
-  return {
-    title: 'AliExpress Product',
-    description: 'AliExpress API integration coming soon. Paste the product details manually for now.',
-    images: [],
-    supplierCost: 0,
-    source: 'aliexpress',
-    supplierUrl: url,
+// --- AliExpress (Drop Shipping API) ---
+// Uses ToGoGo's app credentials (AppKey: configured via env)
+// Token management for AliExpress DS API
+let aliexpressAccessToken = null
+let aliexpressTokenExpiry = 0
+
+async function getAliExpressAccessToken() {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  const appSecret = process.env.ALIEXPRESS_APP_SECRET
+  if (!appKey || !appSecret) return null
+
+  const now = Date.now()
+  // Return cached token if still valid (refresh 1 day early)
+  if (aliexpressAccessToken && aliexpressTokenExpiry > now + 86400000) {
+    return aliexpressAccessToken
   }
+
+  // For server-to-server DS API calls, use the system-level token
+  // This is obtained via the OAuth flow and stored; for product search
+  // we use the app-level API which only needs app_key + sign
+  return null
+}
+
+// Sign AliExpress API requests (HMAC-SHA256)
+function signAliExpressRequest(params, appSecret) {
+  const sorted = Object.keys(params)
+    .filter(k => k !== 'sign')
+    .sort()
+    .map(k => `${k}${params[k]}`)
+    .join('')
+
+  const signStr = `${appSecret}${sorted}${appSecret}`
+  return crypto
+    .createHmac('sha256', appSecret)
+    .update(signStr)
+    .digest('hex')
+    .toUpperCase()
+}
+
+// Call AliExpress DS API
+async function callAliExpressAPI(method, params = {}) {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  const appSecret = process.env.ALIEXPRESS_APP_SECRET
+  if (!appKey || !appSecret) return null
+
+  const baseParams = {
+    app_key: appKey,
+    method,
+    sign_method: 'sha256',
+    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    format: 'json',
+    v: '2.0',
+    ...params,
+  }
+
+  baseParams.sign = signAliExpressRequest(baseParams, appSecret)
+
+  const response = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(baseParams).toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  })
+
+  if (!response.ok) throw new Error(`AliExpress API error: ${response.status}`)
+  return response.json()
+}
+
+async function searchAliExpress(query, page = 1) {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  if (!appKey) return getSampleAliExpressProducts(query)
+
+  try {
+    const data = await callAliExpressAPI('aliexpress.ds.product.search', {
+      target_currency: 'USD',
+      target_language: 'en',
+      keywords: query,
+      page_no: String(page),
+      page_size: '20',
+      sort: 'SALE_PRICE_ASC',
+    })
+
+    const resp = data?.aliexpress_ds_product_search_response?.result
+    if (!resp?.products?.product || resp.products.product.length === 0) {
+      return getSampleAliExpressProducts(query)
+    }
+
+    return resp.products.product.map(p => normaliseAliExpressProduct(p))
+  } catch {
+    return getSampleAliExpressProducts(query)
+  }
+}
+
+function normaliseAliExpressProduct(p) {
+  const cost = parseFloat(p.target_sale_price || p.target_original_price || '0')
+  const originalPrice = parseFloat(p.target_original_price || '0')
+  const shipping = 0 // Most AliExpress DS products have free shipping
+  const suggestedPrice = Math.ceil(cost * 2.5 * 100) / 100
+
+  return {
+    id: `ae_${p.product_id}`,
+    title: p.product_title || 'AliExpress Product',
+    description: p.product_title || '',
+    image: p.product_main_image_url || '',
+    images: p.product_small_image_urls?.string || [],
+    cost,
+    originalPrice,
+    shipping,
+    totalCost: Math.round((cost + shipping) * 100) / 100,
+    suggestedPrice,
+    suggestedMargin: Math.round((suggestedPrice - cost - shipping) * 100) / 100,
+    deliveryDays: 14,
+    supplier: 'AliExpress',
+    supplierLogo: '🛒',
+    sourceUrl: p.product_detail_url || `https://www.aliexpress.com/item/${p.product_id}.html`,
+    minOrderQty: 1,
+    category: p.first_level_category_name || p.second_level_category_name || '',
+    rating: p.evaluate_rate ? parseFloat(p.evaluate_rate.replace('%', '')) / 100 : null,
+    orders: p.lastest_volume || 0,
+    discount: originalPrice > cost ? Math.round((1 - cost / originalPrice) * 100) : 0,
+    _live: true,
+  }
+}
+
+async function importFromAliExpress(url) {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  if (!appKey) {
+    return {
+      title: 'AliExpress Product',
+      description: 'Configure ALIEXPRESS_APP_KEY and ALIEXPRESS_APP_SECRET to auto-import.',
+      images: [],
+      supplierCost: 0,
+      source: 'aliexpress',
+      supplierUrl: url,
+    }
+  }
+
+  // Extract product ID from URL
+  const match = url.match(/\/(\d{8,})/)
+  const productId = match?.[1]
+
+  if (!productId) {
+    return {
+      title: 'AliExpress Product',
+      description: 'Could not extract product ID from URL.',
+      images: [],
+      supplierCost: 0,
+      source: 'aliexpress',
+      supplierUrl: url,
+    }
+  }
+
+  try {
+    const data = await callAliExpressAPI('aliexpress.ds.product.get', {
+      product_id: productId,
+      target_currency: 'USD',
+      target_language: 'en',
+    })
+
+    const p = data?.aliexpress_ds_product_get_response?.result
+    if (!p) throw new Error('Product not found')
+
+    const images = p.ae_multimedia_info_dto?.image_urls?.split(';') || []
+    const skus = p.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
+    const lowestPrice = skus.reduce((min, s) => {
+      const price = parseFloat(s.sku_price || '999')
+      return price < min ? price : min
+    }, parseFloat(p.ae_item_base_info_dto?.target_sale_price || '0'))
+
+    return {
+      title: p.ae_item_base_info_dto?.subject || 'AliExpress Product',
+      description: p.ae_item_base_info_dto?.detail || p.ae_item_base_info_dto?.subject || '',
+      images,
+      supplierCost: lowestPrice,
+      shippingCost: 0,
+      source: 'aliexpress',
+      supplierUrl: url,
+      productId,
+      variants: skus.map(s => ({
+        sku: s.id,
+        price: parseFloat(s.sku_price || '0'),
+        stock: s.sku_available_stock || 0,
+        attributes: s.ae_sku_property_dtos?.ae_sku_property_d_t_o?.map(a => ({
+          name: a.sku_property_name,
+          value: a.property_value_definition_name || a.sku_property_value,
+        })) || [],
+      })),
+    }
+  } catch {
+    return {
+      title: 'AliExpress Product',
+      description: 'Failed to fetch product details. Please try again.',
+      images: [],
+      supplierCost: 0,
+      source: 'aliexpress',
+      supplierUrl: url,
+    }
+  }
+}
+
+function getSampleAliExpressProducts(query) {
+  const q = query || 'Product'
+  return [
+    { id: 'ae_sample_1', title: `${q} - Hot Seller`, description: 'Top-rated AliExpress product with 10k+ orders', image: '', images: [], cost: 4.99, originalPrice: 9.99, shipping: 0, totalCost: 4.99, suggestedPrice: 14.99, suggestedMargin: 10.00, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.96, orders: 10532, discount: 50, _live: false },
+    { id: 'ae_sample_2', title: `${q} - Budget Pick`, description: 'Affordable option with free shipping worldwide', image: '', images: [], cost: 2.49, originalPrice: 4.99, shipping: 0, totalCost: 2.49, suggestedPrice: 9.99, suggestedMargin: 7.50, deliveryDays: 20, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.92, orders: 5210, discount: 50, _live: false },
+    { id: 'ae_sample_3', title: `${q} - Premium Quality`, description: 'Higher quality variant with faster shipping option', image: '', images: [], cost: 8.99, originalPrice: 14.99, shipping: 0, totalCost: 8.99, suggestedPrice: 24.99, suggestedMargin: 16.00, deliveryDays: 10, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.98, orders: 3420, discount: 40, _live: false },
+    { id: 'ae_sample_4', title: `${q} - Bundle (5 Pack)`, description: 'Multi-pack for better per-unit margins', image: '', images: [], cost: 11.99, originalPrice: 19.99, shipping: 0, totalCost: 11.99, suggestedPrice: 34.99, suggestedMargin: 23.00, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.94, orders: 1876, discount: 40, _live: false },
+  ]
 }
 
 // --- Manual/DB suppliers ---
