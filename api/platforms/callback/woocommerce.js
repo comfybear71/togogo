@@ -54,6 +54,33 @@ export default async function handler(req, res) {
       WHERE id = ${conn.id}
     `
 
+    // Auto-register order webhook on the user's WooCommerce store
+    const webhookUrl = `${process.env.API_BASE_URL || 'https://togogo.me'}/api/platforms/webhook/woocommerce`
+    try {
+      const webhookRes = await fetch(`${conn.shop_url}/wp-json/wc/v3/webhooks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${credentials}`,
+        },
+        body: JSON.stringify({
+          name: 'ToGoGo Order Notifications',
+          topic: 'order.created',
+          delivery_url: webhookUrl,
+          secret: consumer_key,
+          status: 'active',
+        }),
+      })
+      if (webhookRes.ok) {
+        console.log('WooCommerce webhook registered for', conn.shop_url)
+      } else {
+        console.error('Failed to register WooCommerce webhook:', await webhookRes.text())
+      }
+    } catch (webhookErr) {
+      // Non-fatal — user can manually set up webhooks if auto-register fails
+      console.error('Webhook registration error:', webhookErr.message)
+    }
+
     // WC Auth expects a 200 response to confirm we received the keys
     res.json({ success: true })
   } catch (err) {
