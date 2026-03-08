@@ -4,7 +4,9 @@ import {
   ChevronRight, AlertCircle, Clock, DollarSign, Shield
 } from 'lucide-react'
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { usePlatformConnections } from '../hooks/usePlatforms'
+import DomainSearch from '../components/DomainSearch'
 
 // Full step-by-step guides for every platform
 const GUIDES = {
@@ -498,8 +500,10 @@ export default function PlatformGuidePage() {
   const { platform } = useParams()
   const navigate = useNavigate()
   const [expandedStep, setExpandedStep] = useState(0)
+  const [searchParams] = useSearchParams()
   const { data: connectionsData } = usePlatformConnections()
   const connections = connectionsData?.connections || []
+  const purchasedDomain = searchParams.get('domain_purchased')
 
   const guide = GUIDES[platform]
 
@@ -590,6 +594,29 @@ export default function PlatformGuidePage() {
           ))}
         </ul>
       </div>
+
+      {/* Domain purchase — show for storefronts that need a domain */}
+      {(platform === 'woocommerce' || platform === 'prestashop') && (
+        <div className="mb-6">
+          {purchasedDomain ? (
+            <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
+                  <Check className="h-5 w-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-emerald-400">Domain purchased!</h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    <strong className="text-white">{purchasedDomain}</strong> is yours. Continue with the setup steps below.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <DomainSearch />
+          )}
+        </div>
+      )}
 
       {/* Steps */}
       <div className="mb-8">
