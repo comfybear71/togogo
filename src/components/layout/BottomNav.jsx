@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { House, Search, Heart, User, LayoutDashboard, Rocket } from 'lucide-react'
+import { House, Search, Heart, User, LayoutDashboard } from 'lucide-react'
 import { useWatchlistStore } from '../../stores/cartStore'
 import { useAuthStore } from '../../stores/authStore'
 
@@ -19,7 +19,6 @@ export default function BottomNav() {
     ? [
         { to: '/', icon: House },
         { to: '/browse', icon: Search },
-        { to: '/launch-store', icon: Rocket },
         { to: '/dashboard', icon: LayoutDashboard },
         { to: '/profile', icon: User },
       ]
