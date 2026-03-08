@@ -58,10 +58,10 @@ const TOOLS = [
     path: '/platforms',
   },
   {
-    id: 'browse',
-    emoji: '🔍',
-    label: 'Browse Deals',
-    path: '/browse',
+    id: 'promotions',
+    emoji: '📣',
+    label: 'Promotions',
+    path: '/promotions',
   },
 ]
 
