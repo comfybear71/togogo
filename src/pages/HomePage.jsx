@@ -9,10 +9,77 @@ const QUICK_STARTS = [
   { id: 'money', emoji: '💰', label: 'Side Hustle', border: 'hover:border-[#a78bfa]/30' },
 ]
 
+// Real brand logos for the 3 category buttons
 const TOOLS = [
-  { id: 'suppliers', emoji: '🏭', label: 'Suppliers', path: '/suppliers' },
-  { id: 'platforms', emoji: '🛍️', label: 'Platforms', path: '/platforms' },
-  { id: 'promotions', emoji: '📣', label: 'Marketing', path: '/promotions' },
+  {
+    id: 'suppliers',
+    label: 'Suppliers',
+    path: '/suppliers',
+    logos: [
+      { name: 'CJ', color: '#FF6B35' },
+      { name: 'Ali', color: '#E53238' },
+      { name: 'PF', color: '#29AB51' },
+    ],
+  },
+  {
+    id: 'platforms',
+    label: 'Platforms',
+    path: '/platforms',
+    logos: [
+      { name: 'eBay', color: '#E53238' },
+      { name: 'Etsy', color: '#F56400' },
+      { name: 'Amz', color: '#FF9900' },
+    ],
+  },
+  {
+    id: 'promotions',
+    label: 'Marketing',
+    path: '/promotions',
+    logos: [
+      { name: 'IG', color: '#E1306C' },
+      { name: 'TT', color: '#ffffff' },
+      { name: 'FB', color: '#1877F2' },
+    ],
+  },
+]
+
+// One featured product per supplier for the showcase strip
+const SUPPLIER_PRODUCTS = [
+  {
+    supplier: 'CJ Dropshipping',
+    image: 'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=200&h=200&fit=crop',
+    title: 'Wireless Earbuds',
+    price: '$29.99',
+    color: '#FF6B35',
+  },
+  {
+    supplier: 'AliExpress',
+    image: 'https://images.unsplash.com/photo-1615796153287-98eacf0abb13?w=200&h=200&fit=crop',
+    title: 'LED Strip Lights',
+    price: '$14.99',
+    color: '#E53238',
+  },
+  {
+    supplier: 'Printful',
+    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=200&h=200&fit=crop',
+    title: 'Custom T-Shirt',
+    price: '$24.99',
+    color: '#29AB51',
+  },
+  {
+    supplier: 'Printify',
+    image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=200&h=200&fit=crop',
+    title: 'Custom Mug',
+    price: '$18.99',
+    color: '#39B54A',
+  },
+  {
+    supplier: 'Gooten',
+    image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=200&h=200&fit=crop',
+    title: 'Canvas Tote Bag',
+    price: '$22.99',
+    color: '#00B4D8',
+  },
 ]
 
 export default function HomePage() {
@@ -68,15 +135,26 @@ export default function HomePage() {
           Your shortcut to earning online
         </p>
 
-        {/* === Tool buttons ABOVE price === */}
+        {/* === Tool buttons with brand logos === */}
         <div className="fade-up flex gap-3 w-full" style={{ marginTop: '32px', maxWidth: '360px', animationDelay: '0.9s' }}>
           {TOOLS.map((tool) => (
             <button
               key={tool.id}
               onClick={() => navigate(tool.path)}
-              className="group flex-1 flex flex-col items-center gap-1.5 rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-2.5 transition-all duration-300 hover:border-white/[0.12] active:scale-[0.97]"
+              className="group flex-1 flex flex-col items-center gap-2 rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-3 transition-all duration-300 hover:border-white/[0.12] active:scale-[0.97]"
             >
-              <span className="text-lg">{tool.emoji}</span>
+              {/* Mini brand logos row */}
+              <div className="flex items-center gap-1">
+                {tool.logos.map((logo) => (
+                  <div
+                    key={logo.name}
+                    className="flex items-center justify-center w-6 h-6 rounded-md text-[7px] font-bold"
+                    style={{ backgroundColor: `${logo.color}20`, color: logo.color }}
+                  >
+                    {logo.name}
+                  </div>
+                ))}
+              </div>
               <span className="text-[10px] font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors">{tool.label}</span>
             </button>
           ))}
@@ -130,8 +208,43 @@ export default function HomePage() {
           ))}
         </div>
 
+        {/* === Product showcase from suppliers === */}
+        <div className="fade-up w-full" style={{ marginTop: '20px', maxWidth: '360px', animationDelay: '1.3s' }}>
+          <p className="text-[10px] text-zinc-600 uppercase tracking-wider text-center mb-3">Products from our suppliers</p>
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            {SUPPLIER_PRODUCTS.map((product) => (
+              <button
+                key={product.supplier}
+                onClick={() => navigate('/suppliers')}
+                className="flex-shrink-0 w-[100px] rounded-xl bg-[#0e0e0e] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all active:scale-[0.97]"
+              >
+                <div className="w-full h-[80px] overflow-hidden">
+                  <img
+                    src={product.image}
+                    alt={product.title}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="p-2">
+                  <p className="text-[9px] text-zinc-400 truncate">{product.title}</p>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-[10px] font-bold text-white">{product.price}</span>
+                    <span
+                      className="text-[7px] font-bold px-1 py-0.5 rounded"
+                      style={{ backgroundColor: `${product.color}20`, color: product.color }}
+                    >
+                      {product.supplier.split(' ')[0]}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Footer */}
-        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '32px', animationDelay: '1.4s' }}>
+        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '24px', animationDelay: '1.5s' }}>
           The marketplace for everything
         </p>
 

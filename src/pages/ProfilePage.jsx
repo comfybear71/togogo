@@ -17,7 +17,7 @@ import Button from '../components/ui/Button'
 import { useAuthStore, authFetch } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
 
-const TABS = ['My Store', 'Watchlist', 'Settings']
+const TABS = ['My Store', 'Settings']
 
 const platformColors = {
   woocommerce: '#7F54B3',
@@ -131,16 +131,11 @@ export default function ProfilePage() {
                 {displayName}
               </h1>
               <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
-              <div className="flex items-center gap-2 mt-1.5">
-                <Badge className="rounded-full bg-[#FF6B35]/10 px-2.5 py-0.5 text-[10px] font-bold text-[#FF6B35]">
-                  {subscriptionPlan} Plan
-                </Badge>
-                {activeConnections.length > 0 && (
-                  <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
-                    <CheckCircle2 className="h-2.5 w-2.5" /> Store Active
-                  </span>
-                )}
-              </div>
+              {activeConnections.length > 0 && (
+                <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 mt-1.5">
+                  <CheckCircle2 className="h-2.5 w-2.5" /> Store Active
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -161,7 +156,6 @@ export default function ProfilePage() {
                 }`}
               >
                 {tab === 'My Store' && <Store className="h-3.5 w-3.5" />}
-                {tab === 'Watchlist' && <Heart className="h-3.5 w-3.5" />}
                 {tab === 'Settings' && <Settings className="h-3.5 w-3.5" />}
                 {tab}
                 {activeTab === tab && (
@@ -333,19 +327,15 @@ export default function ProfilePage() {
                         <Zap className="h-4 w-4 text-[#FFD23F]" />
                       </div>
                       <div>
-                        <p className="text-xs font-semibold text-white">{subscriptionPlan} Plan</p>
-                        <p className="text-[10px] text-zinc-500">
-                          {subscriptionPlan === 'Free'
-                            ? '$19.99/mo — Get everything'
-                            : 'Full access to all features'}
-                        </p>
+                        <p className="text-xs font-semibold text-white">$19.99/mo</p>
+                        <p className="text-[10px] text-zinc-500">Full access to all features</p>
                       </div>
                     </div>
                     <Link
                       to="/subscription"
                       className="px-3 py-1.5 rounded-lg bg-[#FFD23F]/10 text-[10px] font-bold text-[#FFD23F]"
                     >
-                      {subscriptionPlan === 'Free' ? 'Upgrade' : 'Manage'}
+                      Manage
                     </Link>
                   </div>
                 </div>
@@ -655,42 +645,6 @@ export default function ProfilePage() {
                 )}
               </>
             )}
-          </div>
-        )}
-
-        {/* ============================================ */}
-        {/* WATCHLIST TAB */}
-        {/* ============================================ */}
-        {activeTab === 'Watchlist' && (
-          <div className="space-y-6">
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/5 bg-[#111] px-6 py-16 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FF6B35]/10">
-                <Heart className="h-8 w-8 text-[#FF6B35]" />
-              </div>
-              <h3 className="mt-6 font-['Baloo_2'] text-xl font-bold text-white">
-                No products watched yet
-              </h3>
-              <p className="mt-2 max-w-sm text-sm text-zinc-500">
-                You're not watching any products yet. Search for something you want and tap the heart to watch for price drops.
-              </p>
-              <Link to="/browse">
-                <Button className="mt-8 rounded-xl bg-[#FF6B35] px-8 py-3.5 text-sm font-bold text-white transition-colors hover:bg-[#e55a2b]">
-                  Search Products
-                </Button>
-              </Link>
-            </div>
-
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-white/5 bg-[#111] px-6 py-16 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#06D6A0]/10">
-                <Bell className="h-8 w-8 text-[#06D6A0]" />
-              </div>
-              <h3 className="mt-6 font-['Baloo_2'] text-xl font-bold text-white">
-                No price alerts
-              </h3>
-              <p className="mt-2 max-w-sm text-sm text-zinc-500">
-                Add products to your watchlist and we'll notify you when prices drop.
-              </p>
-            </div>
           </div>
         )}
 

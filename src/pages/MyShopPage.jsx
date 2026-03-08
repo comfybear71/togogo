@@ -129,28 +129,6 @@ export default function MyShopPage() {
         </button>
       </div>
 
-      {/* Tier banner for free users */}
-      {!isPaid && (
-        <div className="rounded-xl bg-gradient-to-r from-[#FFD23F]/10 to-[#FF6B35]/10 border border-[#FFD23F]/20 p-4 mb-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FFD23F]/15 flex-shrink-0">
-              <Zap className="h-4 w-4 text-[#FFD23F]" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xs font-semibold text-white mb-0.5">Free Plan — 1 product at a time</h3>
-              <p className="text-[10px] text-zinc-400 mb-2">
-                Upgrade to Pro to list unlimited products from all 5 suppliers including print-on-demand.
-              </p>
-              <button
-                onClick={() => setShowUpgradeModal(true)}
-                className="text-[10px] font-semibold text-[#FFD23F] flex items-center gap-1 hover:text-[#FFD23F]/80 transition-colors"
-              >
-                <Crown className="h-3 w-3" /> Upgrade to Pro — $19.99/mo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -339,13 +317,6 @@ export default function MyShopPage() {
                   </button>
                 ))}
               </div>
-              {!isPaid && (
-                <div className="flex items-center gap-1.5 mt-2 text-[10px] text-[#FFD23F]">
-                  <Lock className="h-3 w-3" />
-                  Free plan — showing products from free suppliers only.
-                  <button onClick={() => setShowUpgradeModal(true)} className="underline">Upgrade</button>
-                </div>
-              )}
             </div>
 
             {/* Product list */}
