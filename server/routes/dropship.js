@@ -20,6 +20,8 @@ router.get('/search', async (req, res, next) => {
     const results = await Promise.allSettled([
       searchCJ(query || category, Number(page)),
       searchPrintful(query || category),
+      searchPrintify(query || category),
+      searchGooten(query || category),
     ])
 
     // Merge and normalise into unified format
@@ -51,7 +53,7 @@ router.get('/search', async (req, res, next) => {
       products,
       total: products.length,
       page: Number(page),
-      suppliers: ['CJ Dropshipping', 'Printful'],
+      suppliers: ['CJ Dropshipping', 'Printful', 'Printify', 'Gooten'],
       live: hasLiveData,
       message: hasLiveData ? null : 'Showing sample data. Live supplier APIs will be connected soon.',
     })
@@ -87,6 +89,8 @@ router.get('/trending', async (req, res, next) => {
     const results = await Promise.allSettled([
       ...searchTerms.map(term => searchCJ(term, 1)),
       ...searchTerms.map(term => searchPrintful(term)),
+      ...searchTerms.map(term => searchPrintify(term)),
+      ...searchTerms.map(term => searchGooten(term)),
     ])
 
     let products = results
@@ -201,6 +205,8 @@ router.post('/compare', requireAuth, async (req, res, next) => {
     const results = await Promise.allSettled([
       searchCJ(productName, 1),
       searchPrintful(productName),
+      searchPrintify(productName),
+      searchGooten(productName),
       searchManualSuppliers(productName),
     ])
 
@@ -522,6 +528,159 @@ const PRINTFUL_BASE_COSTS = {
   'KIDS T-SHIRT': 9.00,
 }
 
+// --- Printify ---
+let printifyCatalogCache = null
+let printifyCacheTime = 0
+
+async function fetchPrintifyCatalog(apiKey) {
+  const now = Date.now()
+  if (printifyCatalogCache && (now - printifyCacheTime) < PRINTFUL_CACHE_TTL) {
+    return printifyCatalogCache
+  }
+
+  const response = await fetch('https://api.printify.com/v1/catalog/blueprints.json', {
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+  })
+
+  if (!response.ok) throw new Error(`Printify API ${response.status}`)
+
+  const data = await response.json()
+  printifyCatalogCache = Array.isArray(data) ? data : (data.data || [])
+  printifyCacheTime = now
+  return printifyCatalogCache
+}
+
+async function searchPrintify(query) {
+  const apiKey = process.env.PRINTIFY_API_KEY
+  if (!apiKey) return getSamplePrintifyProducts(query)
+
+  try {
+    const catalog = await fetchPrintifyCatalog(apiKey)
+    const q = (query || '').toLowerCase().trim()
+
+    if (!q || q.length < 2) {
+      return catalog.slice(0, 10).map(p => normalisePrintifyProduct(p))
+    }
+
+    const words = q.split(/\s+/).filter(w => w.length >= 2)
+    const filtered = catalog
+      .filter(p => {
+        const text = [p.title, p.description].map(f => (f || '').toLowerCase()).join(' ')
+        return words.some(w => text.includes(w)) || text.includes(q)
+      })
+      .slice(0, 15)
+
+    if (filtered.length === 0) return getSamplePrintifyProducts(query)
+    return filtered.map(p => normalisePrintifyProduct(p))
+  } catch {
+    return getSamplePrintifyProducts(query)
+  }
+}
+
+const PRINTIFY_BASE_COSTS = {
+  't-shirt': 8.50, 'hoodie': 20.00, 'sweatshirt': 18.00,
+  'tank top': 9.00, 'mug': 5.50, 'poster': 6.00,
+  'canvas': 12.00, 'phone case': 7.50, 'tote bag': 9.00,
+  'hat': 11.00, 'pillow': 12.00, 'blanket': 28.00,
+  'sticker': 1.80, 'notebook': 8.50, 'backpack': 26.00,
+}
+
+function normalisePrintifyProduct(p) {
+  const titleLower = (p.title || '').toLowerCase()
+  let baseCost = 13.00
+  for (const [key, cost] of Object.entries(PRINTIFY_BASE_COSTS)) {
+    if (titleLower.includes(key)) { baseCost = cost; break }
+  }
+  const shipping = 4.00
+  const suggestedPrice = Math.ceil(baseCost * 2.3 * 100) / 100
+
+  return {
+    id: `py_${p.id}`,
+    title: p.title || 'Printify Product',
+    description: p.description || 'Custom print-on-demand product',
+    image: p.images?.[0] || '',
+    images: p.images || [],
+    cost: baseCost,
+    shipping,
+    totalCost: Math.round((baseCost + shipping) * 100) / 100,
+    suggestedPrice,
+    suggestedMargin: Math.round((suggestedPrice - baseCost - shipping) * 100) / 100,
+    deliveryDays: 5,
+    supplier: 'Printify',
+    supplierLogo: '🖨️',
+    sourceUrl: 'https://printify.com',
+    minOrderQty: 1,
+    category: 'Custom',
+    customisable: true,
+    _live: true,
+  }
+}
+
+// --- Gooten ---
+let gootenCatalogCache = null
+let gootenCacheTime = 0
+
+async function searchGooten(query) {
+  const recipeId = process.env.GOOTEN_RECIPE_ID
+  if (!recipeId) return getSampleGootenProducts(query)
+
+  try {
+    const now = Date.now()
+    if (!gootenCatalogCache || (now - gootenCacheTime) > PRINTFUL_CACHE_TTL) {
+      const response = await fetch(`https://api.gooten.com/v/1/source/api/products?recipeid=${recipeId}&all=true`)
+      if (!response.ok) throw new Error(`Gooten API ${response.status}`)
+      const data = await response.json()
+      gootenCatalogCache = data.Products || data.products || []
+      gootenCacheTime = now
+    }
+
+    const q = (query || '').toLowerCase().trim()
+    if (!q || q.length < 2) {
+      return gootenCatalogCache.slice(0, 10).map(p => normaliseGootenProduct(p))
+    }
+
+    const words = q.split(/\s+/).filter(w => w.length >= 2)
+    const filtered = gootenCatalogCache
+      .filter(p => {
+        const text = [p.Name, p.Description, p.Category].map(f => (f || '').toLowerCase()).join(' ')
+        return words.some(w => text.includes(w)) || text.includes(q)
+      })
+      .slice(0, 15)
+
+    if (filtered.length === 0) return getSampleGootenProducts(query)
+    return filtered.map(p => normaliseGootenProduct(p))
+  } catch {
+    return getSampleGootenProducts(query)
+  }
+}
+
+function normaliseGootenProduct(p) {
+  const baseCost = p.MinPrice || p.RetailPrice?.Price || 12.00
+  const shipping = 4.50
+  const suggestedPrice = Math.ceil(baseCost * 2.2 * 100) / 100
+
+  return {
+    id: `gt_${p.Id || p.ProductId}`,
+    title: p.Name || 'Gooten Product',
+    description: p.Description || 'Custom print product by Gooten',
+    image: p.Images?.[0]?.Url || p.FeaturedImage?.Url || '',
+    images: (p.Images || []).map(i => i.Url).filter(Boolean),
+    cost: baseCost,
+    shipping,
+    totalCost: Math.round((baseCost + shipping) * 100) / 100,
+    suggestedPrice,
+    suggestedMargin: Math.round((suggestedPrice - baseCost - shipping) * 100) / 100,
+    deliveryDays: 6,
+    supplier: 'Gooten',
+    supplierLogo: '🏭',
+    sourceUrl: 'https://gooten.com',
+    minOrderQty: 1,
+    category: p.Category || 'Custom',
+    customisable: true,
+    _live: true,
+  }
+}
+
 // --- AliExpress (placeholder for future) ---
 async function importFromAliExpress(url) {
   return {
@@ -583,6 +742,23 @@ function getSamplePrintfulProducts(query) {
     { id: 'pf_sample_2', title: `${q} Mug`, description: '11oz ceramic mug — full wrap print', image: '', images: [], cost: 7.50, shipping: 4.50, totalCost: 12.00, suggestedPrice: 22.99, suggestedMargin: 10.99, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
     { id: 'pf_sample_3', title: `${q} Phone Case`, description: 'Tough snap case for iPhone/Samsung — your design', image: '', images: [], cost: 10.00, shipping: 4.50, totalCost: 14.50, suggestedPrice: 27.99, suggestedMargin: 13.49, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
     { id: 'pf_sample_4', title: `${q} Poster Print`, description: 'Museum-quality poster on thick matte paper', image: '', images: [], cost: 8.00, shipping: 4.50, totalCost: 12.50, suggestedPrice: 24.99, suggestedMargin: 12.49, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
+  ]
+}
+
+function getSamplePrintifyProducts(query) {
+  const q = query || 'Custom'
+  return [
+    { id: 'py_sample_1', title: `${q} T-Shirt`, description: 'Gildan 64000 unisex tee — your custom design', image: '', images: [], cost: 8.50, shipping: 4.00, totalCost: 12.50, suggestedPrice: 27.99, suggestedMargin: 15.49, deliveryDays: 5, supplier: 'Printify', supplierLogo: '🖨️', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
+    { id: 'py_sample_2', title: `${q} Mug`, description: 'Classic 11oz mug — vibrant sublimation print', image: '', images: [], cost: 5.50, shipping: 4.00, totalCost: 9.50, suggestedPrice: 19.99, suggestedMargin: 10.49, deliveryDays: 5, supplier: 'Printify', supplierLogo: '🖨️', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
+    { id: 'py_sample_3', title: `${q} Hoodie`, description: 'Unisex pullover hoodie — DTG printed your design', image: '', images: [], cost: 20.00, shipping: 4.50, totalCost: 24.50, suggestedPrice: 49.99, suggestedMargin: 25.49, deliveryDays: 5, supplier: 'Printify', supplierLogo: '🖨️', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
+  ]
+}
+
+function getSampleGootenProducts(query) {
+  const q = query || 'Custom'
+  return [
+    { id: 'gt_sample_1', title: `${q} T-Shirt`, description: 'Next Level unisex tee — premium DTG print', image: '', images: [], cost: 9.00, shipping: 4.50, totalCost: 13.50, suggestedPrice: 28.99, suggestedMargin: 15.49, deliveryDays: 6, supplier: 'Gooten', supplierLogo: '🏭', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
+    { id: 'gt_sample_2', title: `${q} Canvas Print`, description: 'Gallery wrapped canvas — high-res print on wood frame', image: '', images: [], cost: 14.00, shipping: 5.00, totalCost: 19.00, suggestedPrice: 44.99, suggestedMargin: 25.99, deliveryDays: 6, supplier: 'Gooten', supplierLogo: '🏭', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
   ]
 }
 
