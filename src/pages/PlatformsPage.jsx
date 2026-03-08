@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Store, ArrowRight, Check, Search, Link2, BookOpen,
-  ShoppingBag, Globe, Zap, ExternalLink
+  ShoppingBag, Globe, Zap, ExternalLink, Gift
 } from 'lucide-react'
 import { usePlatformConnections } from '../hooks/usePlatforms'
 
+// Referral links — every signup through Togogo earns us a commission
 const PLATFORMS = [
   {
     name: 'Shopify',
@@ -14,6 +15,7 @@ const PLATFORMS = [
     bestFor: 'Building a brand',
     category: 'storefront',
     url: 'https://shopify.com',
+    referralUrl: 'https://shopify.pxf.io/togogo',
     fees: '2.9% + 30c',
     monthly: '$39/mo',
     free: false,
@@ -25,6 +27,7 @@ const PLATFORMS = [
     bestFor: 'WordPress users',
     category: 'storefront',
     url: 'https://woocommerce.com',
+    referralUrl: 'https://woocommerce.com/?aff=togogo',
     fees: 'Gateway fees only',
     monthly: 'Free',
     free: true,
@@ -36,6 +39,7 @@ const PLATFORMS = [
     bestFor: 'Visual brands',
     category: 'storefront',
     url: 'https://squarespace.com',
+    referralUrl: 'https://squarespace.syuh.net/togogo',
     fees: '0-3%',
     monthly: '$33/mo',
     free: false,
@@ -47,6 +51,7 @@ const PLATFORMS = [
     bestFor: 'Scaling up',
     category: 'storefront',
     url: 'https://bigcommerce.com',
+    referralUrl: 'https://bigcommerce.pxf.io/togogo',
     fees: '0% tx fees',
     monthly: '$39/mo',
     free: false,
@@ -58,6 +63,7 @@ const PLATFORMS = [
     bestFor: 'Beginners',
     category: 'storefront',
     url: 'https://wix.com',
+    referralUrl: 'https://wix.pxf.io/togogo',
     fees: '2.9% + 30c',
     monthly: '$27/mo',
     free: false,
@@ -69,6 +75,7 @@ const PLATFORMS = [
     bestFor: 'EU sellers',
     category: 'storefront',
     url: 'https://prestashop.com',
+    referralUrl: 'https://prestashop.com/?ref=togogo',
     fees: 'Gateway fees only',
     monthly: 'Free',
     free: true,
@@ -80,6 +87,7 @@ const PLATFORMS = [
     bestFor: 'Artists & makers',
     category: 'storefront',
     url: 'https://bigcartel.com',
+    referralUrl: 'https://bigcartel.com/?ref=togogo',
     fees: '0% tx fees',
     monthly: 'Free',
     free: true,
@@ -91,6 +99,7 @@ const PLATFORMS = [
     bestFor: 'Volume sellers',
     category: 'marketplace',
     url: 'https://sell.amazon.com',
+    referralUrl: 'https://sell.amazon.com/?ref=togogo',
     fees: '8-15%',
     monthly: '$39.99/mo',
     free: false,
@@ -102,6 +111,7 @@ const PLATFORMS = [
     bestFor: 'Used & vintage',
     category: 'marketplace',
     url: 'https://ebay.com',
+    referralUrl: 'https://ebay.pxf.io/togogo',
     fees: '10-15%',
     monthly: 'Free',
     free: true,
@@ -113,6 +123,7 @@ const PLATFORMS = [
     bestFor: 'Crafters & artists',
     category: 'marketplace',
     url: 'https://etsy.com',
+    referralUrl: 'https://etsy.me/togogo',
     fees: '6.5% + 20c',
     monthly: 'Free',
     free: true,
@@ -124,6 +135,7 @@ const PLATFORMS = [
     bestFor: 'Viral products',
     category: 'marketplace',
     url: 'https://seller.tiktok.com',
+    referralUrl: 'https://seller.tiktok.com/?ref=togogo',
     fees: '5%',
     monthly: 'Free',
     free: true,
@@ -135,6 +147,7 @@ const PLATFORMS = [
     bestFor: 'Local selling',
     category: 'marketplace',
     url: 'https://facebook.com/marketplace',
+    referralUrl: null,
     fees: '5%',
     monthly: 'Free',
     free: true,
@@ -146,6 +159,7 @@ const PLATFORMS = [
     bestFor: 'Trendy fashion',
     category: 'marketplace',
     url: 'https://depop.com',
+    referralUrl: 'https://depop.com/?ref=togogo',
     fees: '10%',
     monthly: 'Free',
     free: true,
@@ -157,6 +171,7 @@ const PLATFORMS = [
     bestFor: 'Local events',
     category: 'other',
     url: null,
+    referralUrl: null,
     fees: 'Varies',
     monthly: 'Free',
     free: true,
@@ -213,7 +228,7 @@ export default function PlatformsPage() {
         </button>
       </div>
 
-      {/* Search + filters */}
+      {/* Search */}
       <div className="flex items-center gap-2 mb-5">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
@@ -245,10 +260,11 @@ export default function PlatformsPage() {
         ))}
       </div>
 
-      {/* Platform cards — clean vertical stack */}
+      {/* Platform cards */}
       <div className="space-y-3 mb-8">
         {filteredPlatforms.map((p) => {
           const connected = isConnected(p.name)
+          const slug = p.name.toLowerCase().replace(/\s+/g, '-')
 
           return (
             <div
@@ -259,7 +275,7 @@ export default function PlatformsPage() {
                   : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
               }`}
             >
-              {/* Top row: icon + name + badge */}
+              {/* Top: icon + name + badge + fees */}
               <div className="flex items-center gap-3 mb-3">
                 <div
                   className="flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0 text-base font-bold"
@@ -285,7 +301,7 @@ export default function PlatformsPage() {
                 </div>
               </div>
 
-              {/* Info chips — single clean row */}
+              {/* Info row */}
               <div className="flex items-center gap-2 mb-3 ml-14">
                 <span
                   className="text-[10px] font-semibold px-2 py-1 rounded-lg"
@@ -293,48 +309,66 @@ export default function PlatformsPage() {
                 >
                   {p.bestFor}
                 </span>
-                <span className="text-[10px] text-zinc-500 font-medium">
-                  {p.fees}
-                </span>
+                <span className="text-[10px] text-zinc-500 font-medium">{p.fees}</span>
                 <span className="text-[10px] text-zinc-600">·</span>
-                <span className="text-[10px] text-zinc-500 font-medium">
-                  {p.monthly}
-                </span>
+                <span className="text-[10px] text-zinc-500 font-medium">{p.monthly}</span>
               </div>
 
-              {/* Action buttons — spaced properly */}
-              <div className="flex items-center gap-2 ml-14">
-                {/* Guide button */}
+              {/* 2x2 Button grid — clean and tidy */}
+              <div className="grid grid-cols-2 gap-2 ml-14">
+                {/* Row 1: Guide + Sign Up */}
                 <button
-                  onClick={() => navigate(`/guide/${p.name.toLowerCase().replace(/\s+/g, '-')}`)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-zinc-400 hover:text-white hover:border-white/[0.15] transition-all"
+                  onClick={() => navigate(`/guide/${slug}`)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-zinc-400 hover:text-white hover:border-white/[0.15] transition-all"
                 >
                   <BookOpen className="h-3.5 w-3.5" />
-                  Step-by-Step Guide
+                  Setup Guide
                 </button>
 
-                {/* Visit button */}
-                {p.url && (
+                {p.referralUrl ? (
+                  <a
+                    href={p.referralUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[11px] font-semibold text-[#FFD23F] hover:bg-[#FFD23F]/15 transition-all"
+                  >
+                    <Gift className="h-3.5 w-3.5" />
+                    Sign Up Free
+                  </a>
+                ) : p.url ? (
                   <a
                     href={p.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-zinc-400 hover:text-white hover:border-white/[0.15] transition-all"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-zinc-400 hover:text-white hover:border-white/[0.15] transition-all"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    Visit
+                    Visit Site
                   </a>
+                ) : (
+                  <div />
                 )}
 
-                {/* Spacer */}
-                <div className="flex-1" />
+                {/* Row 2: Visit + Connect */}
+                {p.referralUrl && p.url ? (
+                  <a
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-[11px] font-medium text-zinc-400 hover:text-white hover:border-white/[0.15] transition-all"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Visit Site
+                  </a>
+                ) : (
+                  <div />
+                )}
 
-                {/* Connect button */}
                 <button
                   onClick={() => navigate(`/setup?platform=${encodeURIComponent(p.name)}`)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                  className={`flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] font-semibold transition-all ${
                     connected
-                      ? 'bg-emerald-500/15 text-emerald-400'
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
                       : 'bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90'
                   }`}
                 >
