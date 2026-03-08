@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Store, ArrowRight, Check, Search, Link2, BookOpen,
   ShoppingBag, Globe, Zap, ExternalLink, Gift
 } from 'lucide-react'
 import { usePlatformConnections } from '../hooks/usePlatforms'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 // Referral links — every signup through Togogo earns us a commission
 const PLATFORMS = [
@@ -189,11 +191,26 @@ export default function PlatformsPage() {
   const navigate = useNavigate()
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [adminReferralLinks, setAdminReferralLinks] = useState({})
   const { data: connectionsData } = usePlatformConnections()
   const connections = connectionsData?.connections || []
 
+  // Fetch dynamic referral links set by admin
+  useEffect(() => {
+    fetch(`${API_BASE}/api/admin/public/referral-links`)
+      .then((res) => res.ok ? res.json() : {})
+      .then((data) => setAdminReferralLinks(data))
+      .catch(() => {})
+  }, [])
+
   const isConnected = (name) =>
     connections.some((c) => c.platform_name === name && c.status === 'active')
+
+  // Merge admin referral links over hardcoded defaults
+  const getReferralUrl = (platform) => {
+    const slug = platform.name.toLowerCase().replace(/\s+/g, '')
+    return adminReferralLinks[slug] || adminReferralLinks[platform.name.toLowerCase()] || platform.referralUrl
+  }
 
   const filteredPlatforms = PLATFORMS.filter((p) => {
     const matchesCategory = activeCategory === 'all' || p.category === activeCategory
@@ -325,9 +342,9 @@ export default function PlatformsPage() {
                   Setup Guide
                 </button>
 
-                {p.referralUrl ? (
+                {getReferralUrl(p) ? (
                   <a
-                    href={p.referralUrl}
+                    href={getReferralUrl(p)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[11px] font-semibold text-[#FFD23F] hover:bg-[#FFD23F]/15 transition-all"
@@ -350,7 +367,7 @@ export default function PlatformsPage() {
                 )}
 
                 {/* Row 2: Visit + Connect */}
-                {p.referralUrl && p.url ? (
+                {getReferralUrl(p) && p.url ? (
                   <a
                     href={p.url}
                     target="_blank"

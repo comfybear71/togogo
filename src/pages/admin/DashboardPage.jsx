@@ -126,12 +126,36 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <Link to="/admin" className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]">
-              <ArrowLeft className="h-4 w-4" /> Back to Admin
+            <Link to="/" className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]">
+              <ArrowLeft className="h-4 w-4" /> Back to Site
             </Link>
             <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
             <p className="text-gray-500">Welcome back{user?.email ? `, ${user.email}` : ''}! Here's what's happening today.</p>
           </div>
+        </div>
+
+        {/* Admin navigation */}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {[
+            { to: '/admin', label: 'Dashboard', active: true },
+            { to: '/admin/users', label: 'Users' },
+            { to: '/admin/products', label: 'Products' },
+            { to: '/admin/orders', label: 'Orders' },
+            { to: '/admin/marketing', label: 'Marketing' },
+            { to: '/admin/settings', label: 'Settings' },
+          ].map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`flex-shrink-0 rounded-xl px-4 py-2 text-sm font-medium transition-all ${
+                item.active
+                  ? 'bg-[#FF6B35] text-white'
+                  : 'bg-white text-gray-500 hover:text-gray-900 shadow'
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
         </div>
 
         {/* Stats Cards */}

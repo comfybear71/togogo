@@ -213,6 +213,27 @@ create table if not exists public.platform_connections (
 );
 
 -- ============================================
+-- ADMIN SETTINGS TABLE
+-- Key-value config store for referral links, API keys, platform config
+-- ============================================
+create table if not exists public.admin_settings (
+  id uuid default uuid_generate_v4() primary key,
+  key text unique not null,
+  value text not null default '',
+  category text not null,
+  label text,
+  is_secret boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists idx_admin_settings_category on public.admin_settings(category);
+create index if not exists idx_admin_settings_key on public.admin_settings(key);
+
+-- Admin settings: only admins can manage (via service key on backend)
+-- No RLS needed — accessed only through admin API routes with requireAdmin middleware
+
+-- ============================================
 -- INDEXES
 -- ============================================
 create index if not exists idx_products_category on public.products(category);

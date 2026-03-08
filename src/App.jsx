@@ -18,6 +18,12 @@ const PlatformsPage = lazy(() => import('./pages/PlatformsPage'))
 const SetupPage = lazy(() => import('./pages/SetupPage'))
 const PlatformGuidePage = lazy(() => import('./pages/PlatformGuidePage'))
 const PromotionsPage = lazy(() => import('./pages/PromotionsPage'))
+const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage'))
+const AdminUsers = lazy(() => import('./pages/admin/UsersPage'))
+const AdminProducts = lazy(() => import('./pages/admin/ProductsPage'))
+const AdminOrders = lazy(() => import('./pages/admin/OrdersPage'))
+const AdminMarketing = lazy(() => import('./pages/admin/MarketingPage'))
+const AdminSettings = lazy(() => import('./pages/admin/SettingsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function PageLoader() {
@@ -59,6 +65,17 @@ export default function App() {
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        </Route>
+
+        {/* Admin routes — no AppLayout (admin has its own) */}
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/users" element={<AdminUsers />} />
+        <Route path="/admin/products" element={<AdminProducts />} />
+        <Route path="/admin/orders" element={<AdminOrders />} />
+        <Route path="/admin/marketing" element={<AdminMarketing />} />
+        <Route path="/admin/settings" element={<AdminSettings />} />
+
+        <Route element={<AppLayout />}>
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>
