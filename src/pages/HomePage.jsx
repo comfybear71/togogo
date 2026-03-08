@@ -1,6 +1,8 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BookOpen } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import { DUMMY_PRODUCTS, DUMMY_SUPPLIERS } from '../lib/dummyShopData'
 
 const QUICK_STARTS = [
   { id: 'sell', emoji: '🏷️', label: 'Start Selling', border: 'hover:border-[#FF6B35]/30' },
@@ -43,48 +45,36 @@ const TOOLS = [
   },
 ]
 
-// One featured product per supplier for the showcase strip
-const SUPPLIER_PRODUCTS = [
-  {
-    supplier: 'CJ Dropshipping',
-    image: 'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=200&h=200&fit=crop',
-    title: 'Wireless Earbuds',
-    price: '$29.99',
-    color: '#FF6B35',
-  },
-  {
-    supplier: 'AliExpress',
-    image: 'https://images.unsplash.com/photo-1615796153287-98eacf0abb13?w=200&h=200&fit=crop',
-    title: 'LED Strip Lights',
-    price: '$14.99',
-    color: '#E53238',
-  },
-  {
-    supplier: 'Printful',
-    image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=200&h=200&fit=crop',
-    title: 'Custom T-Shirt',
-    price: '$24.99',
-    color: '#29AB51',
-  },
-  {
-    supplier: 'Printify',
-    image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=200&h=200&fit=crop',
-    title: 'Custom Mug',
-    price: '$18.99',
-    color: '#39B54A',
-  },
-  {
-    supplier: 'Gooten',
-    image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=200&h=200&fit=crop',
-    title: 'Canvas Tote Bag',
-    price: '$22.99',
-    color: '#00B4D8',
-  },
-]
+// Pick one random product per supplier
+function getRandomProductPerSupplier() {
+  const supplierColors = {}
+  for (const s of DUMMY_SUPPLIERS) {
+    supplierColors[s.id] = s.color
+  }
+  const grouped = {}
+  for (const p of DUMMY_PRODUCTS) {
+    if (!grouped[p.supplierId]) grouped[p.supplierId] = []
+    grouped[p.supplierId].push(p)
+  }
+  return DUMMY_SUPPLIERS.map((s) => {
+    const products = grouped[s.id] || []
+    const pick = products[Math.floor(Math.random() * products.length)]
+    return pick ? {
+      id: pick.id,
+      supplier: s.name,
+      image: pick.image.replace('w=400', 'w=200').replace('h=400', 'h=200'),
+      title: pick.title,
+      price: `$${pick.suggestedPrice.toFixed(2)}`,
+      color: s.color,
+    } : null
+  }).filter(Boolean)
+}
 
 export default function HomePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  // Random products — changes on each page load/refresh
+  const showcaseProducts = useMemo(() => getRandomProductPerSupplier(), [])
 
   const handleGetStarted = () => {
     navigate(user ? '/profile' : '/auth')
@@ -212,9 +202,9 @@ export default function HomePage() {
         <div className="fade-up w-full" style={{ marginTop: '20px', maxWidth: '360px', animationDelay: '1.3s' }}>
           <p className="text-[10px] text-zinc-600 uppercase tracking-wider text-center mb-3">Products from our suppliers</p>
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {SUPPLIER_PRODUCTS.map((product) => (
+            {showcaseProducts.map((product) => (
               <button
-                key={product.supplier}
+                key={product.id}
                 onClick={() => navigate('/suppliers')}
                 className="flex-shrink-0 w-[100px] rounded-xl bg-[#0e0e0e] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all active:scale-[0.97]"
               >
