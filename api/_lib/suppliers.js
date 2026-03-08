@@ -506,7 +506,7 @@ const ALIEXPRESS_CATEGORY_FILTER = {
   home: ['home & garden', 'home appliance', 'home improvement', 'furniture', 'lights & lighting', 'kitchen'],
   beauty: ['beauty & health', 'hair extensions & wigs'],
   toys: ['toys & hobbies', 'mother & kids'],
-  automotive: ['automobiles, parts', 'motorcycle'],
+  automotive: ['automobiles', 'motorcycle', 'car accessori'],
 }
 
 // Map search queries to relevant AliExpress feed categories
@@ -680,14 +680,30 @@ export async function searchAliExpress(query, page = 1) {
     })
 
     if (query) {
-      // First try: filter by AliExpress category name
       const ourCat = getOurCategoryForQuery(query)
+
+      // Filter by AliExpress category name (most reliable method)
       if (ourCat) {
         const catFiltered = filterByAliExpressCategory(products, ourCat)
-        if (catFiltered.length >= 5) return catFiltered
+        if (catFiltered.length >= 5) {
+          // Within category, further filter by keyword for relevance
+          const q = query.toLowerCase()
+          const keywords = q.split(/\s+/).filter(kw => kw.length > 2)
+          if (keywords.length > 0) {
+            const kwFiltered = catFiltered.filter(p => {
+              const text = (p.title + ' ' + p.category).toLowerCase()
+              return keywords.some(kw => text.includes(kw))
+            })
+            return kwFiltered.length >= 3 ? kwFiltered : catFiltered
+          }
+          return catFiltered
+        }
+        // Category is known but no products in pool — use sample data
+        // (e.g., AliExpress feeds don't carry pet products)
+        return getSampleAliExpressProducts(query)
       }
 
-      // Second try: keyword match on title + category
+      // No known category — do general keyword search
       const q = query.toLowerCase()
       const keywords = q.split(/\s+/).filter(kw => kw.length > 2)
       const filtered = products.filter(p => {
@@ -696,18 +712,6 @@ export async function searchAliExpress(query, page = 1) {
       })
       if (filtered.length >= 3) return filtered
 
-      // Third try: partial keyword matching (any 3+ char substring)
-      const looseFiltered = products.filter(p => {
-        const text = (p.title + ' ' + p.category).toLowerCase()
-        return keywords.some(kw => {
-          // Try partial match for compound words
-          const parts = kw.length > 3 ? [kw, kw.slice(0, -1)] : [kw]
-          return parts.some(part => text.includes(part))
-        })
-      })
-      if (looseFiltered.length >= 3) return looseFiltered
-
-      // Nothing in the pool matches — return sample data with images
       return getSampleAliExpressProducts(query)
     }
 
