@@ -92,7 +92,10 @@ async function handleOrder(conn, order) {
     const product = matchedProducts[0]
     const supplierCost = product?.supplier_cost || 0
     const salePrice = parseFloat(item.price) || 0
-    const profit = salePrice - supplierCost
+    // ToGoGo takes 5% commission on every sale that flows through the platform
+    const TOGOGO_COMMISSION_RATE = 0.05
+    const togogoCommission = salePrice * TOGOGO_COMMISSION_RATE
+    const profit = salePrice - supplierCost - togogoCommission
 
     // Upsert order (idempotent — safe for retries)
     await sql`
@@ -101,7 +104,7 @@ async function handleOrder(conn, order) {
         supplier_cost, sale_price, profit,
         platform, platform_order_id,
         customer_name, customer_email,
-        shipping_address, status
+        shipping_address, status, notes
       ) VALUES (
         ${conn.user_id},
         ${product?.supplier || 'unknown'},
@@ -122,7 +125,8 @@ async function handleOrder(conn, order) {
           postcode: shippingAddress.postcode,
           country: shippingAddress.country,
         })},
-        ${order.status === 'processing' || order.status === 'completed' ? 'processing' : 'pending'}
+        ${order.status === 'processing' || order.status === 'completed' ? 'processing' : 'pending'},
+        ${`ToGoGo commission: $${togogoCommission.toFixed(2)} (5%)`}
       )
       ON CONFLICT DO NOTHING
     `
