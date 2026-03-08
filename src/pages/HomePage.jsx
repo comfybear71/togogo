@@ -1,21 +1,70 @@
 import { useNavigate } from 'react-router-dom'
-import { Check } from 'lucide-react'
+import { Sparkles, Check } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 
-const EVERYTHING = [
-  'Every product in the world',
-  'Every platform in the world',
-  'Every type of marketing',
-  'Unlimited listings',
-  'AI assistant',
-  'All suppliers unlocked',
-  'Print-on-demand included',
-  'Advanced analytics',
+const QUICK_STARTS = [
+  {
+    id: 'sell',
+    emoji: '🏷️',
+    label: 'Start Selling',
+    gradient: 'from-[#FF6B35]/20 to-[#FF6B35]/5',
+    border: 'hover:border-[#FF6B35]/30',
+    prompt: "I'm new to selling online and I want to start earning money from home. I don't know what to sell or where to start. Can you help me pick easy products I can sell today with very little money? Walk me through it step by step, keep it super simple.",
+  },
+  {
+    id: 'trending',
+    emoji: '🔥',
+    label: 'Hot Products',
+    gradient: 'from-[#FFD23F]/20 to-[#FFD23F]/5',
+    border: 'hover:border-[#FFD23F]/30',
+    prompt: "Show me the hottest trending products that are selling well right now. I want to know what's popular so I can start selling them. Give me specific product ideas with estimated profit margins. Keep it simple and practical.",
+  },
+  {
+    id: 'dropship',
+    emoji: '📦',
+    label: 'Dropshipping',
+    gradient: 'from-[#06D6A0]/20 to-[#06D6A0]/5',
+    border: 'hover:border-[#06D6A0]/30',
+    prompt: "I want to try dropshipping but I have no experience. Explain it to me like I'm a complete beginner. How do I start without buying any stock? What products should I dropship and where do I sell them? Make it really simple.",
+  },
+  {
+    id: 'money',
+    emoji: '💰',
+    label: 'Side Hustle Ideas',
+    gradient: 'from-[#a78bfa]/20 to-[#a78bfa]/5',
+    border: 'hover:border-[#a78bfa]/30',
+    prompt: "I'm sitting at home and I need ideas to make extra money. I'm not very tech-savvy. Give me simple side hustle ideas I can start today — things like selling items, flipping products, or offering services. Keep it practical and beginner-friendly.",
+  },
+]
+
+const TOOLS = [
+  {
+    id: 'suppliers',
+    emoji: '🏭',
+    label: 'Suppliers',
+    path: '/suppliers',
+  },
+  {
+    id: 'platforms',
+    emoji: '🛍️',
+    label: 'Platforms',
+    path: '/platforms',
+  },
+  {
+    id: 'promotions',
+    emoji: '📣',
+    label: 'Marketing',
+    path: '/promotions',
+  },
 ]
 
 export default function HomePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+
+  const handleQuickStart = (prompt) => {
+    navigate(`/assistant?start=${encodeURIComponent(prompt)}`)
+  }
 
   const handleGetStarted = () => {
     if (user) {
@@ -45,7 +94,7 @@ export default function HomePage() {
       </div>
 
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center" style={{ paddingTop: '10vh', paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}>
+      <div className="relative z-10 flex flex-col items-center" style={{ paddingTop: '8vh', paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}>
 
         {/* Dots */}
         <div className="flex items-center justify-center gap-4" style={{ marginBottom: '24px' }}>
@@ -70,41 +119,82 @@ export default function HomePage() {
           Your shortcut to earning online
         </p>
 
-        {/* Price card */}
-        <div className="fade-up w-full" style={{ marginTop: '48px', maxWidth: '360px', animationDelay: '1s' }}>
-          <div className="relative rounded-2xl border border-[#FF6B35]/30 bg-[#0e0e0e] p-8 text-center">
-
-            {/* Price */}
-            <div className="mb-2">
-              <span className="font-heading text-5xl font-bold text-white">$19.99</span>
+        {/* === $19.99 Plan Card === */}
+        <div className="fade-up w-full" style={{ marginTop: '32px', maxWidth: '360px', animationDelay: '0.9s' }}>
+          <div className="relative rounded-2xl border border-[#FF6B35]/30 bg-[#0e0e0e] p-6 text-center">
+            <div className="mb-1">
+              <span className="font-heading text-4xl font-bold text-white">$19.99</span>
               <span className="text-sm text-zinc-500">/mo</span>
             </div>
-            <p className="text-sm text-zinc-400 mb-6">One plan. Everything included.</p>
+            <p className="text-xs text-zinc-400 mb-4">One plan. Everything included.</p>
 
-            {/* What you get */}
-            <ul className="space-y-3 text-left mb-8">
-              {EVERYTHING.map((item) => (
-                <li key={item} className="flex items-center gap-3">
-                  <Check className="h-4 w-4 flex-shrink-0 text-[#06D6A0]" />
-                  <span className="text-sm text-zinc-300">{item}</span>
-                </li>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-left mb-5">
+              {['Every product', 'Every platform', 'All marketing', 'Unlimited listings', 'AI assistant', 'All suppliers', 'Print-on-demand', 'Advanced analytics'].map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <Check className="h-3 w-3 flex-shrink-0 text-[#06D6A0]" />
+                  <span className="text-[11px] text-zinc-300">{item}</span>
+                </div>
               ))}
-            </ul>
+            </div>
 
-            {/* CTA */}
             <button
               onClick={handleGetStarted}
-              className="w-full rounded-xl bg-[#FF6B35] py-4 text-base font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
+              className="w-full rounded-xl bg-[#FF6B35] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
             >
               Get Started
             </button>
-
-            <p className="text-[10px] text-zinc-600 mt-3">Cancel anytime. No long-term commitment.</p>
+            <p className="text-[10px] text-zinc-600 mt-2">Cancel anytime. No commitment.</p>
           </div>
         </div>
 
+        {/* === AI Assistant Box === */}
+        <div className="fade-up" style={{ marginTop: '16px', width: '100%', maxWidth: '360px', animationDelay: '1.1s' }}>
+          <button
+            onClick={() => navigate('/assistant')}
+            className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all duration-300"
+            style={{ background: 'linear-gradient(135deg, #FF6B35, #FFD23F, #06D6A0)', backgroundSize: '200% 200%', animation: 'gradient-shift 4s ease infinite' }}
+          >
+            <div className="flex items-center justify-center gap-3 rounded-[15px] bg-[#0a0a0a] px-5 py-3.5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
+              <Sparkles className="h-4 w-4 text-[#FFD23F]" />
+              <div className="text-center">
+                <div className="text-sm font-semibold text-white">Ask me anything</div>
+                <div className="text-[10px] text-zinc-500">AI-powered help</div>
+              </div>
+              <Sparkles className="h-4 w-4 text-[#FFD23F] opacity-40" />
+            </div>
+          </button>
+        </div>
+
+        {/* === Quick-Start Cards (compact — half height) === */}
+        <div className="fade-up grid grid-cols-4 gap-2 w-full" style={{ marginTop: '12px', maxWidth: '360px', animationDelay: '1.2s' }}>
+          {QUICK_STARTS.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleQuickStart(item.prompt)}
+              className={`group flex flex-col items-center text-center rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-2.5 px-1 transition-all duration-300 ${item.border} active:scale-[0.97]`}
+            >
+              <span className="text-xl block mb-1">{item.emoji}</span>
+              <span className="text-[10px] font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors leading-tight">{item.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* === Tool buttons (no rocket) === */}
+        <div className="fade-up flex gap-3 w-full" style={{ marginTop: '12px', maxWidth: '360px', animationDelay: '1.3s' }}>
+          {TOOLS.map((tool) => (
+            <button
+              key={tool.id}
+              onClick={() => navigate(tool.path)}
+              className="group flex-1 flex flex-col items-center gap-1.5 rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-2.5 transition-all duration-300 hover:border-white/[0.12] active:scale-[0.97]"
+            >
+              <span className="text-lg">{tool.emoji}</span>
+              <span className="text-[10px] font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors">{tool.label}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Footer */}
-        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '40px', animationDelay: '1.4s' }}>
+        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '32px', animationDelay: '1.5s' }}>
           The marketplace for everything
         </p>
 
