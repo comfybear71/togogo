@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   Moon, Sun, LogOut, Heart, Bell, CreditCard, User,
-  Store, Rocket, Link2, Globe, Package, ShoppingBag,
+  Store, Link2, Globe, Package, ShoppingBag,
   DollarSign, TrendingUp, BarChart3, CheckCircle2,
   ArrowUpRight, ExternalLink, ChevronRight, Plus,
   Settings, Loader2, AlertCircle, Zap,
@@ -48,7 +48,6 @@ const statusColors = {
 // Setup steps tracker
 const SETUP_STEPS = [
   { key: 'account', label: 'Create account', icon: User, desc: 'Sign up for ToGoGo' },
-  { key: 'store_path', label: 'Choose selling path', icon: Rocket, desc: 'Marketplace or own store' },
   { key: 'platform', label: 'Connect a platform', icon: Link2, desc: 'eBay, Etsy, WooCommerce, etc.' },
   { key: 'products', label: 'Add products', icon: Package, desc: 'Find & list products to sell' },
   { key: 'first_sale', label: 'Make first sale', icon: DollarSign, desc: 'Get your first order!' },
@@ -106,7 +105,6 @@ export default function ProfilePage() {
 
   const completedSteps = {
     account: true,
-    store_path: activeConnections.length > 0,
     platform: activeConnections.length > 0,
     products: products.total > 0,
     first_sale: orders.total > 0,
@@ -194,7 +192,7 @@ export default function ProfilePage() {
                 <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-semibold text-white flex items-center gap-2">
-                      <Rocket className="h-3.5 w-3.5 text-[#FF6B35]" />
+                      <Store className="h-3.5 w-3.5 text-[#FF6B35]" />
                       Store Setup
                     </h3>
                     <span className="text-[10px] font-bold text-[#FF6B35]">{setupProgress}%</span>
@@ -240,11 +238,6 @@ export default function ProfilePage() {
                             </p>
                             <p className="text-[10px] text-zinc-600">{step.desc}</p>
                           </div>
-                          {isNext && step.key === 'store_path' && (
-                            <Link to="/launch-store" className="px-3 py-1.5 rounded-lg bg-[#FF6B35] text-[10px] font-bold text-white flex-shrink-0">
-                              Start
-                            </Link>
-                          )}
                           {isNext && step.key === 'platform' && (
                             <Link to="/launch-store" className="px-3 py-1.5 rounded-lg bg-[#FF6B35] text-[10px] font-bold text-white flex-shrink-0">
                               Connect
@@ -343,7 +336,7 @@ export default function ProfilePage() {
                         <p className="text-xs font-semibold text-white">{subscriptionPlan} Plan</p>
                         <p className="text-[10px] text-zinc-500">
                           {subscriptionPlan === 'Free'
-                            ? 'Upgrade for more features'
+                            ? '$19.99/mo — Get everything'
                             : 'Full access to all features'}
                         </p>
                       </div>
@@ -630,7 +623,7 @@ export default function ProfilePage() {
                           to="/launch-store"
                           className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors"
                         >
-                          <Rocket className="h-3.5 w-3.5" /> Launch Your Store
+                          <Store className="h-3.5 w-3.5" /> Connect a Platform
                         </Link>
                       </div>
                     )}
