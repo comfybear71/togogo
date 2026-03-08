@@ -26,7 +26,7 @@ export default function BottomNav() {
     : tabs
 
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-t border-white/5 pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav className="fixed bottom-0 inset-x-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-xl border-t border-white/5 pb-[env(safe-area-inset-bottom)] xl:hidden">
       <div className="flex items-center justify-around h-16 px-2">
         {activeTabs.map((tab) => {
           const Icon = tab.icon
