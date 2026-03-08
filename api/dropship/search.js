@@ -1,4 +1,4 @@
-import { searchAllSuppliers, groupByProduct } from '../_lib/suppliers.js'
+import { searchAllSuppliers, groupByProduct, parseSuppliers } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -6,20 +6,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { query, page = 1, category, supplier, sort = 'relevance' } = req.query
+    const { query, page = 1, category, suppliers: suppliersParam, sort = 'relevance' } = req.query
 
     if (!query && !category) {
       return res.status(400).json({ error: 'Search query or category is required' })
     }
 
-    const { products: rawProducts, hasLiveData } = await searchAllSuppliers(query || category, Number(page))
+    const activeSuppliers = parseSuppliers(suppliersParam)
+    const { products: rawProducts, hasLiveData } = await searchAllSuppliers(query || category, Number(page), suppliersParam)
 
     let products = rawProducts
-
-    // Filter by supplier if requested
-    if (supplier) {
-      products = products.filter(p => p.supplier === supplier)
-    }
 
     // Group similar products for price comparison
     products = groupByProduct(products)
@@ -39,7 +35,7 @@ export default async function handler(req, res) {
       products,
       total: products.length,
       page: Number(page),
-      suppliers: ['CJ Dropshipping', 'Printful', 'Printify', 'Gooten'],
+      suppliers: activeSuppliers,
       live: hasLiveData,
       message: hasLiveData ? null : 'Showing sample data. Live supplier APIs will be connected soon.',
     })

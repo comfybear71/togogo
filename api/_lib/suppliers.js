@@ -1,6 +1,7 @@
 // Shared supplier logic for Vercel serverless functions
 // Searches ALL suppliers through ToGoGo's master API keys
 // Users never need their own supplier accounts
+import crypto from 'crypto'
 
 // ============================================
 // CJ DROPSHIPPING
@@ -307,10 +308,18 @@ export async function searchGooten(query) {
   try {
     const now = Date.now()
     if (!gootenCatalogCache || (now - gootenCacheTime) > PRINTFUL_CACHE_TTL) {
-      const response = await fetch(`https://api.gooten.com/v/1/source/api/products?recipeid=${recipeId}&all=true`)
+      const response = await fetch(`https://api.print.io/api/v/4/source/api/products?recipeId=${recipeId}&countryCode=US&showAllProducts=true`)
       if (!response.ok) throw new Error(`Gooten API ${response.status}`)
       const data = await response.json()
-      gootenCatalogCache = data.Products || data.products || []
+      // v4 API returns categories with nested items
+      const rawProducts = data.Products || data.products || []
+      if (rawProducts.length > 0 && rawProducts[0]?.items) {
+        gootenCatalogCache = rawProducts.flatMap(cat =>
+          (cat.items || []).map(item => ({ ...item, Category: cat.name || cat.Name || '' }))
+        )
+      } else {
+        gootenCatalogCache = rawProducts
+      }
       gootenCacheTime = now
     }
 
@@ -335,16 +344,17 @@ export async function searchGooten(query) {
 }
 
 function normaliseGootenProduct(p) {
-  const baseCost = p.MinPrice || p.RetailPrice?.Price || 12.00
-  const shipping = 4.50
+  const baseCost = p.MinPrice || p.min_price || p.RetailPrice?.Price || p.retail_price?.price || 12.00
+  const cheapestShip = p.CheapestShippingPrice || p.cheapest_shipping_price || 4.50
+  const shipping = typeof cheapestShip === 'object' ? (cheapestShip.Price || cheapestShip.price || 4.50) : cheapestShip
   const suggestedPrice = Math.ceil(baseCost * 2.2 * 100) / 100
 
   return {
-    id: `gt_${p.Id || p.ProductId}`,
-    title: p.Name || 'Gooten Product',
-    description: p.Description || `Custom print product by Gooten`,
-    image: p.Images?.[0]?.Url || p.FeaturedImage?.Url || '',
-    images: (p.Images || []).map(i => i.Url).filter(Boolean),
+    id: `gt_${p.Id || p.ProductId || p.id || p.product_id}`,
+    title: p.Name || p.name || 'Gooten Product',
+    description: p.Description || p.description || p.meta_description || 'Custom print product by Gooten',
+    image: p.Images?.[0]?.Url || p.images?.[0]?.url || p.FeaturedImage?.Url || '',
+    images: (p.Images || p.images || []).map(i => i.Url || i.url).filter(Boolean),
     cost: baseCost,
     shipping,
     totalCost: Math.round((baseCost + shipping) * 100) / 100,
@@ -355,10 +365,157 @@ function normaliseGootenProduct(p) {
     supplierLogo: '🏭',
     sourceUrl: 'https://gooten.com',
     minOrderQty: 1,
-    category: p.Category || 'Custom',
+    category: p.Category || p.category || 'Custom',
     customisable: true,
     _live: true,
   }
+}
+
+// ============================================
+// ALIEXPRESS (Drop Shipping API)
+// ============================================
+let aliexpressFeedNames = null
+let aliexpressFeedNamesFetchedAt = 0
+
+function signAliExpressRequest(params, appSecret) {
+  const sorted = Object.keys(params)
+    .filter(k => k !== 'sign')
+    .sort()
+    .map(k => `${k}${params[k]}`)
+    .join('')
+
+  const signStr = `${appSecret}${sorted}${appSecret}`
+  return crypto
+    .createHmac('sha256', appSecret)
+    .update(signStr)
+    .digest('hex')
+    .toUpperCase()
+}
+
+async function callAliExpressAPI(method, params = {}) {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  const appSecret = process.env.ALIEXPRESS_APP_SECRET
+  if (!appKey || !appSecret) return null
+
+  const baseParams = {
+    app_key: appKey,
+    method,
+    sign_method: 'sha256',
+    timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    format: 'json',
+    v: '2.0',
+    ...params,
+  }
+
+  baseParams.sign = signAliExpressRequest(baseParams, appSecret)
+
+  const response = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(baseParams).toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  })
+
+  if (!response.ok) throw new Error(`AliExpress API error: ${response.status}`)
+  return response.json()
+}
+
+async function getAliExpressFeedNames() {
+  const now = Date.now()
+  if (aliexpressFeedNames && (now - aliexpressFeedNamesFetchedAt) < 60 * 60 * 1000) {
+    return aliexpressFeedNames
+  }
+
+  try {
+    const data = await callAliExpressAPI('aliexpress.ds.feedname.get', {})
+    const feeds = data?.aliexpress_ds_feedname_get_response?.result?.feed_names?.feed_name || []
+    if (feeds.length > 0) {
+      aliexpressFeedNames = feeds
+      aliexpressFeedNamesFetchedAt = now
+    }
+    return feeds
+  } catch {
+    return aliexpressFeedNames || []
+  }
+}
+
+export async function searchAliExpress(query, page = 1) {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  if (!appKey) return getSampleAliExpressProducts(query)
+
+  try {
+    const feeds = await getAliExpressFeedNames()
+    const feedName = feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+
+    const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+      feed_name: feedName,
+      target_currency: 'USD',
+      target_language: 'EN',
+      page_no: String(page),
+      page_size: '20',
+      sort: 'volumeDesc',
+    })
+
+    const resp = data?.aliexpress_ds_recommend_feed_get_response?.result
+    if (!resp?.products?.product || resp.products.product.length === 0) {
+      return getSampleAliExpressProducts(query)
+    }
+
+    let products = resp.products.product.map(p => normaliseAliExpressProduct(p))
+
+    // Client-side keyword filter since feed API doesn't support keyword search
+    if (query) {
+      const q = query.toLowerCase()
+      const filtered = products.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
+      )
+      if (filtered.length > 0) products = filtered
+    }
+
+    return products
+  } catch {
+    return getSampleAliExpressProducts(query)
+  }
+}
+
+function normaliseAliExpressProduct(p) {
+  const cost = parseFloat(p.target_sale_price || p.target_original_price || '0')
+  const originalPrice = parseFloat(p.target_original_price || '0')
+  const shipping = 0
+  const suggestedPrice = Math.ceil(cost * 2.5 * 100) / 100
+
+  return {
+    id: `ae_${p.product_id}`,
+    title: p.product_title || 'AliExpress Product',
+    description: p.product_title || '',
+    image: p.product_main_image_url || '',
+    images: p.product_small_image_urls?.string || [],
+    cost,
+    originalPrice,
+    shipping,
+    totalCost: Math.round((cost + shipping) * 100) / 100,
+    suggestedPrice,
+    suggestedMargin: Math.round((suggestedPrice - cost - shipping) * 100) / 100,
+    deliveryDays: p.ship_to_days || 14,
+    supplier: 'AliExpress',
+    supplierLogo: '🛒',
+    sourceUrl: p.product_detail_url || `https://www.aliexpress.com/item/${p.product_id}.html`,
+    minOrderQty: 1,
+    category: p.first_level_category_name || p.second_level_category_name || '',
+    rating: p.evaluate_rate ? parseFloat(p.evaluate_rate.replace('%', '')) / 100 : null,
+    orders: p.lastest_volume || 0,
+    discount: originalPrice > cost ? Math.round((1 - cost / originalPrice) * 100) : 0,
+    _live: true,
+  }
+}
+
+export function getSampleAliExpressProducts(query) {
+  const q = query || 'Product'
+  const img = getImageForQuery(q)
+  return [
+    { id: `ae_s_${hash(q)}_1`, title: `${q} - Hot Seller`, description: 'Top-rated AliExpress product with 10k+ orders', image: img, images: img ? [img] : [], cost: 4.99, originalPrice: 9.99, shipping: 0, totalCost: 4.99, suggestedPrice: 14.99, suggestedMargin: 10.00, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.96, orders: 10532, discount: 50, _live: false },
+    { id: `ae_s_${hash(q)}_2`, title: `${q} - Budget Pick`, description: 'Affordable option with free shipping worldwide', image: img, images: img ? [img] : [], cost: 2.49, originalPrice: 4.99, shipping: 0, totalCost: 2.49, suggestedPrice: 9.99, suggestedMargin: 7.50, deliveryDays: 20, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.92, orders: 5210, discount: 50, _live: false },
+    { id: `ae_s_${hash(q)}_3`, title: `${q} - Premium Quality`, description: 'Higher quality variant with faster shipping option', image: img, images: img ? [img] : [], cost: 8.99, originalPrice: 14.99, shipping: 0, totalCost: 8.99, suggestedPrice: 24.99, suggestedMargin: 16.00, deliveryDays: 10, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.98, orders: 3420, discount: 40, _live: false },
+  ]
 }
 
 // ============================================
@@ -632,15 +789,44 @@ export function groupByProduct(products) {
 }
 
 // ============================================
+// SUPPLIER SEARCH MAP & FILTERING
+// ============================================
+const SUPPLIER_SEARCH_MAP = {
+  'CJ Dropshipping': (q, page) => searchCJ(q, page),
+  'AliExpress': (q, page) => searchAliExpress(q, page),
+  'Printful': (q) => searchPrintful(q),
+  'Printify': (q) => searchPrintify(q),
+  'Gooten': (q) => searchGooten(q),
+}
+
+const SUPPLIER_SAMPLE_MAP = {
+  'CJ Dropshipping': getSampleCJProducts,
+  'AliExpress': getSampleAliExpressProducts,
+  'Printful': getSamplePrintfulProducts,
+  'Printify': getSamplePrintifyProducts,
+  'Gooten': getSampleGootenProducts,
+}
+
+export function parseSuppliers(suppliersParam) {
+  if (!suppliersParam) return Object.keys(SUPPLIER_SEARCH_MAP)
+  return suppliersParam.split(',').filter(s => SUPPLIER_SEARCH_MAP[s])
+}
+
+export function getSampleForSuppliers(activeSuppliers, query) {
+  return activeSuppliers.flatMap(s =>
+    SUPPLIER_SAMPLE_MAP[s] ? SUPPLIER_SAMPLE_MAP[s](query) : []
+  )
+}
+
+// ============================================
 // SEARCH ALL SUPPLIERS
 // ============================================
-export async function searchAllSuppliers(query, page = 1) {
-  const results = await Promise.allSettled([
-    searchCJ(query, page),
-    searchPrintful(query),
-    searchPrintify(query),
-    searchGooten(query),
-  ])
+export async function searchAllSuppliers(query, page = 1, suppliersParam) {
+  const activeSuppliers = parseSuppliers(suppliersParam)
+
+  const results = await Promise.allSettled(
+    activeSuppliers.map(s => SUPPLIER_SEARCH_MAP[s](query, page))
+  )
 
   let products = results
     .filter(r => r.status === 'fulfilled')
@@ -649,10 +835,10 @@ export async function searchAllSuppliers(query, page = 1) {
   // Also include matching curated products
   const curated = getCuratedTrending(null, query)
   if (curated.length > 0) {
-    // Merge curated, avoiding duplicate IDs
     const existingIds = new Set(products.map(p => p.id))
     for (const c of curated) {
-      if (!existingIds.has(c.id)) {
+      // Only include curated items from active suppliers
+      if (!existingIds.has(c.id) && activeSuppliers.includes(c.supplier)) {
         products.push(c)
         existingIds.add(c.id)
       }
@@ -703,6 +889,7 @@ export const CATEGORIES = [
 export const ALL_SUPPLIERS = [
   { value: '', label: 'All Suppliers' },
   { value: 'CJ Dropshipping', label: '📦 CJ Dropshipping', type: 'general' },
+  { value: 'AliExpress', label: '🛒 AliExpress', type: 'general' },
   { value: 'Printful', label: '🎨 Printful', type: 'pod' },
   { value: 'Printify', label: '🖨️ Printify', type: 'pod' },
   { value: 'Gooten', label: '🏭 Gooten', type: 'pod' },
