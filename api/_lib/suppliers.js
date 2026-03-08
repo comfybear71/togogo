@@ -460,11 +460,13 @@ export async function searchAliExpress(query, page = 1) {
 
     const feedResp = data?.aliexpress_ds_recommend_feed_get_response
     const resp = feedResp?.resp_result?.result || feedResp?.result
-    if (!resp?.products?.product || resp.products.product.length === 0) {
+    // AliExpress uses either "product" or "traffic_product_d_t_o" depending on API version
+    const productList = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
+    if (productList.length === 0) {
       return getSampleAliExpressProducts(query)
     }
 
-    let products = resp.products.product.map(p => normaliseAliExpressProduct(p))
+    let products = productList.map(p => normaliseAliExpressProduct(p))
 
     // Client-side keyword filter since feed API doesn't support keyword search
     if (query) {
@@ -494,7 +496,7 @@ function normaliseAliExpressProduct(p) {
     title: p.product_title || 'AliExpress Product',
     description: p.product_title || '',
     image: p.product_main_image_url || '',
-    images: p.product_small_image_urls?.string || [],
+    images: p.product_small_image_urls?.string || p.product_small_image_urls?.productSmallImageUrl || [],
     cost,
     originalPrice,
     shipping,
