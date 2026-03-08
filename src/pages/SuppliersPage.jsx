@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2, ArrowDownUp } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2, ArrowDownUp, Lock, Crown, Check } from 'lucide-react'
 import { useSupplierSearch, useTrendingProducts, useSupplierCategories, useSupplierCounts } from '../hooks/useSuppliers'
+import { useAuthStore } from '../stores/authStore'
+import { DUMMY_SUPPLIERS } from '../lib/dummyShopData'
 
 const SORT_OPTIONS = [
   { value: 'relevance', label: 'Most Relevant' },
@@ -28,12 +31,18 @@ function formatCount(n) {
 }
 
 export default function SuppliersPage() {
+  const navigate = useNavigate()
+  const profile = useAuthStore(s => s.profile)
+  const tier = profile?.subscription_plan?.toLowerCase() || 'free'
+  const isPaid = tier === 'paid' || tier === 'basic' || tier === 'premium'
+
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedSuppliers, setSelectedSuppliers] = useState(new Set(ALL_SUPPLIERS))
   const [sort, setSort] = useState('relevance')
   const [showFilters, setShowFilters] = useState(false)
+  const [addedToShop, setAddedToShop] = useState(new Set())
 
   const allSelected = selectedSuppliers.size === ALL_SUPPLIERS.length
 
@@ -97,16 +106,41 @@ export default function SuppliersPage() {
   return (
     <div className="py-4">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
-        <p className="text-xs text-zinc-500">
-          {supplierCounts['CJ Dropshipping'] ? (
-            <>Browse {formatCount(Object.values(supplierCounts).reduce((sum, c) => sum + (c?.count || 0), 0))} products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
-          ) : (
-            <>Browse millions of products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
+      <div className="mb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
+            <p className="text-xs text-zinc-500">
+              {supplierCounts['CJ Dropshipping'] ? (
+                <>Browse {formatCount(Object.values(supplierCounts).reduce((sum, c) => sum + (c?.count || 0), 0))} products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
+              ) : (
+                <>Browse millions of products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
+              )}
+            </p>
+          </div>
+          {isPaid && (
+            <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-[#FFD23F]/15 text-[#FFD23F] flex items-center gap-1">
+              <Crown className="h-3 w-3" /> PRO
+            </span>
           )}
-        </p>
+        </div>
       </div>
+
+      {/* Tier info for free users */}
+      {!isPaid && (
+        <div className="rounded-xl bg-[#FFD23F]/5 border border-[#FFD23F]/15 p-3 mb-4 flex items-center gap-3">
+          <Lock className="h-4 w-4 text-[#FFD23F] flex-shrink-0" />
+          <p className="text-[10px] text-zinc-400 flex-1">
+            <span className="text-[#FFD23F] font-semibold">Free plan:</span> 2 suppliers available. Upgrade to Pro to unlock Printful, Printify & Gooten.
+          </p>
+          <button
+            onClick={() => navigate('/subscription')}
+            className="text-[10px] font-semibold text-[#FFD23F] flex-shrink-0 px-2.5 py-1 rounded-lg bg-[#FFD23F]/10 hover:bg-[#FFD23F]/15 transition-colors"
+          >
+            Upgrade
+          </button>
+        </div>
+      )}
 
       {/* Search bar */}
       <form onSubmit={handleSearch} className="relative mb-4">
@@ -260,7 +294,23 @@ export default function SuppliersPage() {
       {!isLoading && products.length > 0 && (
         <div className="grid grid-cols-2 gap-3">
           {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard
+              key={product.id}
+              product={product}
+              isPaid={isPaid}
+              isAdded={addedToShop.has(product.id)}
+              onAddToShop={(p) => {
+                // Check free tier product limit
+                const existing = JSON.parse(localStorage.getItem('togogo-listed-products') || '[]')
+                if (!isPaid && existing.length >= 1) {
+                  navigate('/my-shop')
+                  return
+                }
+                if (addProductToShop(p)) {
+                  setAddedToShop(prev => new Set([...prev, p.id]))
+                }
+              }}
+            />
           ))}
         </div>
       )}
@@ -300,7 +350,24 @@ export default function SuppliersPage() {
 // Product card with price comparison support
 function safe$(val) { return (Number(val) || 0).toFixed(2) }
 
-function ProductCard({ product }) {
+function addProductToShop(product) {
+  try {
+    const existing = JSON.parse(localStorage.getItem('togogo-listed-products') || '[]')
+    if (existing.some(p => p.id === product.id)) return false
+    const enriched = {
+      ...product,
+      cost: product.totalCost || product.cost || 0,
+      suggestedPrice: product.suggestedPrice || 0,
+      listedAt: new Date().toISOString(),
+      status: 'active',
+    }
+    existing.push(enriched)
+    localStorage.setItem('togogo-listed-products', JSON.stringify(existing))
+    return true
+  } catch { return false }
+}
+
+function ProductCard({ product, isPaid, onAddToShop, isAdded }) {
   const [showAlts, setShowAlts] = useState(false)
   const hasImage = product.image && product.image.length > 0
   const hasAlternatives = product._alternatives && product._alternatives.length > 0
@@ -429,9 +496,32 @@ function ProductCard({ product }) {
         )}
 
         {/* Sell button */}
-        <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90 active:scale-[0.97] transition-all">
-          Sell This Product
-        </button>
+        {(() => {
+          const supplierData = DUMMY_SUPPLIERS.find(s => s.name === product.supplier)
+          const isLocked = !isPaid && supplierData?.tier === 'paid'
+          if (isLocked) {
+            return (
+              <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[#FFD23F] flex items-center justify-center gap-1.5">
+                <Lock className="h-3 w-3" /> Pro Only — Upgrade
+              </button>
+            )
+          }
+          if (isAdded) {
+            return (
+              <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center gap-1.5">
+                <Check className="h-3 w-3" /> Added to Shop
+              </button>
+            )
+          }
+          return (
+            <button
+              onClick={() => onAddToShop?.(product)}
+              className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90 active:scale-[0.97] transition-all"
+            >
+              Sell This Product
+            </button>
+          )
+        })()}
       </div>
     </div>
   )

@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { House, Search, Heart, User, LayoutDashboard } from 'lucide-react'
+import { House, Search, Heart, User, LayoutDashboard, Store } from 'lucide-react'
 import { useWatchlistStore } from '../../stores/cartStore'
 import { useAuthStore } from '../../stores/authStore'
 
@@ -14,11 +14,11 @@ export default function BottomNav() {
   const watchlistCount = useWatchlistStore((s) => s.items.length)
   const user = useAuthStore((s) => s.user)
 
-  // Show dashboard tab if logged in, profile tab for the last icon
+  // Show My Shop + Dashboard tabs if logged in
   const activeTabs = user
     ? [
         { to: '/', icon: House },
-        { to: '/browse', icon: Search },
+        { to: '/my-shop', icon: Store },
         { to: '/dashboard', icon: LayoutDashboard },
         { to: '/profile', icon: User },
       ]

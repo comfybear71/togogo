@@ -19,6 +19,36 @@ export const SUBSCRIPTION_PLANS = [
   { id: 'premium', label: 'Premium', price: 9.99, features: ['All basic features', 'Unlimited watchlist', 'Priority alerts', 'Price predictions', 'Ad-free experience'] },
 ]
 
+export const SELLING_PLANS = [
+  {
+    id: 'free',
+    label: 'Starter',
+    price: 0,
+    productLimit: 1,
+    features: [
+      'Sell on marketplaces (eBay, Etsy, etc.)',
+      '1 product listing at a time',
+      '2 free-tier suppliers',
+      'Basic order tracking',
+    ],
+  },
+  {
+    id: 'paid',
+    label: 'Pro Seller',
+    price: 19.99,
+    productLimit: Infinity,
+    features: [
+      'Everything in Starter',
+      'Unlimited product listings',
+      'All 5 suppliers unlocked',
+      'Print-on-demand (Printful, Printify, Gooten)',
+      'Your own branded store',
+      'Priority shipping options',
+      'Advanced analytics',
+    ],
+  },
+]
+
 export const SORT_OPTIONS = [
   { id: 'price_low', label: 'Price: Low to High' },
   { id: 'price_high', label: 'Price: High to Low' },
