@@ -221,20 +221,20 @@ router.get('/aliexpress/shipping', async (req, res, next) => {
     const { product_id, country = 'US', quantity = 1 } = req.query
     if (!product_id) return res.status(400).json({ error: 'product_id required' })
 
-    const data = await callAliExpressAPI('aliexpress.ds.logistics.calculate', {
+    const data = await callAliExpressAPI('aliexpress.logistics.buyer.freight.calculate', {
       product_id,
       country_code: country,
       product_num: String(quantity),
       send_goods_country_code: 'CN',
     })
 
-    const options = data?.aliexpress_ds_logistics_calculate_response?.result?.logistics_options || []
+    const options = data?.aliexpress_logistics_buyer_freight_calculate_response?.result?.aeop_freight_calculate_result_for_buyer_d_t_o_list?.aeop_freight_calculate_result_for_buyer_dto || []
     res.json({
       shipping_options: options.map(o => ({
-        service: o.logistics_company || o.service_name,
-        cost: parseFloat(o.freight?.amount || '0'),
-        currency: o.freight?.currency || 'USD',
-        estimated_days: o.estimated_delivery_time || null,
+        service: o.service_name || o.logistics_company || '',
+        cost: parseFloat(o.freight?.cent || o.freight?.amount || '0') / 100,
+        currency: o.freight?.currency_code || o.freight?.currency || 'USD',
+        estimated_days: o.estimated_delivery_time || o.ship_to_days || null,
         tracking: o.tracking_available !== false,
       })),
     })
@@ -248,13 +248,17 @@ router.get('/aliexpress/hot', async (req, res, next) => {
   try {
     const { category, page = 1, country = 'US' } = req.query
 
+    const feeds = await getAliExpressFeedNames()
+    const feedName = feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+
     const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+      feed_name: feedName,
       country: country,
       target_currency: 'USD',
-      target_language: 'en',
+      target_language: 'EN',
       page_no: String(page),
       page_size: '20',
-      sort: 'LAST_VOLUME_DESC',
+      sort: 'volumeDesc',
       ...(category ? { category_id: category } : {}),
     })
 
@@ -507,6 +511,41 @@ async function fetchPrintfulCatalog(apiKey) {
   return printfulCatalogCache
 }
 
+// Cache individual product pricing to avoid hitting rate limits
+const printfulPriceCache = new Map()
+const PRINTFUL_PRICE_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
+async function fetchPrintfulProductPrice(apiKey, productId) {
+  const cacheKey = `pf_price_${productId}`
+  const cached = printfulPriceCache.get(cacheKey)
+  if (cached && (Date.now() - cached.time) < PRINTFUL_PRICE_CACHE_TTL) {
+    return cached.price
+  }
+
+  try {
+    const response = await fetch(`https://api.printful.com/products/${productId}`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    })
+    if (!response.ok) return null
+
+    const data = await response.json()
+    const variants = data.result?.variants || []
+    if (variants.length === 0) return null
+
+    // Get the lowest variant price (Printful wholesale cost)
+    const lowestPrice = variants.reduce((min, v) => {
+      const price = parseFloat(v.price || '999')
+      return price < min ? price : min
+    }, 999)
+
+    const result = lowestPrice < 999 ? lowestPrice : null
+    printfulPriceCache.set(cacheKey, { price: result, time: Date.now() })
+    return result
+  } catch {
+    return null
+  }
+}
+
 async function searchPrintful(query) {
   const apiKey = process.env.PRINTFUL_API_KEY
   if (!apiKey) {
@@ -517,50 +556,56 @@ async function searchPrintful(query) {
     const catalog = await fetchPrintfulCatalog(apiKey)
     const q = (query || '').toLowerCase().trim()
 
+    let matches
     // If no query or very broad, return a curated mix of popular product types
     if (!q || q.length < 2) {
-      const popular = catalog
+      matches = catalog
         .filter(p => !p.is_discontinued)
         .slice(0, 10)
-      return popular.map(p => normalisePrintfulProduct(p))
-    }
+    } else {
+      // Split query into words for flexible matching
+      const words = q.split(/\s+/).filter(w => w.length >= 2)
 
-    // Split query into words for flexible matching
-    const words = q.split(/\s+/).filter(w => w.length >= 2)
-
-    const filtered = catalog
-      .filter(p => {
-        if (p.is_discontinued) return false
-        const text = [p.title, p.type_name, p.brand, p.model]
-          .map(f => (f || '').toLowerCase())
-          .join(' ')
-        // Match if ANY search word appears in the combined text
-        return words.some(w => text.includes(w)) || text.includes(q)
-      })
-      .slice(0, 15)
-
-    // If strict search returned nothing, try looser single-word match
-    if (filtered.length === 0 && words.length > 0) {
-      const loose = catalog
+      matches = catalog
         .filter(p => {
           if (p.is_discontinued) return false
-          const text = [p.title, p.type_name].map(f => (f || '').toLowerCase()).join(' ')
-          // Match first word or first 3 chars of query
-          return text.includes(words[0]) || text.includes(q.slice(0, 3))
+          const text = [p.title, p.type_name, p.brand, p.model]
+            .map(f => (f || '').toLowerCase())
+            .join(' ')
+          return words.some(w => text.includes(w)) || text.includes(q)
         })
-        .slice(0, 10)
-      return loose.map(p => normalisePrintfulProduct(p))
+        .slice(0, 15)
+
+      // If strict search returned nothing, try looser single-word match
+      if (matches.length === 0 && words.length > 0) {
+        matches = catalog
+          .filter(p => {
+            if (p.is_discontinued) return false
+            const text = [p.title, p.type_name].map(f => (f || '').toLowerCase()).join(' ')
+            return text.includes(words[0]) || text.includes(q.slice(0, 3))
+          })
+          .slice(0, 10)
+      }
     }
 
-    return filtered.map(p => normalisePrintfulProduct(p))
+    // Fetch real pricing for up to 5 products in parallel (rate limit friendly)
+    const priceFetches = matches.slice(0, 5).map(p =>
+      fetchPrintfulProductPrice(apiKey, p.id)
+    )
+    const prices = await Promise.allSettled(priceFetches)
+
+    return matches.map((p, i) => {
+      const realPrice = i < 5 && prices[i].status === 'fulfilled' ? prices[i].value : null
+      return normalisePrintfulProduct(p, realPrice)
+    })
   } catch {
     return getSamplePrintfulProducts(query)
   }
 }
 
-function normalisePrintfulProduct(p) {
-  // Printful catalog doesn't return pricing — use known base costs by product type
-  const baseCost = PRINTFUL_BASE_COSTS[p.type_name] || 15.00
+function normalisePrintfulProduct(p, realPrice = null) {
+  // Use real variant pricing if available, otherwise fall back to known base costs
+  const baseCost = realPrice || PRINTFUL_BASE_COSTS[p.type_name] || 15.00
   const shipping = 4.50
   const suggestedPrice = Math.ceil(baseCost * 2.2 * 100) / 100
   const fulfillmentDays = p.avg_fulfillment_time || 3
@@ -720,10 +765,19 @@ async function searchGooten(query) {
   try {
     const now = Date.now()
     if (!gootenCatalogCache || (now - gootenCacheTime) > PRINTFUL_CACHE_TTL) {
-      const response = await fetch(`https://api.gooten.com/v/1/source/api/products?recipeid=${recipeId}&all=true`)
+      const response = await fetch(`https://api.print.io/api/v/4/source/api/products?recipeId=${recipeId}&countryCode=US&showAllProducts=true`)
       if (!response.ok) throw new Error(`Gooten API ${response.status}`)
       const data = await response.json()
-      gootenCatalogCache = data.Products || data.products || []
+      // v4 API returns categories with nested items
+      const rawProducts = data.Products || data.products || []
+      // Flatten if categories contain items arrays
+      if (rawProducts.length > 0 && rawProducts[0]?.items) {
+        gootenCatalogCache = rawProducts.flatMap(cat =>
+          (cat.items || []).map(item => ({ ...item, Category: cat.name || cat.Name || '' }))
+        )
+      } else {
+        gootenCatalogCache = rawProducts
+      }
       gootenCacheTime = now
     }
 
@@ -748,16 +802,18 @@ async function searchGooten(query) {
 }
 
 function normaliseGootenProduct(p) {
-  const baseCost = p.MinPrice || p.RetailPrice?.Price || 12.00
-  const shipping = 4.50
+  // v4 API uses different field casing/names
+  const baseCost = p.MinPrice || p.min_price || p.RetailPrice?.Price || p.retail_price?.price || 12.00
+  const cheapestShip = p.CheapestShippingPrice || p.cheapest_shipping_price || 4.50
+  const shipping = typeof cheapestShip === 'object' ? (cheapestShip.Price || cheapestShip.price || 4.50) : cheapestShip
   const suggestedPrice = Math.ceil(baseCost * 2.2 * 100) / 100
 
   return {
-    id: `gt_${p.Id || p.ProductId}`,
-    title: p.Name || 'Gooten Product',
-    description: p.Description || 'Custom print product by Gooten',
-    image: p.Images?.[0]?.Url || p.FeaturedImage?.Url || '',
-    images: (p.Images || []).map(i => i.Url).filter(Boolean),
+    id: `gt_${p.Id || p.ProductId || p.id || p.product_id}`,
+    title: p.Name || p.name || 'Gooten Product',
+    description: p.Description || p.description || p.meta_description || 'Custom print product by Gooten',
+    image: p.Images?.[0]?.Url || p.images?.[0]?.url || p.FeaturedImage?.Url || '',
+    images: (p.Images || p.images || []).map(i => i.Url || i.url).filter(Boolean),
     cost: baseCost,
     shipping,
     totalCost: Math.round((baseCost + shipping) * 100) / 100,
@@ -768,7 +824,7 @@ function normaliseGootenProduct(p) {
     supplierLogo: '🏭',
     sourceUrl: 'https://gooten.com',
     minOrderQty: 1,
-    category: p.Category || 'Custom',
+    category: p.Category || p.category || 'Custom',
     customisable: true,
     _live: true,
   }
@@ -840,28 +896,118 @@ async function callAliExpressAPI(method, params = {}) {
   return response.json()
 }
 
+// Cache feed names so we don't call feedname.get on every search
+let aliexpressFeedNames = null
+let aliexpressFeedNamesFetchedAt = 0
+
+async function getAliExpressFeedNames() {
+  const now = Date.now()
+  if (aliexpressFeedNames && (now - aliexpressFeedNamesFetchedAt) < 60 * 60 * 1000) {
+    return aliexpressFeedNames
+  }
+
+  try {
+    const data = await callAliExpressAPI('aliexpress.ds.feedname.get', {})
+    const feeds = data?.aliexpress_ds_feedname_get_response?.result?.feed_names?.feed_name || []
+    if (feeds.length > 0) {
+      aliexpressFeedNames = feeds
+      aliexpressFeedNamesFetchedAt = now
+    }
+    return feeds
+  } catch {
+    return aliexpressFeedNames || []
+  }
+}
+
 async function searchAliExpress(query, page = 1) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
   if (!appKey) return getSampleAliExpressProducts(query)
 
   try {
-    const data = await callAliExpressAPI('aliexpress.ds.product.search', {
+    // AliExpress DS API has no product.search — use recommend.feed.get instead
+    const feeds = await getAliExpressFeedNames()
+    const feedName = feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+
+    const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+      feed_name: feedName,
       target_currency: 'USD',
-      target_language: 'en',
-      keywords: query,
+      target_language: 'EN',
       page_no: String(page),
       page_size: '20',
-      sort: 'SALE_PRICE_ASC',
+      sort: 'volumeDesc',
+      ...(query ? { category_id: '' } : {}),
     })
 
-    const resp = data?.aliexpress_ds_product_search_response?.result
+    const resp = data?.aliexpress_ds_recommend_feed_get_response?.result
     if (!resp?.products?.product || resp.products.product.length === 0) {
+      // Try product detail if query looks like a product ID
+      if (/^\d{8,}$/.test(query)) {
+        return searchAliExpressByProductId(query)
+      }
       return getSampleAliExpressProducts(query)
     }
 
-    return resp.products.product.map(p => normaliseAliExpressProduct(p))
+    let products = resp.products.product.map(p => normaliseAliExpressProduct(p))
+
+    // Client-side keyword filter since feed API doesn't support keyword search
+    if (query) {
+      const q = query.toLowerCase()
+      const filtered = products.filter(p =>
+        p.title.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q)
+      )
+      if (filtered.length > 0) products = filtered
+    }
+
+    return products
   } catch {
     return getSampleAliExpressProducts(query)
+  }
+}
+
+async function searchAliExpressByProductId(productId) {
+  try {
+    const data = await callAliExpressAPI('aliexpress.ds.product.get', {
+      product_id: productId,
+      target_currency: 'USD',
+      target_language: 'EN',
+    })
+
+    const p = data?.aliexpress_ds_product_get_response?.result
+    if (!p) return []
+
+    const baseInfo = p.ae_item_base_info_dto || {}
+    const skus = p.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
+    const images = (p.ae_multimedia_info_dto?.image_urls || '').split(';').filter(Boolean)
+    const lowestPrice = skus.reduce((min, s) => {
+      const price = parseFloat(s.offer_sale_price || s.sku_price || '999')
+      return price < min ? price : min
+    }, 999)
+    const cost = lowestPrice < 999 ? lowestPrice : 0
+
+    return [{
+      id: `ae_${baseInfo.product_id}`,
+      title: baseInfo.subject || 'AliExpress Product',
+      description: baseInfo.subject || '',
+      image: images[0] || '',
+      images,
+      cost,
+      originalPrice: cost,
+      shipping: 0,
+      totalCost: cost,
+      suggestedPrice: Math.ceil(cost * 2.5 * 100) / 100,
+      suggestedMargin: Math.round((Math.ceil(cost * 2.5 * 100) / 100 - cost) * 100) / 100,
+      deliveryDays: 14,
+      supplier: 'AliExpress',
+      supplierLogo: '🛒',
+      sourceUrl: `https://www.aliexpress.com/item/${baseInfo.product_id}.html`,
+      minOrderQty: 1,
+      category: baseInfo.category_id ? String(baseInfo.category_id) : '',
+      variantCount: skus.length,
+      _live: true,
+    }]
+  } catch {
+    return []
   }
 }
 
