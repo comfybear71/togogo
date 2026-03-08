@@ -496,6 +496,18 @@ async function getAliExpressFeedNames() {
   }
 }
 
+// Map our category system to AliExpress first_level_category_name values
+const ALIEXPRESS_CATEGORY_FILTER = {
+  pets: ['pet', 'dog', 'cat', 'animal', 'aquarium', 'bird', 'reptile'],
+  sports: ['sport', 'entertainment', 'outdoor', 'camping', 'fitness', 'cycling', 'fishing'],
+  electronics: ['consumer electronics', 'computer', 'office', 'phone', 'telecommunication', 'electronic'],
+  fashion: ['apparel', 'women', 'men', 'shoes', 'accessories', 'bags', 'luggage', 'jewelry', 'watch'],
+  home: ['home', 'garden', 'furniture', 'improvement', 'kitchen', 'household'],
+  beauty: ['beauty', 'health', 'hair', 'makeup', 'personal care'],
+  toys: ['toys', 'hobbies', 'hobby', 'game'],
+  automotive: ['automobile', 'motorcycl', 'car', 'vehicle', 'automotive'],
+}
+
 // Map search queries to relevant AliExpress feed categories
 const FEED_KEYWORDS = {
   pet: ['pet', 'dog', 'cat', 'animal'],
@@ -510,18 +522,73 @@ const FEED_KEYWORDS = {
   baby: ['baby', 'kid', 'child', 'infant'],
 }
 
+// Cache for AliExpress product pool (products from multiple feeds)
+let aliexpressProductPool = []
+let aliexpressPoolFetchedAt = 0
+
+async function getAliExpressProductPool() {
+  const now = Date.now()
+  // Cache for 10 minutes
+  if (aliexpressProductPool.length > 0 && (now - aliexpressPoolFetchedAt) < 10 * 60 * 1000) {
+    return aliexpressProductPool
+  }
+
+  const feeds = await getAliExpressFeedNames()
+  if (feeds.length === 0) return []
+
+  // Fetch from up to 10 different feeds in parallel for variety
+  const getName = (f) => f?.promo_name || f?.feed_name || f || ''
+  const feedsToFetch = feeds.slice(0, Math.min(feeds.length, 10)).map(getName)
+
+  const feedResults = await Promise.allSettled(
+    feedsToFetch.map(feedName =>
+      callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+        feed_name: feedName,
+        target_currency: 'USD',
+        target_language: 'EN',
+        page_no: '1',
+        page_size: '50',
+        sort: 'volumeDesc',
+      })
+    )
+  )
+
+  const allProducts = []
+  for (const result of feedResults) {
+    if (result.status !== 'fulfilled' || !result.value) continue
+    const feedResp = result.value?.aliexpress_ds_recommend_feed_get_response
+    const resp = feedResp?.resp_result?.result || feedResp?.result
+    const items = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
+    allProducts.push(...items)
+  }
+
+  // Deduplicate by product_id
+  const seen = new Set()
+  const unique = allProducts.filter(p => {
+    const id = p.product_id
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+
+  if (unique.length > 0) {
+    aliexpressProductPool = unique
+    aliexpressPoolFetchedAt = now
+  }
+
+  return unique
+}
+
 function pickBestFeeds(feeds, query, count = 3) {
   const getName = (f) => f?.promo_name || f?.feed_name || f || ''
   if (!feeds.length) return ['DS bestselling products']
   if (!query) {
-    // Return a mix of bestselling feeds
     return feeds.slice(0, count).map(getName)
   }
 
   const q = query.toLowerCase()
   const matched = []
 
-  // Find which categories the query maps to
   const matchedCategories = []
   for (const [cat, keywords] of Object.entries(FEED_KEYWORDS)) {
     if (keywords.some(kw => q.includes(kw))) {
@@ -529,15 +596,11 @@ function pickBestFeeds(feeds, query, count = 3) {
     }
   }
 
-  // Search feeds for matching names
   for (const feed of feeds) {
     const name = getName(feed).toLowerCase()
-    // Check mapped categories
     if (matchedCategories.some(cat => name.includes(cat))) {
       matched.push(getName(feed))
-    }
-    // Direct query word match
-    else {
+    } else {
       const queryWords = q.split(/\s+/)
       if (queryWords.some(w => w.length > 2 && name.includes(w))) {
         matched.push(getName(feed))
@@ -546,7 +609,6 @@ function pickBestFeeds(feeds, query, count = 3) {
     if (matched.length >= count) break
   }
 
-  // If nothing matched, fall back to bestselling/hot feeds
   if (matched.length === 0) {
     for (const feed of feeds) {
       const n = getName(feed).toLowerCase()
@@ -560,87 +622,32 @@ function pickBestFeeds(feeds, query, count = 3) {
   return matched.length > 0 ? matched : feeds.slice(0, count).map(getName)
 }
 
-// Map our categories to AliExpress category IDs for affiliate keyword search
-const ALIEXPRESS_CATEGORY_MAP = {
-  pet: '200003655',
-  dog: '200003655',
-  cat: '200003655',
-  animal: '200003655',
-  sport: '200003530',
-  fitness: '200003530',
-  gym: '200003530',
-  yoga: '200003530',
-  outdoor: '200003530',
-  camping: '200003530',
-  toy: '200003482',
-  puzzle: '200003482',
-  game: '200003482',
-  plush: '200003482',
-  beauty: '200003498',
-  makeup: '200003498',
-  skincare: '200003498',
-  cosmetic: '200003498',
-  hair: '200003498',
-  home: '200003109',
-  kitchen: '200003109',
-  garden: '200003109',
-  furniture: '200003109',
-  decor: '200003109',
-  lamp: '200003109',
-  light: '200003109',
-  electronics: '200000147',
-  computer: '200000147',
-  laptop: '200000147',
-  earbuds: '200000147',
-  headphone: '200000147',
-  phone: '200000345',
-  mobile: '200000345',
-  charger: '200000345',
-  car: '200000298',
-  auto: '200000298',
-  vehicle: '200000298',
-  dash: '200000298',
-  motor: '200000298',
-  watch: '200000399',
-  jewel: '200001996',
-  necklace: '200001996',
-  ring: '200001996',
-  bracelet: '200001996',
-  fashion: '200003490',
-  sunglasses: '200003490',
-  dress: '200000346',
-  shirt: '200000346',
-  baby: '200001890',
-  kid: '200001890',
-  child: '200001890',
-}
-
-function getCategoryIdForQuery(query) {
+// Determine which our-category a search query belongs to
+function getOurCategoryForQuery(query) {
   if (!query) return null
   const q = query.toLowerCase()
-  for (const [keyword, catId] of Object.entries(ALIEXPRESS_CATEGORY_MAP)) {
-    if (q.includes(keyword)) return catId
+  // Direct mapping from trending terms back to categories
+  for (const [cat, terms] of Object.entries(TRENDING_TERMS)) {
+    if (cat && terms.some(t => q.includes(t.toLowerCase()) || t.toLowerCase().includes(q))) return cat
+  }
+  // Check ALIEXPRESS_CATEGORY_FILTER keywords
+  for (const [ourCat, filterTerms] of Object.entries(ALIEXPRESS_CATEGORY_FILTER)) {
+    if (filterTerms.some(ft => q.includes(ft))) return ourCat
   }
   return null
 }
 
-// Try keyword search via affiliate product query API
-async function searchAliExpressKeyword(query, page = 1) {
-  const params = {
-    keywords: query,
-    target_currency: 'USD',
-    target_language: 'EN',
-    page_no: String(page),
-    page_size: '50',
-    sort: 'LAST_VOLUME_DESC',
-  }
-  const categoryId = getCategoryIdForQuery(query)
-  if (categoryId) params.category_ids = categoryId
+// Filter products by AliExpress category name matching our category
+function filterByAliExpressCategory(products, ourCategory) {
+  if (!ourCategory) return products
+  const catFilters = ALIEXPRESS_CATEGORY_FILTER[ourCategory]
+  if (!catFilters) return products
 
-  const data = await callAliExpressAPI('aliexpress.affiliate.product.query', params)
-  const resp = data?.aliexpress_affiliate_product_query_response?.resp_result?.result
-  const productList = resp?.products?.product || []
-  return productList
+  const filtered = products.filter(p => {
+    const cat = (p.category || '').toLowerCase()
+    return catFilters.some(f => cat.includes(f))
+  })
+  return filtered
 }
 
 export async function searchAliExpress(query, page = 1) {
@@ -648,50 +655,16 @@ export async function searchAliExpress(query, page = 1) {
   if (!appKey) return getSampleAliExpressProducts(query)
 
   try {
-    // Strategy 1: Try keyword search via affiliate API (supports actual search)
-    let productList = []
-    if (query) {
-      try {
-        productList = await searchAliExpressKeyword(query, page)
-      } catch (e) {
-        // Affiliate API not available, fall through to feed API
-      }
-    }
+    // Get the large product pool from multiple feeds (cached 10 min)
+    const pool = await getAliExpressProductPool()
 
-    // Strategy 2: Fall back to feed-based browsing
-    if (productList.length === 0) {
-      const feeds = await getAliExpressFeedNames()
-      const feedNames = pickBestFeeds(feeds, query, 3)
-
-      const feedResults = await Promise.allSettled(
-        feedNames.map(feedName =>
-          callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
-            feed_name: feedName,
-            target_currency: 'USD',
-            target_language: 'EN',
-            page_no: String(page),
-            page_size: '50',
-            sort: 'volumeDesc',
-          })
-        )
-      )
-
-      for (const result of feedResults) {
-        if (result.status !== 'fulfilled' || !result.value) continue
-        const feedResp = result.value?.aliexpress_ds_recommend_feed_get_response
-        const resp = feedResp?.resp_result?.result || feedResp?.result
-        const items = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
-        productList.push(...items)
-      }
-    }
-
-    if (productList.length === 0) {
+    if (pool.length === 0) {
       return getSampleAliExpressProducts(query)
     }
 
-    let products = productList.map(p => normaliseAliExpressProduct(p))
+    let products = pool.map(p => normaliseAliExpressProduct(p))
 
-    // Deduplicate by product_id
+    // Deduplicate
     const seen = new Set()
     products = products.filter(p => {
       if (seen.has(p.id)) return false
@@ -699,8 +672,15 @@ export async function searchAliExpress(query, page = 1) {
       return true
     })
 
-    // Client-side keyword filter for feed results (affiliate results are already relevant)
     if (query) {
+      // First try: filter by AliExpress category name
+      const ourCat = getOurCategoryForQuery(query)
+      if (ourCat) {
+        const catFiltered = filterByAliExpressCategory(products, ourCat)
+        if (catFiltered.length >= 5) return catFiltered
+      }
+
+      // Second try: keyword match on title + category
       const q = query.toLowerCase()
       const keywords = q.split(/\s+/).filter(kw => kw.length > 2)
       const filtered = products.filter(p => {
@@ -708,14 +688,19 @@ export async function searchAliExpress(query, page = 1) {
         return keywords.some(kw => text.includes(kw))
       })
       if (filtered.length >= 3) return filtered
-      // If we got very few matches, also include products from the right AliExpress category
-      const categoryId = getCategoryIdForQuery(query)
-      if (categoryId && filtered.length < 3) {
-        // Return whatever we have — the feed returned products that may be loosely relevant
-        // But don't return totally irrelevant products
-        return filtered.length > 0 ? filtered : getSampleAliExpressProducts(query)
-      }
-      if (filtered.length > 0) return filtered
+
+      // Third try: partial keyword matching (any 3+ char substring)
+      const looseFiltered = products.filter(p => {
+        const text = (p.title + ' ' + p.category).toLowerCase()
+        return keywords.some(kw => {
+          // Try partial match for compound words
+          const parts = kw.length > 3 ? [kw, kw.slice(0, -1)] : [kw]
+          return parts.some(part => text.includes(part))
+        })
+      })
+      if (looseFiltered.length >= 3) return looseFiltered
+
+      // Nothing in the pool matches — return sample data with images
       return getSampleAliExpressProducts(query)
     }
 
