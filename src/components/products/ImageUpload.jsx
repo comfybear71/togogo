@@ -95,6 +95,14 @@ export default function ImageUpload({ images = [], onChange, maxImages = 10 }) {
                 src={getPreviewUrl(image)}
                 alt={`Upload ${index + 1}`}
                 className="h-full w-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.parentElement.querySelector('.img-fallback')?.remove()
+                  const fb = document.createElement('div')
+                  fb.className = 'img-fallback h-full w-full flex items-center justify-center bg-gray-100 text-gray-400 text-xs'
+                  fb.textContent = 'Error'
+                  e.target.parentElement.insertBefore(fb, e.target)
+                }}
               />
               <button
                 type="button"

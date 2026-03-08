@@ -21,7 +21,15 @@ export default function Header() {
               className="flex items-center justify-center w-9 h-9 rounded-full overflow-hidden transition-opacity hover:opacity-80"
             >
               {profile?.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  className="w-9 h-9 rounded-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                    e.target.parentElement.innerHTML = `<div class="w-9 h-9 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] flex items-center justify-center text-white text-sm font-bold">${(profile?.name || user.email || '?')[0].toUpperCase()}</div>`
+                  }}
+                />
               ) : (
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#FF6B35] to-[#FFD23F] flex items-center justify-center text-white text-sm font-bold">
                   {(profile?.name || user.email || '?')[0].toUpperCase()}

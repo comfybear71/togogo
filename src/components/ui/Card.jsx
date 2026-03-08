@@ -29,6 +29,10 @@ export default function Card({ product }) {
             src={images[0]}
             alt={title}
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={(e) => {
+              e.target.style.display = 'none'
+              e.target.parentElement.innerHTML = '<div class="flex h-full w-full items-center justify-center bg-gray-100 text-gray-400 text-xs font-medium">No Image</div>'
+            }}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-gray-300">

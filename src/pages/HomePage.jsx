@@ -230,12 +230,16 @@ export default function HomePage() {
                 onClick={() => navigate('/suppliers')}
                 className="flex-shrink-0 w-[100px] rounded-xl bg-[#0e0e0e] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all active:scale-[0.97]"
               >
-                <div className="w-full h-[80px] overflow-hidden">
+                <div className="w-full h-[80px] overflow-hidden bg-[#111]">
                   <img
                     src={product.image}
                     alt={product.title}
                     className="w-full h-full object-cover"
                     loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                      e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><span class="text-lg font-bold" style="color:${product.color}">${product.supplier.charAt(0)}</span></div>`
+                    }}
                   />
                 </div>
                 <div className="p-2">

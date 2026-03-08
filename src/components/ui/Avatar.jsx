@@ -14,6 +14,13 @@ export default function Avatar({ src, name = '', size = 'md', className = '' }) 
         src={src}
         alt={name}
         className={`rounded-full object-cover ${sizes[size]} ${className}`}
+        onError={(e) => {
+          e.target.style.display = 'none'
+          const fallback = document.createElement('div')
+          fallback.className = `flex items-center justify-center rounded-full bg-[#FF6B35] text-white font-bold ${sizes[size]} ${className}`
+          fallback.textContent = initial
+          e.target.parentElement.insertBefore(fallback, e.target)
+        }}
       />
     )
   }

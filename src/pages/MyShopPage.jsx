@@ -172,7 +172,15 @@ export default function MyShopPage() {
                 <div className="flex gap-3">
                   <div className="w-16 h-16 rounded-lg overflow-hidden bg-[#0a0a0a] flex-shrink-0">
                     {product.image ? (
-                      <img src={product.image} alt={product.title} className="w-full h-full object-cover" />
+                      <img
+                        src={product.image}
+                        alt={product.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none'
+                          e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center"><span class="text-lg">' + (product.supplierLogo || '📦') + '</span></div>'
+                        }}
+                      />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Package className="h-6 w-6 text-zinc-700" />
@@ -341,7 +349,15 @@ export default function MyShopPage() {
                       <div className="flex gap-3">
                         <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#0a0a0a] flex-shrink-0">
                           {product.image ? (
-                            <img src={product.image} alt={product.title} className="w-full h-full object-cover" />
+                            <img
+                              src={product.image}
+                              alt={product.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none'
+                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-2xl">' + (product.supplierLogo || '📦') + '</div>'
+                              }}
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-2xl">
                               {product.supplierLogo}

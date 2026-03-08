@@ -73,7 +73,18 @@ function ProductCard({ product, rank }) {
       {/* Image */}
       <div className="relative">
         {product.image_url ? (
-          <img src={product.image_url} alt={product.name} className="h-36 w-full object-cover" />
+          <img
+            src={product.image_url}
+            alt={product.name}
+            className="h-36 w-full object-cover"
+            onError={(e) => {
+              e.target.style.display = 'none'
+              const fallback = document.createElement('div')
+              fallback.className = 'flex flex-col h-36 w-full items-center justify-center bg-[#0a0a0a]'
+              fallback.innerHTML = '<span class="text-2xl font-bold text-zinc-600">' + (product.brand?.charAt(0) || '?') + '</span>'
+              e.target.parentElement.insertBefore(fallback, e.target)
+            }}
+          />
         ) : (
           <div className="flex flex-col h-36 w-full items-center justify-center bg-[#0a0a0a]">
             <PackageSearch className="h-8 w-8 text-zinc-700" />
