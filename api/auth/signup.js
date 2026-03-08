@@ -50,7 +50,16 @@ export default async function handler(req, res) {
     }
 
     const user = rows[0]
-    const token = generateToken(user)
+    if (!user) {
+      return res.status(500).json({ error: 'INSERT returned no rows' })
+    }
+
+    let token
+    try {
+      token = generateToken(user)
+    } catch (tokenErr) {
+      return res.status(500).json({ error: 'Token generation failed', details: tokenErr.message, user: { id: user.id, email: user.email, role: user.role } })
+    }
 
     return res.status(201).json({
       user: {
