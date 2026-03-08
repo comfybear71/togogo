@@ -61,19 +61,51 @@ router.get('/search', async (req, res, next) => {
 })
 
 // Get trending/popular products (no search needed)
+// Map category IDs to actual product search terms that return results
+const TRENDING_TERMS = {
+  '': ['phone case', 'led light', 't-shirt', 'jewellery', 'mug'],
+  electronics: ['wireless earbuds', 'phone case', 'led strip light', 'portable charger'],
+  fashion: ['sunglasses', 'watch', 'jewellery', 'necklace'],
+  home: ['led light', 'organiser', 'kitchen gadget', 'pillow'],
+  beauty: ['makeup brush', 'skincare', 'hair accessories', 'beauty'],
+  toys: ['fidget toy', 'puzzle', 'RC car', 'plush toy'],
+  sports: ['water bottle', 'yoga mat', 'resistance band', 'gym bag'],
+  pets: ['dog toy', 'pet bed', 'cat toy', 'pet bowl'],
+  automotive: ['car phone mount', 'car light', 'car organiser', 'dash cam'],
+  custom: ['t-shirt', 'mug', 'phone case', 'hoodie', 'poster'],
+}
+
 router.get('/trending', async (req, res, next) => {
   try {
     const { category = '' } = req.query
+    const terms = TRENDING_TERMS[category] || TRENDING_TERMS['']
+
+    // Pick 2 random terms to get variety
+    const shuffled = terms.sort(() => Math.random() - 0.5)
+    const searchTerms = shuffled.slice(0, 2)
 
     const results = await Promise.allSettled([
-      searchCJ(category || 'trending', 1),
-      searchPrintful(category || 'bestseller'),
+      ...searchTerms.map(term => searchCJ(term, 1)),
+      ...searchTerms.map(term => searchPrintful(term)),
     ])
 
-    const products = results
+    let products = results
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value)
-      .sort(() => Math.random() - 0.5) // Shuffle for variety
+
+    // If live APIs returned nothing, use sample data
+    if (products.length === 0) {
+      products = [
+        ...getSampleCJProducts(searchTerms[0]),
+        ...getSamplePrintfulProducts(searchTerms[0]),
+      ]
+    }
+
+    // Deduplicate by id, shuffle, and limit
+    const seen = new Set()
+    products = products
+      .filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true })
+      .sort(() => Math.random() - 0.5)
       .slice(0, 20)
 
     res.json({ products })
@@ -208,6 +240,41 @@ router.get('/suppliers', requireAuth, async (req, res, next) => {
 // ============================================
 
 // --- CJ Dropshipping ---
+// --- CJ Dropshipping access token management ---
+// CJ API key must be exchanged for an access token (valid 15 days)
+let cjAccessToken = null
+let cjTokenExpiry = 0
+
+async function getCJAccessToken() {
+  const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
+  if (!apiKey) return null
+
+  const now = Date.now()
+  // Return cached token if still valid (refresh 1 day early)
+  if (cjAccessToken && cjTokenExpiry > now + 86400000) {
+    return cjAccessToken
+  }
+
+  const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey }),
+  })
+
+  if (!response.ok) throw new Error(`CJ auth failed: ${response.status}`)
+
+  const data = await response.json()
+  if (!data.data?.accessToken) throw new Error(`CJ auth error: ${data.message || 'no token'}`)
+
+  cjAccessToken = data.data.accessToken
+  // Parse expiry or default to 14 days
+  cjTokenExpiry = data.data.accessTokenExpiryDate
+    ? new Date(data.data.accessTokenExpiryDate).getTime()
+    : now + 14 * 86400000
+
+  return cjAccessToken
+}
+
 async function searchCJ(query, page = 1) {
   const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
   if (!apiKey) {
@@ -215,11 +282,14 @@ async function searchCJ(query, page = 1) {
   }
 
   try {
+    const token = await getCJAccessToken()
+    if (!token) return getSampleCJProducts(query)
+
     const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'CJ-Access-Token': apiKey,
+        'CJ-Access-Token': token,
       },
       body: JSON.stringify({
         productNameEn: query,
@@ -231,7 +301,14 @@ async function searchCJ(query, page = 1) {
     if (!response.ok) throw new Error('CJ API error')
 
     const data = await response.json()
-    return (data.data?.list || []).map(p => normaliseCJProduct(p))
+    const products = (data.data?.list || []).map(p => normaliseCJProduct(p))
+
+    // If API returned 0 results for this query, fall back to samples
+    if (products.length === 0) {
+      return getSampleCJProducts(query)
+    }
+
+    return products
   } catch {
     return getSampleCJProducts(query)
   }
@@ -282,9 +359,14 @@ async function importFromCJ(url) {
     return { title: 'CJ Product', description: 'Could not extract product ID from URL.', images: [], supplierCost: 0, source: 'cj', supplierUrl: url }
   }
 
+  const token = await getCJAccessToken()
+  if (!token) {
+    return { title: 'CJ Product', description: 'Could not authenticate with CJ API.', images: [], supplierCost: 0, source: 'cj', supplierUrl: url }
+  }
+
   const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/query', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': apiKey },
+    headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': token },
     body: JSON.stringify({ pid: productId }),
   })
 
@@ -334,16 +416,42 @@ async function searchPrintful(query) {
 
   try {
     const catalog = await fetchPrintfulCatalog(apiKey)
-    const q = (query || '').toLowerCase()
+    const q = (query || '').toLowerCase().trim()
 
-    // Filter catalog by search query (match title, type, brand, model)
+    // If no query or very broad, return a curated mix of popular product types
+    if (!q || q.length < 2) {
+      const popular = catalog
+        .filter(p => !p.is_discontinued)
+        .slice(0, 10)
+      return popular.map(p => normalisePrintfulProduct(p))
+    }
+
+    // Split query into words for flexible matching
+    const words = q.split(/\s+/).filter(w => w.length >= 2)
+
     const filtered = catalog
       .filter(p => {
         if (p.is_discontinued) return false
-        const fields = [p.title, p.type_name, p.brand, p.model].map(f => (f || '').toLowerCase())
-        return fields.some(f => f.includes(q) || q.includes(f))
+        const text = [p.title, p.type_name, p.brand, p.model]
+          .map(f => (f || '').toLowerCase())
+          .join(' ')
+        // Match if ANY search word appears in the combined text
+        return words.some(w => text.includes(w)) || text.includes(q)
       })
       .slice(0, 15)
+
+    // If strict search returned nothing, try looser single-word match
+    if (filtered.length === 0 && words.length > 0) {
+      const loose = catalog
+        .filter(p => {
+          if (p.is_discontinued) return false
+          const text = [p.title, p.type_name].map(f => (f || '').toLowerCase()).join(' ')
+          // Match first word or first 3 chars of query
+          return text.includes(words[0]) || text.includes(q.slice(0, 3))
+        })
+        .slice(0, 10)
+      return loose.map(p => normalisePrintfulProduct(p))
+    }
 
     return filtered.map(p => normalisePrintfulProduct(p))
   } catch {
