@@ -117,21 +117,23 @@ export default function PromotionsPage() {
 
       {/* Marketing tools */}
       <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">Marketing tools included</h2>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-3">
         {STRATEGIES.map((s) => {
           const glow = `${s.color}25`
           return (
             <div key={s.title} className="relative rounded-2xl overflow-hidden">
               <div className="absolute inset-0 rounded-2xl opacity-40" style={{ background: `linear-gradient(135deg, ${s.color}25, transparent 60%)` }} />
-              <div className="relative rounded-2xl bg-[#0c0c0c]/90 border p-4" style={{ borderColor: `${s.color}20` }}>
+              <div className="relative rounded-2xl bg-[#0c0c0c]/90 border p-4 flex items-start gap-4" style={{ borderColor: `${s.color}20` }}>
                 <div
-                  className="flex items-center justify-center w-9 h-9 rounded-lg text-[10px] font-extrabold mb-3"
+                  className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-lg text-[10px] font-extrabold"
                   style={{ backgroundColor: `${s.color}20`, color: s.color, boxShadow: `0 0 16px ${glow}` }}
                 >
                   {s.initials}
                 </div>
-                <h3 className="text-xs font-bold text-white mb-1">{s.title}</h3>
-                <p className="text-[10px] text-zinc-400 leading-relaxed">{s.desc}</p>
+                <div>
+                  <h3 className="text-xs font-bold text-white mb-1">{s.title}</h3>
+                  <p className="text-[10px] text-zinc-400 leading-relaxed">{s.desc}</p>
+                </div>
               </div>
             </div>
           )
