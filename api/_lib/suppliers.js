@@ -7,17 +7,31 @@ import { sql } from './db.js'
 // ============================================
 // NSFW / INAPPROPRIATE CONTENT FILTER
 // ============================================
-const BLOCKED_TERMS = [
-  'sex toy', 'sex doll', 'sex machine', 'vibrator', 'dildo', 'masturbat',
-  'adult toy', 'erotic', 'bondage', 'lingerie set', 'butt plug', 'anal',
-  'penis', 'vagina', 'fleshlight', 'blow up doll', 'nipple', 'fetish',
-  'stripper', 'prostate massag', 'cock ring', 'love doll', 'sexy underwear',
+const BLOCKED_PHRASES = [
+  'sex toy', 'sex doll', 'sex machine', 'sex toys',
+  'adult toy', 'adult toys', 'erotic toy',
+  'love doll', 'blow up doll', 'real doll',
+  'butt plug', 'cock ring', 'nipple clamp',
+  'sexy underwear', 'sexy lingerie',
+  'prostate massag',
+]
+// These are checked as whole words (word boundary matching)
+const BLOCKED_WORDS = [
+  'vibrator', 'dildo', 'masturbat', 'bondage', 'fleshlight',
+  'fetish', 'stripper',
 ]
 
 export function filterNSFW(products) {
   return products.filter(p => {
     const text = ((p.title || '') + ' ' + (p.description || '') + ' ' + (p.name || '')).toLowerCase()
-    return !BLOCKED_TERMS.some(term => text.includes(term))
+    // Check exact phrases
+    if (BLOCKED_PHRASES.some(phrase => text.includes(phrase))) return false
+    // Check whole-word matches (avoid matching "unisex" for "sex", "analysis" for "anal", etc.)
+    for (const word of BLOCKED_WORDS) {
+      const regex = new RegExp(`\\b${word}`, 'i')
+      if (regex.test(text)) return false
+    }
+    return true
   })
 }
 
