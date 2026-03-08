@@ -59,12 +59,14 @@ export async function searchCJ(query, page = 1) {
     if (!response.ok) throw new Error(`CJ API ${response.status}`)
 
     const data = await response.json()
+    if (data.code !== 200) throw new Error(`CJ code ${data.code}: ${data.message}`)
     const list = data.data?.list || data.data?.pageList || []
     const products = list.map(p => normaliseCJProduct(p))
 
     if (products.length === 0) return getSampleCJProducts(query)
     return products
-  } catch {
+  } catch (err) {
+    console.error('CJ search error:', err.message || err)
     return getSampleCJProducts(query)
   }
 }
@@ -427,7 +429,8 @@ async function getAliExpressFeedNames() {
 
   try {
     const data = await callAliExpressAPI('aliexpress.ds.feedname.get', {})
-    const feeds = data?.aliexpress_ds_feedname_get_response?.result?.feed_names?.feed_name || []
+    const respResult = data?.aliexpress_ds_feedname_get_response?.resp_result?.result
+    const feeds = respResult?.promos?.promo || respResult?.feed_names?.feed_name || []
     if (feeds.length > 0) {
       aliexpressFeedNames = feeds
       aliexpressFeedNamesFetchedAt = now
@@ -444,7 +447,7 @@ export async function searchAliExpress(query, page = 1) {
 
   try {
     const feeds = await getAliExpressFeedNames()
-    const feedName = feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+    const feedName = feeds[0]?.promo_name || feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
 
     const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
       feed_name: feedName,
@@ -455,7 +458,8 @@ export async function searchAliExpress(query, page = 1) {
       sort: 'volumeDesc',
     })
 
-    const resp = data?.aliexpress_ds_recommend_feed_get_response?.result
+    const feedResp = data?.aliexpress_ds_recommend_feed_get_response
+    const resp = feedResp?.resp_result?.result || feedResp?.result
     if (!resp?.products?.product || resp.products.product.length === 0) {
       return getSampleAliExpressProducts(query)
     }
@@ -473,7 +477,8 @@ export async function searchAliExpress(query, page = 1) {
     }
 
     return products
-  } catch {
+  } catch (err) {
+    console.error('AliExpress search error:', err.message || err)
     return getSampleAliExpressProducts(query)
   }
 }
