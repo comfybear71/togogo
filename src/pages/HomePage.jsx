@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Sparkles, Check } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 
 const QUICK_STARTS = [
@@ -7,7 +7,6 @@ const QUICK_STARTS = [
     id: 'sell',
     emoji: '🏷️',
     label: 'Start Selling',
-    gradient: 'from-[#FF6B35]/20 to-[#FF6B35]/5',
     border: 'hover:border-[#FF6B35]/30',
     prompt: "I'm new to selling online and I want to start earning money from home. I don't know what to sell or where to start. Can you help me pick easy products I can sell today with very little money? Walk me through it step by step, keep it super simple.",
   },
@@ -15,7 +14,6 @@ const QUICK_STARTS = [
     id: 'trending',
     emoji: '🔥',
     label: 'Hot Products',
-    gradient: 'from-[#FFD23F]/20 to-[#FFD23F]/5',
     border: 'hover:border-[#FFD23F]/30',
     prompt: "Show me the hottest trending products that are selling well right now. I want to know what's popular so I can start selling them. Give me specific product ideas with estimated profit margins. Keep it simple and practical.",
   },
@@ -23,39 +21,22 @@ const QUICK_STARTS = [
     id: 'dropship',
     emoji: '📦',
     label: 'Dropshipping',
-    gradient: 'from-[#06D6A0]/20 to-[#06D6A0]/5',
     border: 'hover:border-[#06D6A0]/30',
     prompt: "I want to try dropshipping but I have no experience. Explain it to me like I'm a complete beginner. How do I start without buying any stock? What products should I dropship and where do I sell them? Make it really simple.",
   },
   {
     id: 'money',
     emoji: '💰',
-    label: 'Side Hustle Ideas',
-    gradient: 'from-[#a78bfa]/20 to-[#a78bfa]/5',
+    label: 'Side Hustle',
     border: 'hover:border-[#a78bfa]/30',
     prompt: "I'm sitting at home and I need ideas to make extra money. I'm not very tech-savvy. Give me simple side hustle ideas I can start today — things like selling items, flipping products, or offering services. Keep it practical and beginner-friendly.",
   },
 ]
 
 const TOOLS = [
-  {
-    id: 'suppliers',
-    emoji: '🏭',
-    label: 'Suppliers',
-    path: '/suppliers',
-  },
-  {
-    id: 'platforms',
-    emoji: '🛍️',
-    label: 'Platforms',
-    path: '/platforms',
-  },
-  {
-    id: 'promotions',
-    emoji: '📣',
-    label: 'Marketing',
-    path: '/promotions',
-  },
+  { id: 'suppliers', emoji: '🏭', label: 'Suppliers', path: '/suppliers' },
+  { id: 'platforms', emoji: '🛍️', label: 'Platforms', path: '/platforms' },
+  { id: 'promotions', emoji: '📣', label: 'Marketing', path: '/promotions' },
 ]
 
 export default function HomePage() {
@@ -67,11 +48,7 @@ export default function HomePage() {
   }
 
   const handleGetStarted = () => {
-    if (user) {
-      navigate('/profile')
-    } else {
-      navigate('/auth')
-    }
+    navigate(user ? '/profile' : '/auth')
   }
 
   const letters = [
@@ -119,36 +96,24 @@ export default function HomePage() {
           Your shortcut to earning online
         </p>
 
-        {/* === $19.99 Plan Card === */}
-        <div className="fade-up w-full" style={{ marginTop: '32px', maxWidth: '360px', animationDelay: '0.9s' }}>
-          <div className="relative rounded-2xl border border-[#FF6B35]/30 bg-[#0e0e0e] p-6 text-center">
-            <div className="mb-1">
-              <span className="font-heading text-4xl font-bold text-white">$19.99</span>
-              <span className="text-sm text-zinc-500">/mo</span>
-            </div>
-            <p className="text-xs text-zinc-400 mb-4">One plan. Everything included.</p>
-
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-left mb-5">
-              {['Every product', 'Every platform', 'All marketing', 'Unlimited listings', 'AI assistant', 'All suppliers', 'Print-on-demand', 'Advanced analytics'].map((item) => (
-                <div key={item} className="flex items-center gap-2">
-                  <Check className="h-3 w-3 flex-shrink-0 text-[#06D6A0]" />
-                  <span className="text-[11px] text-zinc-300">{item}</span>
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={handleGetStarted}
-              className="w-full rounded-xl bg-[#FF6B35] py-3.5 text-sm font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
-            >
-              Get Started
-            </button>
-            <p className="text-[10px] text-zinc-600 mt-2">Cancel anytime. No commitment.</p>
+        {/* === $19.99 — simple price + button === */}
+        <div className="fade-up w-full text-center" style={{ marginTop: '40px', maxWidth: '360px', animationDelay: '0.9s' }}>
+          <p className="text-zinc-400 text-sm mb-2">Everything. One price.</p>
+          <div className="mb-4">
+            <span className="font-heading text-5xl font-bold text-white">$19.99</span>
+            <span className="text-sm text-zinc-500">/mo</span>
           </div>
+          <button
+            onClick={handleGetStarted}
+            className="w-full rounded-2xl bg-[#FF6B35] py-4 text-base font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
+          >
+            Get Started
+          </button>
+          <p className="text-[10px] text-zinc-600 mt-2">Cancel anytime</p>
         </div>
 
         {/* === AI Assistant Box === */}
-        <div className="fade-up" style={{ marginTop: '16px', width: '100%', maxWidth: '360px', animationDelay: '1.1s' }}>
+        <div className="fade-up" style={{ marginTop: '24px', width: '100%', maxWidth: '360px', animationDelay: '1.1s' }}>
           <button
             onClick={() => navigate('/assistant')}
             className="group relative w-full overflow-hidden rounded-2xl p-[1px] transition-all duration-300"
@@ -165,7 +130,7 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* === Quick-Start Cards (compact — half height) === */}
+        {/* === Quick-Start Cards (compact row) === */}
         <div className="fade-up grid grid-cols-4 gap-2 w-full" style={{ marginTop: '12px', maxWidth: '360px', animationDelay: '1.2s' }}>
           {QUICK_STARTS.map((item) => (
             <button
