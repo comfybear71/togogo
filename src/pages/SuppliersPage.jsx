@@ -1,528 +1,108 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Filter, TrendingUp, Package, Palette, ChevronDown, Loader2, ArrowDownUp, Lock, Crown, Check } from 'lucide-react'
-import { useSupplierSearch, useTrendingProducts, useSupplierCategories, useSupplierCounts } from '../hooks/useSuppliers'
-import { useAuthStore } from '../stores/authStore'
-import { DUMMY_SUPPLIERS } from '../lib/dummyShopData'
+import { ArrowLeft } from 'lucide-react'
 
-const SORT_OPTIONS = [
-  { value: 'relevance', label: 'Most Relevant' },
-  { value: 'price_low', label: 'Lowest Cost' },
-  { value: 'price_high', label: 'Highest Margin' },
-  { value: 'fastest', label: 'Fastest Shipping' },
+const SUPPLIERS = [
+  {
+    name: 'CJ Dropshipping',
+    emoji: '📦',
+    color: '#FF6B35',
+    what: 'Massive product catalogue with warehouses worldwide. Fast shipping, quality control, and custom packaging.',
+    products: 'Electronics, fashion, home, beauty, gadgets — millions of products',
+    shipping: '5-15 days (US/EU warehouses available for 3-5 day delivery)',
+    cost: 'Free to use. You only pay per product when you sell.',
+  },
+  {
+    name: 'AliExpress',
+    emoji: '🛒',
+    color: '#E53238',
+    what: 'The world\'s biggest wholesale marketplace. Endless product selection at rock-bottom prices.',
+    products: 'Literally everything — 100+ million products across every category',
+    shipping: '7-20 days standard, 3-7 days with AliExpress Premium',
+    cost: 'Free. Buy at wholesale prices, sell at retail.',
+  },
+  {
+    name: 'Printful',
+    emoji: '🎨',
+    color: '#29AB51',
+    what: 'Print-on-demand. Upload your designs, they print and ship when someone orders. Zero inventory.',
+    products: 'T-shirts, hoodies, mugs, phone cases, posters, hats, bags, and more',
+    shipping: '3-5 business days (printed in US, EU, or AU)',
+    cost: 'Free to use. You pay per item only when a customer orders.',
+  },
+  {
+    name: 'Printify',
+    emoji: '🖨️',
+    color: '#39B54A',
+    what: 'Print-on-demand with 80+ print providers worldwide. More options and competitive pricing.',
+    products: 'Apparel, accessories, home decor, drinkware, stationery',
+    shipping: '3-7 business days (multiple print locations)',
+    cost: 'Free plan available. Premium plan $29/mo for up to 20% cheaper products.',
+  },
+  {
+    name: 'Gooten',
+    emoji: '🏭',
+    color: '#00A9E0',
+    what: 'Enterprise print-on-demand with automated routing to the nearest manufacturer.',
+    products: 'Apparel, wall art, photo books, home goods, accessories',
+    shipping: '3-8 business days (smart routing for fastest delivery)',
+    cost: 'Free to use. Pay per product when orders come in.',
+  },
 ]
-
-const ALL_SUPPLIERS = ['CJ Dropshipping', 'AliExpress', 'Printful', 'Printify', 'Gooten']
-
-const SUPPLIER_FILTERS = [
-  { value: 'CJ Dropshipping', label: '📦 CJ' },
-  { value: 'AliExpress', label: '🛒 AliExpress' },
-  { value: 'Printful', label: '🎨 Printful' },
-  { value: 'Printify', label: '🖨️ Printify' },
-  { value: 'Gooten', label: '🏭 Gooten' },
-]
-
-function formatCount(n) {
-  if (n >= 10000000) return '10M+'
-  if (n >= 1000000) return `${(n / 1000000).toFixed(0)}M+`
-  if (n >= 100000) return `${(n / 1000).toFixed(0)}k+`
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}k+`
-  return String(n)
-}
 
 export default function SuppliersPage() {
   const navigate = useNavigate()
-  const profile = useAuthStore(s => s.profile)
-  const tier = profile?.subscription_plan?.toLowerCase() || 'free'
-  const isPaid = tier === 'paid' || tier === 'basic' || tier === 'premium'
-
-  const [searchInput, setSearchInput] = useState('')
-  const [query, setQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
-  const [selectedSuppliers, setSelectedSuppliers] = useState(new Set(ALL_SUPPLIERS))
-  const [sort, setSort] = useState('relevance')
-  const [showFilters, setShowFilters] = useState(false)
-  const [addedToShop, setAddedToShop] = useState(new Set())
-
-  const allSelected = selectedSuppliers.size === ALL_SUPPLIERS.length
-
-  const toggleSupplier = (supplier) => {
-    setSelectedSuppliers(prev => {
-      const next = new Set(prev)
-      if (next.has(supplier)) {
-        // Don't allow deselecting the last one
-        if (next.size <= 1) return prev
-        next.delete(supplier)
-      } else {
-        next.add(supplier)
-      }
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    setSelectedSuppliers(allSelected ? new Set([ALL_SUPPLIERS[0]]) : new Set(ALL_SUPPLIERS))
-  }
-
-  // Build comma-separated supplier string for API (only when not all selected)
-  const suppliersParam = allSelected ? undefined : [...selectedSuppliers].join(',')
-
-  const { data: searchData, isLoading: searching } = useSupplierSearch({
-    query: query || undefined,
-    category: selectedCategory || undefined,
-    suppliers: suppliersParam,
-    sort,
-  })
-
-  const { data: trendingData, isLoading: loadingTrending } = useTrendingProducts(selectedCategory, suppliersParam)
-  const { data: catData } = useSupplierCategories()
-  const { data: countsData } = useSupplierCounts()
-  const supplierCounts = countsData?.counts || {}
-
-  const categories = catData?.categories || []
-  const products = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
-  const isLoading = searching || loadingTrending
-  const isLive = searchData?.live || trendingData?.live
-
-  const handleSearch = (e) => {
-    e.preventDefault()
-    const trimmed = searchInput.trim()
-    if (trimmed) {
-      setQuery(trimmed)
-      setSelectedCategory('')
-    } else {
-      // Refresh — clear query to go back to trending view
-      setQuery('')
-      setSelectedCategory('')
-    }
-  }
-
-  const handleCategoryClick = (catId) => {
-    setSelectedCategory(catId)
-    setQuery('')
-    setSearchInput('')
-  }
 
   return (
     <div className="py-4">
       {/* Header */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-white mb-1">Find Products to Sell</h1>
-            <p className="text-xs text-zinc-500">
-              {supplierCounts['CJ Dropshipping'] ? (
-                <>Browse {formatCount(Object.values(supplierCounts).reduce((sum, c) => sum + (c?.count || 0), 0))} products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
-              ) : (
-                <>Browse millions of products from {SUPPLIER_FILTERS.length} suppliers — we handle setup for you</>
-              )}
-            </p>
-          </div>
-          {isPaid && (
-            <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-[#FFD23F]/15 text-[#FFD23F] flex items-center gap-1">
-              <Crown className="h-3 w-3" /> PRO
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Tier info for free users */}
-      {!isPaid && (
-        <div className="rounded-xl bg-[#FFD23F]/5 border border-[#FFD23F]/15 p-3 mb-4 flex items-center gap-3">
-          <Lock className="h-4 w-4 text-[#FFD23F] flex-shrink-0" />
-          <p className="text-[10px] text-zinc-400 flex-1">
-            <span className="text-[#FFD23F] font-semibold">Free plan:</span> 2 suppliers available. Upgrade to Pro to unlock Printful, Printify & Gooten.
-          </p>
-          <button
-            onClick={() => navigate('/subscription')}
-            className="text-[10px] font-semibold text-[#FFD23F] flex-shrink-0 px-2.5 py-1 rounded-lg bg-[#FFD23F]/10 hover:bg-[#FFD23F]/15 transition-colors"
-          >
-            Upgrade
-          </button>
-        </div>
-      )}
-
-      {/* Search bar */}
-      <form onSubmit={handleSearch} className="relative mb-4">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-        <input
-          type="text"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search products (e.g. phone cases, t-shirts, LED lights...)"
-          className="w-full rounded-xl bg-[#111] border border-white/[0.06] pl-10 pr-4 py-3 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-[#FF6B35]/40 transition-colors"
-        />
-        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-semibold bg-[#FF6B35] text-white rounded-lg hover:bg-[#FF6B35]/90 transition-colors">
-          {searchInput ? 'Search' : 'Refresh'}
-        </button>
-      </form>
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-3 mb-6">
         <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${showFilters ? 'bg-[#FF6B35]/15 border-[#FF6B35]/30 text-[#FF6B35]' : 'bg-[#111] border-white/[0.06] text-zinc-400 hover:text-zinc-200'}`}
+          onClick={() => navigate('/')}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.05] text-zinc-400 hover:text-white transition-all"
         >
-          <Filter className="h-3 w-3" />
-          Filters
-          <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+          <ArrowLeft className="h-4 w-4" />
         </button>
-
-        {!allSelected && (
-          <div className="flex items-center gap-1 flex-wrap">
-            {[...selectedSuppliers].map(s => {
-              const filter = SUPPLIER_FILTERS.find(f => f.value === s)
-              const countInfo = supplierCounts[s]
-              return (
-                <button
-                  key={s}
-                  onClick={() => toggleSupplier(s)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-[#06D6A0]/15 border border-[#06D6A0]/30 text-[#06D6A0]"
-                >
-                  {filter?.label || s}
-                  {countInfo && <span className="text-[8px] opacity-70">({formatCount(countInfo.count)})</span>}
-                  &times;
-                </button>
-              )
-            })}
-            <button
-              onClick={toggleAll}
-              className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-white/5 border border-white/[0.06] text-zinc-400 hover:text-zinc-200"
-            >
-              Show all
-            </button>
-          </div>
-        )}
-
-        {query && (
-          <span className="text-[10px] text-zinc-500">
-            {searchData?.total || 0} results for &ldquo;{query}&rdquo;
-          </span>
-        )}
-
-        {!isLive && (searchData || trendingData) && (
-          <span className="ml-auto text-[10px] text-zinc-600 bg-zinc-800/50 px-2 py-0.5 rounded-full">
-            Sample data
-          </span>
-        )}
+        <div>
+          <h1 className="text-xl font-heading font-bold text-white">Our Suppliers</h1>
+          <p className="text-[11px] text-zinc-500">Who we work with to get you products</p>
+        </div>
       </div>
 
-      {/* Expandable filters */}
-      {showFilters && (
-        <div className="mb-4 p-3 rounded-xl bg-[#111] border border-white/[0.06] space-y-3">
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5 block">Supplier</label>
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={toggleAll}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${allSelected ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
-              >
-                All Suppliers
-              </button>
-              {SUPPLIER_FILTERS.map((s) => {
-                const countInfo = supplierCounts[s.value]
-                const countLabel = countInfo ? formatCount(countInfo.count) : null
-                return (
-                  <button
-                    key={s.value}
-                    onClick={() => toggleSupplier(s.value)}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${selectedSuppliers.has(s.value) ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
-                  >
-                    {s.label}
-                    {countLabel && (
-                      <span className="ml-1 text-[9px] text-zinc-500 font-normal">
-                        ({countLabel})
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div>
-            <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5 block">Sort by</label>
-            <div className="flex flex-wrap gap-1.5">
-              {SORT_OPTIONS.map((s) => (
-                <button
-                  key={s.value}
-                  onClick={() => setSort(s.value)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${sort === s.value ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Categories */}
-      {!query && (
-        <div className="mb-6">
-          <h2 className="text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Categories</h2>
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <button
-              onClick={() => setSelectedCategory('')}
-              className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${!selectedCategory ? 'bg-[#FF6B35]/15 border-[#FF6B35]/30 text-[#FF6B35]' : 'bg-[#111] border-white/[0.06] text-zinc-400 hover:text-zinc-200'}`}
-            >
-              <TrendingUp className="h-3 w-3 inline mr-1" />
-              Trending
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => handleCategoryClick(cat.id)}
-                className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-medium border transition-colors ${selectedCategory === cat.id ? 'bg-[#FF6B35]/15 border-[#FF6B35]/30 text-[#FF6B35]' : 'bg-[#111] border-white/[0.06] text-zinc-400 hover:text-zinc-200'}`}
-              >
-                <span className="mr-1">{cat.emoji}</span>
-                {cat.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Loading state */}
-      {isLoading && (
-        <div className="flex flex-col items-center justify-center py-16 gap-3">
-          <Loader2 className="h-6 w-6 text-[#FF6B35] animate-spin" />
-          <p className="text-xs text-zinc-500">Searching {selectedSuppliers.size} supplier{selectedSuppliers.size !== 1 ? 's' : ''}...</p>
-        </div>
-      )}
-
-      {/* Product grid */}
-      {!isLoading && products.length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
-          {products.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              isPaid={isPaid}
-              isAdded={addedToShop.has(product.id)}
-              onAddToShop={(p) => {
-                // Check free tier product limit
-                const existing = JSON.parse(localStorage.getItem('togogo-listed-products') || '[]')
-                if (!isPaid && existing.length >= 1) {
-                  navigate('/my-shop')
-                  return
-                }
-                if (addProductToShop(p)) {
-                  setAddedToShop(prev => new Set([...prev, p.id]))
-                }
-              }}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!isLoading && products.length === 0 && (query || selectedCategory) && (
-        <div className="text-center py-16">
-          <Package className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
-          <p className="text-sm text-zinc-400 mb-1">No products found</p>
-          <p className="text-xs text-zinc-600">Try a different search or browse categories</p>
-        </div>
-      )}
-
-      {/* Initial state — no search yet */}
-      {!isLoading && !query && !selectedCategory && products.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-4xl mb-4">🔍</div>
-          <p className="text-sm text-zinc-400 mb-1">Search for anything to sell</p>
-          <p className="text-xs text-zinc-600">We'll find it across all our suppliers instantly</p>
-          <div className="flex flex-wrap justify-center gap-2 mt-4">
-            {['Phone cases', 'T-shirts', 'LED lights', 'Jewellery', 'Mugs'].map((idea) => (
-              <button
-                key={idea}
-                onClick={() => { setSearchInput(idea); setQuery(idea) }}
-                className="px-3 py-1.5 rounded-full text-xs font-medium bg-[#111] border border-white/[0.06] text-zinc-400 hover:text-white hover:border-white/[0.12] transition-colors"
-              >
-                {idea}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Product card with price comparison support
-function safe$(val) { return (Number(val) || 0).toFixed(2) }
-
-function addProductToShop(product) {
-  try {
-    const existing = JSON.parse(localStorage.getItem('togogo-listed-products') || '[]')
-    if (existing.some(p => p.id === product.id)) return false
-    const enriched = {
-      ...product,
-      cost: product.totalCost || product.cost || 0,
-      suggestedPrice: product.suggestedPrice || 0,
-      listedAt: new Date().toISOString(),
-      status: 'active',
-    }
-    existing.push(enriched)
-    localStorage.setItem('togogo-listed-products', JSON.stringify(existing))
-    return true
-  } catch { return false }
-}
-
-function ProductCard({ product, isPaid, onAddToShop, isAdded }) {
-  const [showAlts, setShowAlts] = useState(false)
-  const hasImage = product.image && product.image.length > 0
-  const hasAlternatives = product._alternatives && product._alternatives.length > 0
-
-  return (
-    <div className="group rounded-2xl bg-[#111] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all duration-300">
-      {/* Image */}
-      <div className="aspect-square bg-[#0a0a0a] relative overflow-hidden">
-        {hasImage ? (
-          <img
-            src={product.image}
-            alt={product.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <span className="text-4xl">{product.supplierLogo}</span>
-          </div>
-        )}
-
-        {/* Supplier badge */}
-        <div className="absolute top-2 left-2">
-          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-black/70 text-zinc-300 backdrop-blur-sm">
-            {product.supplierLogo} {product.supplier}
-          </span>
-        </div>
-
-        {/* Best deal badge */}
-        {product._bestDeal && hasAlternatives && (
-          <div className="absolute bottom-2 left-2">
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[#06D6A0]/90 text-black backdrop-blur-sm">
-              Best Price
-            </span>
-          </div>
-        )}
-
-        {/* Customisable badge */}
-        {product.customisable && (
-          <div className="absolute top-2 right-2">
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#a78bfa]/20 text-[#a78bfa] backdrop-blur-sm flex items-center gap-0.5">
-              <Palette className="h-2.5 w-2.5" />
-              Custom
-            </span>
-          </div>
-        )}
-
-        {/* Multi-supplier indicator */}
-        {hasAlternatives && !product.customisable && (
-          <div className="absolute top-2 right-2">
-            <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-md bg-[#FFD23F]/20 text-[#FFD23F] backdrop-blur-sm">
-              {product._supplierCount} suppliers
-            </span>
-          </div>
-        )}
+      {/* Intro */}
+      <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-5 mb-5">
+        <p className="text-sm text-zinc-300 leading-relaxed">
+          ToGoGo connects you to <span className="text-white font-semibold">5 world-class suppliers</span> so you can sell anything without buying stock upfront. When a customer buys from you, the supplier ships directly to them. You keep the profit.
+        </p>
       </div>
 
-      {/* Info */}
-      <div className="p-3">
-        <h3 className="text-xs font-semibold text-white leading-tight mb-2 line-clamp-2">
-          {product.title}
-        </h3>
-
-        {/* Pricing row */}
-        <div className="flex items-end justify-between mb-2">
-          <div>
-            <span className="text-[10px] text-zinc-600 block">Your cost</span>
-            <span className="text-sm font-bold text-white">${safe$(product.totalCost)}</span>
-          </div>
-          <div className="text-right">
-            <span className="text-[10px] text-zinc-600 block">Sell for</span>
-            <span className="text-sm font-bold text-[#06D6A0]">${safe$(product.suggestedPrice)}</span>
-          </div>
-        </div>
-
-        {/* Margin bar */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex-1 h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#06D6A0] to-[#FFD23F]"
-              style={{ width: `${Math.min(((product.suggestedMargin || 0) / (product.suggestedPrice || 1)) * 100, 100)}%` }}
-            />
-          </div>
-          <span className="text-[10px] font-semibold text-[#06D6A0]">
-            ${safe$(product.suggestedMargin)} profit
-          </span>
-        </div>
-
-        {/* Delivery */}
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] text-zinc-500">
-            {product.deliveryDays <= 7 ? '🚀' : '📦'} {product.deliveryDays} day delivery
-          </span>
-        </div>
-
-        {/* Price comparison toggle */}
-        {hasAlternatives && (
-          <button
-            onClick={() => setShowAlts(!showAlts)}
-            className="w-full mt-2 flex items-center justify-center gap-1 py-1 text-[10px] font-medium text-[#FFD23F] hover:text-[#FFD23F]/80 transition-colors"
-          >
-            <ArrowDownUp className="h-3 w-3" />
-            Compare {product._supplierCount} suppliers
-          </button>
-        )}
-
-        {/* Alternative suppliers comparison */}
-        {showAlts && product._alternatives && (
-          <div className="mt-2 space-y-1.5 border-t border-white/[0.06] pt-2">
-            {/* Current supplier */}
-            <div className="flex items-center justify-between text-[10px] bg-[#06D6A0]/10 rounded-lg px-2 py-1.5">
-              <span className="font-semibold text-[#06D6A0]">{product.supplierLogo} {product.supplier}</span>
-              <span className="font-bold text-[#06D6A0]">${safe$(product.totalCost)}</span>
+      {/* Supplier cards */}
+      <div className="space-y-3">
+        {SUPPLIERS.map((s) => (
+          <div key={s.name} className="rounded-2xl bg-[#111] border border-white/[0.06] p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-2xl">{s.emoji}</span>
+              <h3 className="text-sm font-bold text-white">{s.name}</h3>
             </div>
-            {/* Alternatives */}
-            {product._alternatives.map((alt) => (
-              <div key={alt.id} className="flex items-center justify-between text-[10px] bg-white/[0.03] rounded-lg px-2 py-1.5">
-                <div>
-                  <span className="text-zinc-300">{alt.supplierLogo} {alt.supplier}</span>
-                  <span className="text-zinc-600 ml-1">({alt.deliveryDays}d)</span>
-                </div>
-                <span className="font-semibold text-zinc-300">${safe$(alt.totalCost)}</span>
+            <p className="text-xs text-zinc-400 leading-relaxed mb-3">{s.what}</p>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <span className="text-[10px] text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0 pt-0.5">Products</span>
+                <span className="text-[11px] text-zinc-300">{s.products}</span>
               </div>
-            ))}
+              <div className="flex gap-2">
+                <span className="text-[10px] text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0 pt-0.5">Shipping</span>
+                <span className="text-[11px] text-zinc-300">{s.shipping}</span>
+              </div>
+              <div className="flex gap-2">
+                <span className="text-[10px] text-zinc-600 uppercase tracking-wider w-16 flex-shrink-0 pt-0.5">Cost</span>
+                <span className="text-[11px] text-zinc-300">{s.cost}</span>
+              </div>
+            </div>
           </div>
-        )}
-
-        {/* Sell button */}
-        {(() => {
-          const supplierData = DUMMY_SUPPLIERS.find(s => s.name === product.supplier)
-          const isLocked = !isPaid && supplierData?.tier === 'paid'
-          if (isLocked) {
-            return (
-              <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[#FFD23F] flex items-center justify-center gap-1.5">
-                <Lock className="h-3 w-3" /> Pro Only — Upgrade
-              </button>
-            )
-          }
-          if (isAdded) {
-            return (
-              <button className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center gap-1.5">
-                <Check className="h-3 w-3" /> Added to Shop
-              </button>
-            )
-          }
-          return (
-            <button
-              onClick={() => onAddToShop?.(product)}
-              className="w-full mt-3 py-2 rounded-xl text-xs font-semibold bg-[#FF6B35] text-white hover:bg-[#FF6B35]/90 active:scale-[0.97] transition-all"
-            >
-              Sell This Product
-            </button>
-          )
-        })()}
+        ))}
       </div>
+
+      <div className="h-20" />
     </div>
   )
 }

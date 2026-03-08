@@ -1,36 +1,12 @@
 import { useNavigate } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
+import { BookOpen } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 
 const QUICK_STARTS = [
-  {
-    id: 'sell',
-    emoji: '🏷️',
-    label: 'Start Selling',
-    border: 'hover:border-[#FF6B35]/30',
-    prompt: "I'm new to selling online and I want to start earning money from home. I don't know what to sell or where to start. Can you help me pick easy products I can sell today with very little money? Walk me through it step by step, keep it super simple.",
-  },
-  {
-    id: 'trending',
-    emoji: '🔥',
-    label: 'Hot Products',
-    border: 'hover:border-[#FFD23F]/30',
-    prompt: "Show me the hottest trending products that are selling well right now. I want to know what's popular so I can start selling them. Give me specific product ideas with estimated profit margins. Keep it simple and practical.",
-  },
-  {
-    id: 'dropship',
-    emoji: '📦',
-    label: 'Dropshipping',
-    border: 'hover:border-[#06D6A0]/30',
-    prompt: "I want to try dropshipping but I have no experience. Explain it to me like I'm a complete beginner. How do I start without buying any stock? What products should I dropship and where do I sell them? Make it really simple.",
-  },
-  {
-    id: 'money',
-    emoji: '💰',
-    label: 'Side Hustle',
-    border: 'hover:border-[#a78bfa]/30',
-    prompt: "I'm sitting at home and I need ideas to make extra money. I'm not very tech-savvy. Give me simple side hustle ideas I can start today — things like selling items, flipping products, or offering services. Keep it practical and beginner-friendly.",
-  },
+  { id: 'sell', emoji: '🏷️', label: 'Start Selling', border: 'hover:border-[#FF6B35]/30' },
+  { id: 'trending', emoji: '🔥', label: 'Hot Products', border: 'hover:border-[#FFD23F]/30' },
+  { id: 'dropship', emoji: '📦', label: 'Dropshipping', border: 'hover:border-[#06D6A0]/30' },
+  { id: 'money', emoji: '💰', label: 'Side Hustle', border: 'hover:border-[#a78bfa]/30' },
 ]
 
 const TOOLS = [
@@ -42,10 +18,6 @@ const TOOLS = [
 export default function HomePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-
-  const handleQuickStart = (prompt) => {
-    navigate(`/assistant?start=${encodeURIComponent(prompt)}`)
-  }
 
   const handleGetStarted = () => {
     navigate(user ? '/profile' : '/auth')
@@ -96,8 +68,22 @@ export default function HomePage() {
           Your shortcut to earning online
         </p>
 
+        {/* === Tool buttons ABOVE price === */}
+        <div className="fade-up flex gap-3 w-full" style={{ marginTop: '32px', maxWidth: '360px', animationDelay: '0.9s' }}>
+          {TOOLS.map((tool) => (
+            <button
+              key={tool.id}
+              onClick={() => navigate(tool.path)}
+              className="group flex-1 flex flex-col items-center gap-1.5 rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-2.5 transition-all duration-300 hover:border-white/[0.12] active:scale-[0.97]"
+            >
+              <span className="text-lg">{tool.emoji}</span>
+              <span className="text-[10px] font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors">{tool.label}</span>
+            </button>
+          ))}
+        </div>
+
         {/* === $19.99 — simple price + button === */}
-        <div className="fade-up w-full text-center" style={{ marginTop: '40px', maxWidth: '360px', animationDelay: '0.9s' }}>
+        <div className="fade-up w-full text-center" style={{ marginTop: '24px', maxWidth: '360px', animationDelay: '1s' }}>
           <p className="text-zinc-400 text-sm mb-2">Everything. One price.</p>
           <div className="mb-4">
             <span className="font-heading text-5xl font-bold text-white">$19.99</span>
@@ -112,7 +98,7 @@ export default function HomePage() {
           <p className="text-[10px] text-zinc-600 mt-2">Cancel anytime</p>
         </div>
 
-        {/* === AI Assistant Box === */}
+        {/* === Guides button === */}
         <div className="fade-up" style={{ marginTop: '24px', width: '100%', maxWidth: '360px', animationDelay: '1.1s' }}>
           <button
             onClick={() => navigate('/assistant')}
@@ -120,12 +106,12 @@ export default function HomePage() {
             style={{ background: 'linear-gradient(135deg, #FF6B35, #FFD23F, #06D6A0)', backgroundSize: '200% 200%', animation: 'gradient-shift 4s ease infinite' }}
           >
             <div className="flex items-center justify-center gap-3 rounded-[15px] bg-[#0a0a0a] px-5 py-3.5 transition-all duration-300 group-hover:bg-[#0a0a0a]/80">
-              <Sparkles className="h-4 w-4 text-[#FFD23F]" />
+              <BookOpen className="h-4 w-4 text-[#FFD23F]" />
               <div className="text-center">
-                <div className="text-sm font-semibold text-white">Ask me anything</div>
-                <div className="text-[10px] text-zinc-500">AI-powered help</div>
+                <div className="text-sm font-semibold text-white">How do I get started?</div>
+                <div className="text-[10px] text-zinc-500">Step-by-step guides</div>
               </div>
-              <Sparkles className="h-4 w-4 text-[#FFD23F] opacity-40" />
+              <BookOpen className="h-4 w-4 text-[#FFD23F] opacity-40" />
             </div>
           </button>
         </div>
@@ -135,7 +121,7 @@ export default function HomePage() {
           {QUICK_STARTS.map((item) => (
             <button
               key={item.id}
-              onClick={() => handleQuickStart(item.prompt)}
+              onClick={() => navigate(`/assistant?topic=${item.id}`)}
               className={`group flex flex-col items-center text-center rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-2.5 px-1 transition-all duration-300 ${item.border} active:scale-[0.97]`}
             >
               <span className="text-xl block mb-1">{item.emoji}</span>
@@ -144,22 +130,8 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* === Tool buttons (no rocket) === */}
-        <div className="fade-up flex gap-3 w-full" style={{ marginTop: '12px', maxWidth: '360px', animationDelay: '1.3s' }}>
-          {TOOLS.map((tool) => (
-            <button
-              key={tool.id}
-              onClick={() => navigate(tool.path)}
-              className="group flex-1 flex flex-col items-center gap-1.5 rounded-xl bg-[#0e0e0e] border border-white/[0.06] py-2.5 transition-all duration-300 hover:border-white/[0.12] active:scale-[0.97]"
-            >
-              <span className="text-lg">{tool.emoji}</span>
-              <span className="text-[10px] font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors">{tool.label}</span>
-            </button>
-          ))}
-        </div>
-
         {/* Footer */}
-        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '32px', animationDelay: '1.5s' }}>
+        <p className="fade-up text-center text-[10px] text-zinc-700 tracking-wider uppercase" style={{ marginTop: '32px', animationDelay: '1.4s' }}>
           The marketplace for everything
         </p>
 

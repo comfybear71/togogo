@@ -1,364 +1,268 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Send, Bot, User, Sparkles, Loader2, ChevronRight, Lightbulb } from 'lucide-react'
+import { ArrowLeft, ChevronRight, ChevronLeft, BookOpen } from 'lucide-react'
 
-const SUGGESTIONS = [
-  { emoji: '🏷️', text: 'I want to start selling from home' },
-  { emoji: '🔥', text: 'What products are trending right now?' },
-  { emoji: '📦', text: 'How does dropshipping work?' },
-  { emoji: '💰', text: 'Give me easy side hustle ideas' },
-]
-
-function formatMessage(text) {
-  return text
-    .split('\n')
-    .map((line, i) => {
-      let formatted = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      if (formatted.startsWith('- ') || formatted.startsWith('• ')) {
-        formatted = `<span class="text-[#06D6A0] mr-1.5">•</span>${formatted.slice(2)}`
-        return `<div key="${i}" class="flex items-start gap-0 pl-2 py-0.5">${formatted}</div>`
-      }
-      return formatted
-    })
-    .join('<br />')
+// ─── Pre-written guides ───────────────────────────────────────────────
+const GUIDES = {
+  sell: {
+    title: 'Start Selling',
+    emoji: '🏷️',
+    steps: [
+      {
+        heading: 'Pick something easy to sell',
+        body: "You don't need a warehouse or a big budget. Start with things around your house — clothes you don't wear, electronics you've upgraded from, or shoes collecting dust. Everyone has stuff worth selling.",
+      },
+      {
+        heading: 'Choose where to list it',
+        body: "eBay and Facebook Marketplace are the easiest to start with — no monthly fees, millions of buyers already there. Just snap a photo, write a short description, set a price, and list it. Takes 5 minutes.",
+      },
+      {
+        heading: 'Price it to sell fast',
+        body: "Search for the same item on eBay and see what others are charging. Price yours slightly lower to sell quickly. A fast sale at a fair price beats sitting on an overpriced item for weeks.",
+      },
+      {
+        heading: 'Ship it simply',
+        body: "Most platforms let you print a shipping label right from the app. Pack the item in a padded envelope or small box, stick the label on, and drop it at your local post office. Done.",
+      },
+      {
+        heading: 'Reinvest and grow',
+        body: "Once you sell a few things, use that money to buy products specifically to resell. Check charity shops, clearance sales, and wholesale suppliers. This is how small sellers become big sellers.",
+      },
+    ],
+  },
+  trending: {
+    title: 'Hot Products',
+    emoji: '🔥',
+    steps: [
+      {
+        heading: 'Phone accessories are always hot',
+        body: "Phone cases, screen protectors, chargers, MagSafe accessories — everyone has a phone and they all need accessories. Low cost to buy (under $3 from suppliers), sell for $15-25. Great margins.",
+      },
+      {
+        heading: 'Home organisation sells itself',
+        body: "Storage boxes, drawer organisers, cable management, kitchen gadgets — people see these on TikTok and want them immediately. Cheap to source, easy to ship, high demand year-round.",
+      },
+      {
+        heading: 'Health & wellness products',
+        body: "Posture correctors, massage guns, resistance bands, water bottles with time markers — the wellness trend isn't slowing down. People will pay premium prices for anything that makes them feel healthier.",
+      },
+      {
+        heading: 'Pet products are booming',
+        body: "Pet owners spend like crazy. Collapsible bowls, LED collars, grooming tools, pet beds — the pet industry is worth billions and growing every year. Emotional purchases mean higher prices.",
+      },
+      {
+        heading: 'Print-on-demand custom items',
+        body: "Custom mugs, t-shirts, tote bags, phone cases — you design it, the supplier prints and ships it. Zero inventory. Use Printful or Printify through ToGoGo and start selling your own designs today.",
+      },
+    ],
+  },
+  dropship: {
+    title: 'Dropshipping',
+    emoji: '📦',
+    steps: [
+      {
+        heading: 'What is dropshipping?',
+        body: "You sell a product online. When someone buys it, your supplier ships it directly to the customer. You never touch the product. You never buy stock upfront. You just connect buyer to supplier and keep the profit.",
+      },
+      {
+        heading: 'How it works step by step',
+        body: "1. You list a product on eBay, Etsy, or your own store for $25.\n2. A customer buys it.\n3. You order it from your supplier for $8.\n4. The supplier ships it to your customer.\n5. You keep $17 profit.\n\nThat's it. No warehouse, no packing, no stock risk.",
+      },
+      {
+        heading: 'Finding products to dropship',
+        body: "Use the Suppliers page on ToGoGo — we connect you to CJ Dropshipping, AliExpress, Printful, Printify, and Gooten. Search for any product, see the cost price, and we calculate your profit margin automatically.",
+      },
+      {
+        heading: 'Where to sell',
+        body: "Start on eBay — it's free to list and has 130 million buyers. Once you're making sales, expand to Etsy, Amazon, or your own Shopify store. Use the Platforms page to see all your options.",
+      },
+      {
+        heading: 'Tips for success',
+        body: "Pick a niche — don't sell everything. Focus on one category (e.g. pet products or phone accessories). Write good titles and descriptions. Use real product photos. Price competitively. And be patient — the first sale takes the longest.",
+      },
+    ],
+  },
+  money: {
+    title: 'Side Hustle Ideas',
+    emoji: '💰',
+    steps: [
+      {
+        heading: 'Flip items from charity shops',
+        body: "Buy underpriced items at charity shops, car boot sales, and Facebook Marketplace, then resell them on eBay for more. Clothing brands, electronics, and vintage items work best. People do this full-time and earn thousands a month.",
+      },
+      {
+        heading: 'Sell printables on Etsy',
+        body: "Create digital planners, wall art, budget sheets, or party invitations using free tools like Canva. List them on Etsy. They're digital — no shipping, no stock, no cost per sale. Make it once, sell it forever.",
+      },
+      {
+        heading: 'Start dropshipping (zero stock)',
+        body: "Pick products from our suppliers, list them on eBay or your own store. When someone buys, the supplier ships directly. You never touch the product. Start with zero investment and scale up from profits.",
+      },
+      {
+        heading: 'Print-on-demand merch',
+        body: "Design t-shirts, mugs, hoodies, and phone cases. Suppliers like Printful print your design and ship it when someone orders. No minimum orders, no upfront cost. If you can use Canva, you can do this.",
+      },
+      {
+        heading: 'Offer a service locally',
+        body: "Dog walking, car washing, lawn mowing, furniture assembly, cleaning. Post on Facebook Marketplace, Nextdoor, or Airtasker. No website needed. People near you need help and will pay for it today.",
+      },
+    ],
+  },
 }
 
-// Split a long AI response into individual ideas/sections
-function splitIntoIdeas(text) {
-  // Try to split by numbered items (1. 2. 3.) or bold headers
-  const numberedPattern = /(?:^|\n)(?=\d+[\.\)]\s)/
-  const parts = text.split(numberedPattern).filter(p => p.trim())
-
-  if (parts.length > 1) {
-    return parts.map(p => p.trim())
-  }
-
-  // Try splitting by bold headers like **Header**
-  const boldSections = text.split(/(?=\*\*[^*]+\*\*)/).filter(p => p.trim())
-  if (boldSections.length > 1) {
-    return boldSections.map(p => p.trim())
-  }
-
-  // Try splitting by bullet points into groups
-  const lines = text.split('\n').filter(l => l.trim())
-  if (lines.length > 4) {
-    const chunks = []
-    let current = []
-    for (const line of lines) {
-      current.push(line)
-      if ((line.startsWith('- ') || line.startsWith('• ')) && current.length >= 2) {
-        chunks.push(current.join('\n'))
-        current = []
-      }
-    }
-    if (current.length > 0) {
-      chunks.push(current.join('\n'))
-    }
-    if (chunks.length > 1) return chunks
-  }
-
-  // Fallback: return as single item
-  return [text]
-}
-
-// Extract a short title from an idea section
-function getIdeaTitle(text) {
-  // Try to extract from bold text
-  const boldMatch = text.match(/\*\*([^*]+)\*\*/)
-  if (boldMatch) return boldMatch[1]
-
-  // Try numbered item title
-  const numMatch = text.match(/^\d+[\.\)]\s*\*?\*?([^*\n]+)/)
-  if (numMatch) return numMatch[1].trim()
-
-  // First line, truncated
-  const firstLine = text.split('\n')[0].replace(/^[\d.\-•)\s]+/, '').trim()
-  return firstLine.length > 50 ? firstLine.slice(0, 47) + '...' : firstLine
-}
+// Default guide when arriving without a topic
+const DEFAULT_TOPIC = null
 
 export default function AssistantPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [messages, setMessages] = useState([])
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  // Track which assistant messages are expanded (show all ideas vs one at a time)
-  const [expandedIdeas, setExpandedIdeas] = useState({}) // { messageIndex: currentIdeaIndex }
-  const messagesEndRef = useRef(null)
-  const inputRef = useRef(null)
-  const hasAutoSent = useRef(false)
+  const topicParam = searchParams.get('topic')
+  const [selectedTopic, setSelectedTopic] = useState(topicParam || DEFAULT_TOPIC)
+  const [stepIndex, setStepIndex] = useState(0)
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, expandedIdeas])
+  const guide = selectedTopic ? GUIDES[selectedTopic] : null
+  const step = guide ? guide.steps[stepIndex] : null
+  const isLastStep = guide ? stepIndex >= guide.steps.length - 1 : false
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  const handleSelectTopic = (topicId) => {
+    setSelectedTopic(topicId)
+    setStepIndex(0)
+  }
 
-  const sendMessage = useCallback(async (text) => {
-    const userMessage = text || input.trim()
-    if (!userMessage || isLoading) return
-
-    const newMessages = [...messages, { role: 'user', content: userMessage }]
-    setMessages(newMessages)
-    setInput('')
-    setIsLoading(true)
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      })
-
-      if (!res.ok) throw new Error('Failed to get response')
-
-      const data = await res.json()
-      const newMsgIndex = newMessages.length
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: data.message },
-      ])
-      // Start showing just the first idea
-      setExpandedIdeas((prev) => ({ ...prev, [newMsgIndex]: 0 }))
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content:
-            'Sorry, I\'m having trouble connecting right now. Please make sure the API key is configured and try again.',
-        },
-      ])
-    } finally {
-      setIsLoading(false)
+  const handleNext = () => {
+    if (!isLastStep) {
+      setStepIndex(stepIndex + 1)
     }
-  }, [input, isLoading, messages])
+  }
 
-  // Auto-send prompt from URL param (when user taps a quick-start card)
-  useEffect(() => {
-    const startPrompt = searchParams.get('start')
-    if (startPrompt && !hasAutoSent.current && messages.length === 0) {
-      hasAutoSent.current = true
-      sendMessage(startPrompt)
+  const handleBack = () => {
+    if (stepIndex > 0) {
+      setStepIndex(stepIndex - 1)
+    } else {
+      setSelectedTopic(null)
+      setStepIndex(0)
     }
-  }, [searchParams, messages.length, sendMessage])
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    sendMessage()
-  }
-
-  const showNextIdea = (msgIndex) => {
-    setExpandedIdeas((prev) => ({
-      ...prev,
-      [msgIndex]: (prev[msgIndex] ?? 0) + 1,
-    }))
-  }
-
-  const showAllIdeas = (msgIndex) => {
-    setExpandedIdeas((prev) => ({
-      ...prev,
-      [msgIndex]: 'all',
-    }))
-  }
-
-  const handleExploreIdea = (ideaText) => {
-    const title = getIdeaTitle(ideaText)
-    sendMessage(`Tell me more about: ${title}`)
   }
 
   return (
     <div className="flex flex-col h-[100dvh] bg-[#050505]">
-      {/* ===== Header ===== */}
+      {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#050505]/80 backdrop-blur-xl">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => (guide ? handleBack() : navigate('/'))}
           className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.05] text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-all"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF6B35]/20 to-[#06D6A0]/20">
-            <Bot className="h-4.5 w-4.5 text-[#FF6B35]" />
+            <BookOpen className="h-4.5 w-4.5 text-[#FF6B35]" />
           </div>
           <div>
-            <h1 className="text-sm font-semibold text-white leading-tight">ToGoGo AI</h1>
-            <p className="text-[11px] text-zinc-500">Your personal selling assistant</p>
+            <h1 className="text-sm font-semibold text-white leading-tight">
+              {guide ? guide.title : 'Guides'}
+            </h1>
+            <p className="text-[11px] text-zinc-500">
+              {guide ? `Step ${stepIndex + 1} of ${guide.steps.length}` : 'Tap a topic to get started'}
+            </p>
           </div>
         </div>
-        <Sparkles className="ml-auto h-4 w-4 text-[#FFD23F]/40" />
       </div>
 
-      {/* ===== Messages Area ===== */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-5">
-        {messages.length === 0 && !isLoading ? (
-          <div className="flex flex-col items-center text-center pt-8 px-4">
-            {/* Welcome state */}
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mb-6">
-              <Bot className="h-8 w-8 text-[#FF6B35]" />
-            </div>
-            <h2 className="font-heading text-2xl font-bold text-white mb-3">
-              How can I help?
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto px-5 py-6">
+        {!guide ? (
+          /* ─── Topic picker ─── */
+          <div className="flex flex-col items-center text-center pt-6">
+            <div className="text-4xl mb-4">📖</div>
+            <h2 className="font-heading text-2xl font-bold text-white mb-2">
+              How can we help?
             </h2>
             <p className="text-sm text-zinc-500 max-w-[280px] mb-10 leading-relaxed">
-              Just tap a button below — I'll do all the work for you.
+              Pick a topic and we'll walk you through everything step by step.
             </p>
 
-            {/* Suggestion chips — visual & tappable */}
-            <div className="flex flex-col gap-3 w-full max-w-[300px]">
-              {SUGGESTIONS.map((s) => (
+            <div className="flex flex-col gap-3 w-full max-w-[340px]">
+              {Object.entries(GUIDES).map(([id, g]) => (
                 <button
-                  key={s.text}
-                  onClick={() => sendMessage(s.text)}
-                  className="group text-left px-5 py-4 rounded-2xl bg-[#111] border border-white/[0.06] text-sm text-zinc-400 hover:text-white hover:border-white/[0.12] hover:bg-[#161616] transition-all duration-300 active:scale-[0.98]"
+                  key={id}
+                  onClick={() => handleSelectTopic(id)}
+                  className="group text-left px-5 py-4 rounded-2xl bg-[#111] border border-white/[0.06] hover:border-white/[0.12] hover:bg-[#161616] transition-all duration-300 active:scale-[0.98] flex items-center justify-between"
                 >
-                  <span className="mr-3 text-lg">{s.emoji}</span>
-                  {s.text}
+                  <div>
+                    <span className="mr-3 text-lg">{g.emoji}</span>
+                    <span className="text-sm font-medium text-zinc-300 group-hover:text-white transition-colors">
+                      {g.title}
+                    </span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
                 </button>
               ))}
             </div>
           </div>
         ) : (
-          <>
-            {messages.map((msg, i) => {
-              const ideas = msg.role === 'assistant' ? splitIntoIdeas(msg.content) : null
-              const currentIdeaIndex = expandedIdeas[i]
-              const hasMultipleIdeas = ideas && ideas.length > 1
-              const showingAll = currentIdeaIndex === 'all'
-              const visibleCount = showingAll
-                ? ideas?.length
-                : Math.min((currentIdeaIndex ?? 0) + 1, ideas?.length ?? 1)
-              const hasMore = hasMultipleIdeas && !showingAll && visibleCount < ideas.length
+          /* ─── Step-by-step guide ─── */
+          <div className="max-w-[400px] mx-auto">
+            {/* Emoji */}
+            <div className="text-center mb-6">
+              <span className="text-5xl">{guide.emoji}</span>
+            </div>
 
-              return (
-                <div key={i}>
-                  <div
-                    className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
-                    {msg.role === 'assistant' && (
-                      <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mt-0.5">
-                        <Bot className="h-3.5 w-3.5 text-[#FF6B35]" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[82%] rounded-2xl px-4 py-3.5 text-sm leading-relaxed ${
-                        msg.role === 'user'
-                          ? 'bg-[#FF6B35] text-white rounded-br-md'
-                          : 'bg-[#111] text-zinc-200 border border-white/[0.06] rounded-bl-md'
-                      }`}
-                    >
-                      {msg.role === 'assistant' ? (
-                        hasMultipleIdeas ? (
-                          <div className="space-y-3">
-                            {ideas.slice(0, visibleCount).map((idea, idx) => (
-                              <div key={idx}>
-                                <div
-                                  dangerouslySetInnerHTML={{ __html: formatMessage(idea) }}
-                                />
-                                {/* Explore this idea button */}
-                                <button
-                                  onClick={() => handleExploreIdea(idea)}
-                                  className="mt-2 flex items-center gap-1.5 text-xs font-medium text-[#FFD23F] hover:text-[#FFD23F]/80 transition-colors"
-                                >
-                                  <Lightbulb className="h-3 w-3" />
-                                  Tell me more about this
-                                </button>
-                                {idx < visibleCount - 1 && (
-                                  <div className="border-t border-white/[0.06] mt-3" />
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div
-                            dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
-                          />
-                        )
-                      ) : (
-                        msg.content
-                      )}
-                    </div>
-                    {msg.role === 'user' && (
-                      <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-[#FF6B35]/15 mt-0.5">
-                        <User className="h-3.5 w-3.5 text-[#FF6B35]" />
-                      </div>
-                    )}
-                  </div>
+            {/* Progress dots */}
+            <div className="flex items-center justify-center gap-2 mb-8">
+              {guide.steps.map((_, i) => (
+                <div
+                  key={i}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    i === stepIndex
+                      ? 'w-6 bg-[#FF6B35]'
+                      : i < stepIndex
+                        ? 'w-1.5 bg-[#FF6B35]/40'
+                        : 'w-1.5 bg-white/[0.08]'
+                  }`}
+                />
+              ))}
+            </div>
 
-                  {/* Continue / Show All buttons */}
-                  {msg.role === 'assistant' && hasMore && (
-                    <div className="flex gap-2 ml-10 mt-2.5">
-                      <button
-                        onClick={() => showNextIdea(i)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FF6B35]/10 border border-[#FF6B35]/20 text-xs font-semibold text-[#FF6B35] hover:bg-[#FF6B35]/15 transition-all active:scale-[0.97]"
-                      >
-                        Next idea
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
-                      <button
-                        onClick={() => showAllIdeas(i)}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.06] text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:border-white/[0.1] transition-all active:scale-[0.97]"
-                      >
-                        Show all ({ideas.length - visibleCount} more)
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-
-            {/* Loading indicator */}
-            {isLoading && (
-              <div className="flex gap-2.5 justify-start">
-                <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-[#FF6B35]/15 to-[#06D6A0]/15 mt-0.5">
-                  <Bot className="h-3.5 w-3.5 text-[#FF6B35]" />
-                </div>
-                <div className="bg-[#111] border border-white/[0.06] rounded-2xl rounded-bl-md px-4 py-3">
-                  <div className="flex items-center gap-2 text-sm text-zinc-500">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[#FF6B35]" />
-                    Thinking...
-                  </div>
-                </div>
+            {/* Step content */}
+            <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-6">
+              <h3 className="font-heading text-lg font-bold text-white mb-4">
+                {step.heading}
+              </h3>
+              <div className="text-sm text-zinc-400 leading-relaxed whitespace-pre-line">
+                {step.body}
               </div>
-            )}
-          </>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+            </div>
 
-      {/* ===== Input Area ===== */}
-      <div className="border-t border-white/[0.05] bg-[#0a0a0a] px-3 py-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-        <form onSubmit={handleSubmit} className="flex items-center gap-2 max-w-lg mx-auto">
-          <div className="flex-1 min-w-0 rounded-2xl bg-[#161616]">
-            <input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type or just tap a button above..."
-              disabled={isLoading}
-              className="w-full bg-transparent border-none outline-none py-3 px-4 text-sm text-white placeholder-zinc-600"
-            />
+            {/* Navigation buttons */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={handleBack}
+                className="flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-white/[0.04] border border-white/[0.06] text-sm font-medium text-zinc-400 hover:text-white hover:border-white/[0.12] transition-all active:scale-[0.97]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </button>
+
+              {isLastStep ? (
+                <button
+                  onClick={() => navigate('/')}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-[#06D6A0] text-sm font-bold text-black hover:bg-[#06D6A0]/90 transition-all active:scale-[0.97]"
+                >
+                  Done — Back to Home
+                </button>
+              ) : (
+                <button
+                  onClick={handleNext}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 rounded-xl bg-[#FF6B35] text-sm font-bold text-white hover:bg-[#e55a2b] transition-all active:scale-[0.97]"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <button
-            type="submit"
-            disabled={!input.trim() || isLoading}
-            className="flex-shrink-0 flex items-center justify-center w-11 h-11 rounded-xl transition-all duration-200"
-            style={{
-              background: !input.trim() || isLoading ? '#222' : '#FF6B35',
-              opacity: !input.trim() || isLoading ? 0.4 : 1,
-            }}
-          >
-            <Send className="h-4 w-4 text-white" />
-          </button>
-        </form>
+        )}
       </div>
     </div>
   )
