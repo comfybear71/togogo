@@ -6,26 +6,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  // FIRST: return raw debug
-  if (req.query?.debug === '1') {
-    return res.status(200).json({ bodyType: typeof req.body, body: req.body, method: req.method })
-  }
-
   try {
-    // Debug: return raw body info
-    const rawBodyType = typeof req.body
-    const rawBodyPreview = typeof req.body === 'string' ? req.body.slice(0, 200) : JSON.stringify(req.body)?.slice(0, 200)
-
-    // Parse body if needed
-    let body = req.body
-    if (typeof body === 'string') {
-      try {
-        body = JSON.parse(body)
-      } catch (parseErr) {
-        return res.status(400).json({ error: 'Body parse failed', bodyType: rawBodyType, bodyPreview: rawBodyPreview, parseError: parseErr.message })
-      }
-    }
-    const { email, password, name } = body || {}
+    const { email, password, name } = req.body || {}
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required', bodyType: typeof req.body, hasBody: !!req.body })
