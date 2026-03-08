@@ -100,11 +100,14 @@ router.get('/trending', async (req, res, next) => {
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value)
 
-    // If live APIs returned nothing, use sample data
+    // If live APIs returned nothing, use sample data from all suppliers
     if (products.length === 0) {
       products = [
         ...getSampleCJProducts(searchTerms[0]),
+        ...getSampleAliExpressProducts(searchTerms[0]),
         ...getSamplePrintfulProducts(searchTerms[0]),
+        ...getSamplePrintifyProducts(searchTerms[0]),
+        ...getSampleGootenProducts(searchTerms[0]),
       ]
     }
 
@@ -197,6 +200,75 @@ router.get('/aliexpress/search', async (req, res, next) => {
     })
   } catch (err) {
     next(err)
+  }
+})
+
+// AliExpress categories
+router.get('/aliexpress/categories', async (_req, res, next) => {
+  try {
+    const data = await callAliExpressAPI('aliexpress.ds.category.get', {})
+    const categories = data?.aliexpress_ds_category_get_response?.result?.categories?.category || []
+    res.json({ categories })
+  } catch (err) {
+    // Return empty if API not configured
+    res.json({ categories: [], message: 'AliExpress API keys not configured.' })
+  }
+})
+
+// AliExpress shipping calculator
+router.get('/aliexpress/shipping', async (req, res, next) => {
+  try {
+    const { product_id, country = 'US', quantity = 1 } = req.query
+    if (!product_id) return res.status(400).json({ error: 'product_id required' })
+
+    const data = await callAliExpressAPI('aliexpress.ds.logistics.calculate', {
+      product_id,
+      country_code: country,
+      product_num: String(quantity),
+      send_goods_country_code: 'CN',
+    })
+
+    const options = data?.aliexpress_ds_logistics_calculate_response?.result?.logistics_options || []
+    res.json({
+      shipping_options: options.map(o => ({
+        service: o.logistics_company || o.service_name,
+        cost: parseFloat(o.freight?.amount || '0'),
+        currency: o.freight?.currency || 'USD',
+        estimated_days: o.estimated_delivery_time || null,
+        tracking: o.tracking_available !== false,
+      })),
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// AliExpress hot products / recommended feed
+router.get('/aliexpress/hot', async (req, res, next) => {
+  try {
+    const { category, page = 1, country = 'US' } = req.query
+
+    const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+      country: country,
+      target_currency: 'USD',
+      target_language: 'en',
+      page_no: String(page),
+      page_size: '20',
+      sort: 'LAST_VOLUME_DESC',
+      ...(category ? { category_id: category } : {}),
+    })
+
+    const resp = data?.aliexpress_ds_recommend_feed_get_response?.result
+    const products = (resp?.products?.product || []).map(p => normaliseAliExpressProduct(p))
+
+    res.json({
+      products,
+      total: resp?.total_record_count || products.length,
+      live: products.length > 0 && products[0]?._live,
+    })
+  } catch (err) {
+    // Fallback to sample data
+    res.json({ products: getSampleAliExpressProducts('trending'), live: false })
   }
 })
 
