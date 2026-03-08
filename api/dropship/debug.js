@@ -20,6 +20,74 @@ export default async function handler(req, res) {
     GOOTEN_PARTNER_BILLING_KEY: !!process.env.GOOTEN_PARTNER_BILLING_KEY,
   }
 
+  // Raw API test for CJ
+  try {
+    const cjKey = process.env.CJ_DROPSHIPPING_API_KEY
+    const cjAuth = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: cjKey }),
+    })
+    const cjAuthData = await cjAuth.json()
+    results.cjAuth = {
+      status: cjAuth.status,
+      hasToken: !!cjAuthData.data?.accessToken,
+      code: cjAuthData.code,
+      message: cjAuthData.message,
+      result: cjAuthData.result,
+    }
+
+    if (cjAuthData.data?.accessToken) {
+      const cjSearch = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': cjAuthData.data.accessToken },
+        body: JSON.stringify({ productNameEn: query, pageNum: 1, pageSize: 5 }),
+      })
+      const cjSearchData = await cjSearch.json()
+      results.cjSearch = {
+        status: cjSearch.status,
+        code: cjSearchData.code,
+        message: cjSearchData.message,
+        total: cjSearchData.data?.total || cjSearchData.data?.list?.length || 0,
+        firstTitle: cjSearchData.data?.list?.[0]?.productNameEn,
+      }
+    }
+  } catch (e) {
+    results.cjAuth = { error: e.message }
+  }
+
+  // Raw API test for AliExpress
+  try {
+    const aeKey = process.env.ALIEXPRESS_APP_KEY
+    const aeSecret = process.env.ALIEXPRESS_APP_SECRET
+    const { default: crypto } = await import('crypto')
+    const params = {
+      app_key: aeKey,
+      method: 'aliexpress.ds.feedname.get',
+      sign_method: 'sha256',
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      format: 'json',
+      v: '2.0',
+    }
+    const sorted = Object.keys(params).filter(k => k !== 'sign').sort().map(k => `${k}${params[k]}`).join('')
+    params.sign = crypto.createHmac('sha256', aeSecret).update(`${aeSecret}${sorted}${aeSecret}`).digest('hex').toUpperCase()
+
+    const aeRes = await fetch(`https://api-sg.aliexpress.com/sync?${new URLSearchParams(params)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    })
+    const aeData = await aeRes.json()
+    results.aliexpressRaw = {
+      status: aeRes.status,
+      feeds: aeData?.aliexpress_ds_feedname_get_response?.result?.feed_names?.feed_name?.length || 0,
+      error: aeData?.error_response?.msg,
+      code: aeData?.error_response?.code,
+      raw: JSON.stringify(aeData).slice(0, 500),
+    }
+  } catch (e) {
+    results.aliexpressRaw = { error: e.message }
+  }
+
   // Test each supplier individually
   const suppliers = [
     { name: 'CJ Dropshipping', fn: () => searchCJ(query) },
