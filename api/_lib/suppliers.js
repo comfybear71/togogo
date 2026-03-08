@@ -560,44 +560,136 @@ function pickBestFeeds(feeds, query, count = 3) {
   return matched.length > 0 ? matched : feeds.slice(0, count).map(getName)
 }
 
+// Map our categories to AliExpress category IDs for affiliate keyword search
+const ALIEXPRESS_CATEGORY_MAP = {
+  pet: '200003655',
+  dog: '200003655',
+  cat: '200003655',
+  animal: '200003655',
+  sport: '200003530',
+  fitness: '200003530',
+  gym: '200003530',
+  yoga: '200003530',
+  outdoor: '200003530',
+  camping: '200003530',
+  toy: '200003482',
+  puzzle: '200003482',
+  game: '200003482',
+  plush: '200003482',
+  beauty: '200003498',
+  makeup: '200003498',
+  skincare: '200003498',
+  cosmetic: '200003498',
+  hair: '200003498',
+  home: '200003109',
+  kitchen: '200003109',
+  garden: '200003109',
+  furniture: '200003109',
+  decor: '200003109',
+  lamp: '200003109',
+  light: '200003109',
+  electronics: '200000147',
+  computer: '200000147',
+  laptop: '200000147',
+  earbuds: '200000147',
+  headphone: '200000147',
+  phone: '200000345',
+  mobile: '200000345',
+  charger: '200000345',
+  car: '200000298',
+  auto: '200000298',
+  vehicle: '200000298',
+  dash: '200000298',
+  motor: '200000298',
+  watch: '200000399',
+  jewel: '200001996',
+  necklace: '200001996',
+  ring: '200001996',
+  bracelet: '200001996',
+  fashion: '200003490',
+  sunglasses: '200003490',
+  dress: '200000346',
+  shirt: '200000346',
+  baby: '200001890',
+  kid: '200001890',
+  child: '200001890',
+}
+
+function getCategoryIdForQuery(query) {
+  if (!query) return null
+  const q = query.toLowerCase()
+  for (const [keyword, catId] of Object.entries(ALIEXPRESS_CATEGORY_MAP)) {
+    if (q.includes(keyword)) return catId
+  }
+  return null
+}
+
+// Try keyword search via affiliate product query API
+async function searchAliExpressKeyword(query, page = 1) {
+  const params = {
+    keywords: query,
+    target_currency: 'USD',
+    target_language: 'EN',
+    page_no: String(page),
+    page_size: '50',
+    sort: 'LAST_VOLUME_DESC',
+  }
+  const categoryId = getCategoryIdForQuery(query)
+  if (categoryId) params.category_ids = categoryId
+
+  const data = await callAliExpressAPI('aliexpress.affiliate.product.query', params)
+  const resp = data?.aliexpress_affiliate_product_query_response?.resp_result?.result
+  const productList = resp?.products?.product || []
+  return productList
+}
+
 export async function searchAliExpress(query, page = 1) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
   if (!appKey) return getSampleAliExpressProducts(query)
 
   try {
-    const feeds = await getAliExpressFeedNames()
-
-    // Pick up to 3 relevant feeds to search
-    const feedNames = pickBestFeeds(feeds, query, 3)
-
-    // Fetch from multiple feeds in parallel for better category coverage
-    const feedResults = await Promise.allSettled(
-      feedNames.map(feedName =>
-        callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
-          feed_name: feedName,
-          target_currency: 'USD',
-          target_language: 'EN',
-          page_no: String(page),
-          page_size: '50',
-          sort: 'volumeDesc',
-        })
-      )
-    )
-
-    let allProducts = []
-    for (const result of feedResults) {
-      if (result.status !== 'fulfilled' || !result.value) continue
-      const feedResp = result.value?.aliexpress_ds_recommend_feed_get_response
-      const resp = feedResp?.resp_result?.result || feedResp?.result
-      const productList = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
-      allProducts.push(...productList)
+    // Strategy 1: Try keyword search via affiliate API (supports actual search)
+    let productList = []
+    if (query) {
+      try {
+        productList = await searchAliExpressKeyword(query, page)
+      } catch (e) {
+        // Affiliate API not available, fall through to feed API
+      }
     }
 
-    if (allProducts.length === 0) {
+    // Strategy 2: Fall back to feed-based browsing
+    if (productList.length === 0) {
+      const feeds = await getAliExpressFeedNames()
+      const feedNames = pickBestFeeds(feeds, query, 3)
+
+      const feedResults = await Promise.allSettled(
+        feedNames.map(feedName =>
+          callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+            feed_name: feedName,
+            target_currency: 'USD',
+            target_language: 'EN',
+            page_no: String(page),
+            page_size: '50',
+            sort: 'volumeDesc',
+          })
+        )
+      )
+
+      for (const result of feedResults) {
+        if (result.status !== 'fulfilled' || !result.value) continue
+        const feedResp = result.value?.aliexpress_ds_recommend_feed_get_response
+        const resp = feedResp?.resp_result?.result || feedResp?.result
+        const items = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
+        productList.push(...items)
+      }
+    }
+
+    if (productList.length === 0) {
       return getSampleAliExpressProducts(query)
     }
 
-    let products = allProducts.map(p => normaliseAliExpressProduct(p))
+    let products = productList.map(p => normaliseAliExpressProduct(p))
 
     // Deduplicate by product_id
     const seen = new Set()
@@ -607,17 +699,23 @@ export async function searchAliExpress(query, page = 1) {
       return true
     })
 
-    // Client-side keyword filter since feed API doesn't support keyword search
+    // Client-side keyword filter for feed results (affiliate results are already relevant)
     if (query) {
       const q = query.toLowerCase()
-      const keywords = q.split(/\s+/).filter(kw => kw.length > 1)
+      const keywords = q.split(/\s+/).filter(kw => kw.length > 2)
       const filtered = products.filter(p => {
         const text = (p.title + ' ' + p.category).toLowerCase()
         return keywords.some(kw => text.includes(kw))
       })
-      // If keyword filter finds matches, use them; otherwise fall back to sample
+      if (filtered.length >= 3) return filtered
+      // If we got very few matches, also include products from the right AliExpress category
+      const categoryId = getCategoryIdForQuery(query)
+      if (categoryId && filtered.length < 3) {
+        // Return whatever we have — the feed returned products that may be loosely relevant
+        // But don't return totally irrelevant products
+        return filtered.length > 0 ? filtered : getSampleAliExpressProducts(query)
+      }
       if (filtered.length > 0) return filtered
-      // No relevant products in any feed — return sample data with correct category
       return getSampleAliExpressProducts(query)
     }
 
@@ -629,17 +727,26 @@ export async function searchAliExpress(query, page = 1) {
 }
 
 function normaliseAliExpressProduct(p) {
-  const cost = parseFloat(p.target_sale_price || p.target_original_price || '0')
-  const originalPrice = parseFloat(p.target_original_price || '0')
+  // Handle both feed API and affiliate API response formats
+  const cost = parseFloat(p.target_sale_price || p.app_sale_price || p.target_original_price || p.original_price || '0')
+  const originalPrice = parseFloat(p.target_original_price || p.original_price || '0')
   const shipping = 0
   const suggestedPrice = Math.ceil(cost * 2.5 * 100) / 100
 
+  const title = p.product_title || p.product_detail_url?.split('/item/')?.pop()?.replace('.html', '') || 'AliExpress Product'
+  const image = p.product_main_image_url || p.product_main_image || ''
+  const smallImages = p.product_small_image_urls?.string
+    || p.product_small_image_urls?.productSmallImageUrl
+    || (p.product_small_image_list ? [p.product_small_image_list] : [])
+    || []
+  const evalRate = p.evaluate_rate || p.evaluation_rate || ''
+
   return {
     id: `ae_${p.product_id}`,
-    title: p.product_title || 'AliExpress Product',
-    description: p.product_title || '',
-    image: p.product_main_image_url || '',
-    images: p.product_small_image_urls?.string || p.product_small_image_urls?.productSmallImageUrl || [],
+    title,
+    description: title,
+    image,
+    images: smallImages,
     cost,
     originalPrice,
     shipping,
@@ -649,11 +756,11 @@ function normaliseAliExpressProduct(p) {
     deliveryDays: p.ship_to_days || 14,
     supplier: 'AliExpress',
     supplierLogo: '🛒',
-    sourceUrl: p.product_detail_url || `https://www.aliexpress.com/item/${p.product_id}.html`,
+    sourceUrl: p.product_detail_url || p.promotion_link || `https://www.aliexpress.com/item/${p.product_id}.html`,
     minOrderQty: 1,
-    category: p.first_level_category_name || p.second_level_category_name || '',
-    rating: p.evaluate_rate ? parseFloat(p.evaluate_rate.replace('%', '')) / 100 : null,
-    orders: p.lastest_volume || 0,
+    category: p.first_level_category_name || p.second_level_category_name || p.first_level_category_id || '',
+    rating: evalRate ? parseFloat(String(evalRate).replace('%', '')) / (String(evalRate).includes('%') ? 100 : 1) : null,
+    orders: p.lastest_volume || p.product_volume || 0,
     discount: originalPrice > cost ? Math.round((1 - cost / originalPrice) * 100) : 0,
     _live: true,
   }
@@ -801,26 +908,60 @@ export function getCuratedTrending(category, query) {
 // Now with real Unsplash images
 // ============================================
 const SAMPLE_IMAGES = {
+  // Electronics
   'phone case': 'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=400&h=400&fit=crop',
   'led light': 'https://images.unsplash.com/photo-1615066390971-03e4e1c36ddf?w=400&h=400&fit=crop',
-  't-shirt': 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop',
-  'jewellery': 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop',
-  'mug': 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=400&h=400&fit=crop',
+  'led strip': 'https://images.unsplash.com/photo-1615066390971-03e4e1c36ddf?w=400&h=400&fit=crop',
   'earbuds': 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop',
   'wireless': 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop',
+  'charger': 'https://images.unsplash.com/photo-1622957461168-202e5b43174e?w=400&h=400&fit=crop',
+  'portable charger': 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=400&h=400&fit=crop',
+  // Fashion
   'sunglasses': 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop',
   'watch': 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400&h=400&fit=crop',
+  'jewellery': 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop',
   'necklace': 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop',
+  // Apparel
+  't-shirt': 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop',
   'hoodie': 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop',
+  'mug': 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=400&h=400&fit=crop',
   'poster': 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=400&h=400&fit=crop',
+  // Home
+  'pillow': 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?w=400&h=400&fit=crop',
+  'blanket': 'https://images.unsplash.com/photo-1580301762395-21ce4d7a4c1d?w=400&h=400&fit=crop',
+  'kitchen': 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=400&fit=crop',
+  'organiser': 'https://images.unsplash.com/photo-1506806732259-39c2d0268443?w=400&h=400&fit=crop',
+  // Beauty
+  'makeup brush': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
+  'makeup': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
+  'skincare': 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=400&fit=crop',
+  'beauty': 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&h=400&fit=crop',
+  'hair': 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&h=400&fit=crop',
+  // Sports
   'water bottle': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop',
   'yoga mat': 'https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=400&h=400&fit=crop',
-  'pillow': 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?w=400&h=400&fit=crop',
-  'dog toy': 'https://images.unsplash.com/photo-1535294435445-d7249b8f7b5f?w=400&h=400&fit=crop',
-  'makeup brush': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
-  'charger': 'https://images.unsplash.com/photo-1622957461168-202e5b43174e?w=400&h=400&fit=crop',
+  'resistance band': 'https://images.unsplash.com/photo-1598289431512-b97b0917affc?w=400&h=400&fit=crop',
+  'gym bag': 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&h=400&fit=crop',
   'bag': 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&h=400&fit=crop',
-  'blanket': 'https://images.unsplash.com/photo-1580301762395-21ce4d7a4c1d?w=400&h=400&fit=crop',
+  // Pets
+  'dog toy': 'https://images.unsplash.com/photo-1535294435445-d7249b8f7b5f?w=400&h=400&fit=crop',
+  'pet bed': 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&h=400&fit=crop',
+  'cat toy': 'https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400&h=400&fit=crop',
+  'pet bowl': 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=400&h=400&fit=crop',
+  'pet': 'https://images.unsplash.com/photo-1535294435445-d7249b8f7b5f?w=400&h=400&fit=crop',
+  // Toys
+  'fidget toy': 'https://images.unsplash.com/photo-1622297845775-5ff3fef71d13?w=400&h=400&fit=crop',
+  'fidget': 'https://images.unsplash.com/photo-1622297845775-5ff3fef71d13?w=400&h=400&fit=crop',
+  'puzzle': 'https://images.unsplash.com/photo-1606503153255-59d8b8b82176?w=400&h=400&fit=crop',
+  'rc car': 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400&h=400&fit=crop',
+  'plush': 'https://images.unsplash.com/photo-1559715541-5daf8a0296d0?w=400&h=400&fit=crop',
+  'toy': 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400&h=400&fit=crop',
+  // Automotive
+  'car phone': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
+  'car light': 'https://images.unsplash.com/photo-1489824904134-891ab64532f1?w=400&h=400&fit=crop',
+  'car organiser': 'https://images.unsplash.com/photo-1502877338535-766e1452684a?w=400&h=400&fit=crop',
+  'dash cam': 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400&h=400&fit=crop',
+  'car': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
 }
 
 function getImageForQuery(query) {
