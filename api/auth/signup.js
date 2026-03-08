@@ -6,60 +6,36 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
+  const { email, password, name } = req.body || {}
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' })
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' })
+  }
+
   try {
-    const { email, password, name } = req.body || {}
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required', bodyType: typeof req.body, hasBody: !!req.body })
-    }
-
-    if (password.length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' })
-    }
-
-    // Step-by-step to find exact error
-    let existing
-    try {
-      const result = await sql`SELECT id FROM users WHERE email = ${email.toLowerCase().trim()}`
-      existing = result.rows
-    } catch (dbErr) {
-      return res.status(500).json({ error: 'DB SELECT failed', details: dbErr.message, code: dbErr.code })
-    }
+    // Check if user already exists
+    const { rows: existing } = await sql`
+      SELECT id FROM users WHERE email = ${email.toLowerCase().trim()}
+    `
 
     if (existing.length > 0) {
       return res.status(409).json({ error: 'An account with this email already exists' })
     }
 
-    let passwordHash
-    try {
-      passwordHash = await hashPassword(password)
-    } catch (hashErr) {
-      return res.status(500).json({ error: 'Hash failed', details: hashErr.message })
-    }
-
-    let rows
-    try {
-      const result = await sql`
-        INSERT INTO users (email, password_hash, name, role)
-        VALUES (${email.toLowerCase().trim()}, ${passwordHash}, ${name || email.split('@')[0]}, 'buyer')
-        RETURNING id, email, name, avatar_url, role, created_at
-      `
-      rows = result.rows
-    } catch (insertErr) {
-      return res.status(500).json({ error: 'DB INSERT failed', details: insertErr.message, code: insertErr.code })
-    }
+    // Hash password and create user
+    const passwordHash = await hashPassword(password)
+    const { rows } = await sql`
+      INSERT INTO users (email, password_hash, name, role)
+      VALUES (${email.toLowerCase().trim()}, ${passwordHash}, ${name || email.split('@')[0]}, 'buyer')
+      RETURNING id, email, name, avatar_url, role, created_at
+    `
 
     const user = rows[0]
-    if (!user) {
-      return res.status(500).json({ error: 'INSERT returned no rows' })
-    }
-
-    let token
-    try {
-      token = generateToken(user)
-    } catch (tokenErr) {
-      return res.status(500).json({ error: 'Token generation failed', details: tokenErr.message, user: { id: user.id, email: user.email, role: user.role } })
-    }
+    const token = generateToken(user)
 
     return res.status(201).json({
       user: {
@@ -73,6 +49,11 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     console.error('Signup error:', error)
-    return res.status(500).json({ error: 'Failed to create account', details: error.message })
+    return res.status(500).json({
+      error: 'Failed to create account',
+      details: error.message,
+      name: error.name,
+      code: error.code,
+    })
   }
 }
