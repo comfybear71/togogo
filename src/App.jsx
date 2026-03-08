@@ -15,6 +15,7 @@ const AuthPage = lazy(() => import('./pages/AuthPage'))
 const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 const SuppliersPage = lazy(() => import('./pages/SuppliersPage'))
 const PlatformsPage = lazy(() => import('./pages/PlatformsPage'))
+const SetupPage = lazy(() => import('./pages/SetupPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 
 function PageLoader() {
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/browse" element={<BrowsePage />} />
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/platforms" element={<PlatformsPage />} />
+          <Route path="/setup" element={<SetupPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
