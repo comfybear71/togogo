@@ -9,8 +9,9 @@ const SORT_OPTIONS = [
   { value: 'fastest', label: 'Fastest Shipping' },
 ]
 
+const ALL_SUPPLIERS = ['CJ Dropshipping', 'AliExpress', 'Printful', 'Printify', 'Gooten']
+
 const SUPPLIER_FILTERS = [
-  { value: '', label: 'All Suppliers' },
   { value: 'CJ Dropshipping', label: '📦 CJ' },
   { value: 'AliExpress', label: '🛒 AliExpress' },
   { value: 'Printful', label: '🎨 Printful' },
@@ -22,14 +23,33 @@ export default function SuppliersPage() {
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
-  const [selectedSupplier, setSelectedSupplier] = useState('')
+  const [selectedSuppliers, setSelectedSuppliers] = useState(new Set(ALL_SUPPLIERS))
   const [sort, setSort] = useState('relevance')
   const [showFilters, setShowFilters] = useState(false)
+
+  const allSelected = selectedSuppliers.size === ALL_SUPPLIERS.length
+
+  const toggleSupplier = (supplier) => {
+    setSelectedSuppliers(prev => {
+      const next = new Set(prev)
+      if (next.has(supplier)) {
+        // Don't allow deselecting the last one
+        if (next.size <= 1) return prev
+        next.delete(supplier)
+      } else {
+        next.add(supplier)
+      }
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelectedSuppliers(allSelected ? new Set([ALL_SUPPLIERS[0]]) : new Set(ALL_SUPPLIERS))
+  }
 
   const { data: searchData, isLoading: searching } = useSupplierSearch({
     query: query || undefined,
     category: selectedCategory || undefined,
-    supplier: selectedSupplier || undefined,
     sort,
   })
 
@@ -37,7 +57,9 @@ export default function SuppliersPage() {
   const { data: catData } = useSupplierCategories()
 
   const categories = catData?.categories || []
-  const products = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
+  const rawProducts = query || selectedCategory ? (searchData?.products || []) : (trendingData?.products || [])
+  // Client-side multi-supplier filtering
+  const products = allSelected ? rawProducts : rawProducts.filter(p => selectedSuppliers.has(p.supplier))
   const isLoading = searching || loadingTrending
   const isLive = searchData?.live
 
@@ -91,13 +113,27 @@ export default function SuppliersPage() {
           <ChevronDown className={`h-3 w-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
         </button>
 
-        {selectedSupplier && (
-          <button
-            onClick={() => setSelectedSupplier('')}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-[#06D6A0]/15 border border-[#06D6A0]/30 text-[#06D6A0]"
-          >
-            {selectedSupplier} &times;
-          </button>
+        {!allSelected && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {[...selectedSuppliers].map(s => {
+              const filter = SUPPLIER_FILTERS.find(f => f.value === s)
+              return (
+                <button
+                  key={s}
+                  onClick={() => toggleSupplier(s)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-[#06D6A0]/15 border border-[#06D6A0]/30 text-[#06D6A0]"
+                >
+                  {filter?.label || s} &times;
+                </button>
+              )
+            })}
+            <button
+              onClick={toggleAll}
+              className="px-2.5 py-1.5 rounded-lg text-[10px] font-medium bg-white/5 border border-white/[0.06] text-zinc-400 hover:text-zinc-200"
+            >
+              Show all
+            </button>
+          </div>
         )}
 
         {query && (
@@ -119,11 +155,17 @@ export default function SuppliersPage() {
           <div>
             <label className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5 block">Supplier</label>
             <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={toggleAll}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${allSelected ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
+              >
+                All Suppliers
+              </button>
               {SUPPLIER_FILTERS.map((s) => (
                 <button
                   key={s.value}
-                  onClick={() => setSelectedSupplier(s.value)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${selectedSupplier === s.value ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
+                  onClick={() => toggleSupplier(s.value)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors ${selectedSuppliers.has(s.value) ? 'bg-white/10 border-white/20 text-white' : 'bg-transparent border-white/[0.06] text-zinc-500 hover:text-zinc-300'}`}
                 >
                   {s.label}
                 </button>
