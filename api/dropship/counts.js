@@ -31,10 +31,9 @@ async function getCJCount() {
     if (!token) return { count: 500000, estimated: true }
 
     // Query with empty search to get total
-    const res = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'CJ-Access-Token': token },
-      body: JSON.stringify({ pageNum: 1, pageSize: 1 }),
+    const res = await fetch(`https://developers.cjdropshipping.com/api2.0/v1/product/list?${new URLSearchParams({ pageNum: '1', pageSize: '1' })}`, {
+      method: 'GET',
+      headers: { 'CJ-Access-Token': token },
     })
     const data = await res.json()
     const total = data.data?.total || data.data?.pageTotal || 500000
@@ -65,9 +64,11 @@ async function getAliExpressCount() {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
     const data = await res.json()
-    const feeds = data?.aliexpress_ds_feedname_get_response?.result?.feed_names?.feed_name || []
-    // Each feed has thousands; AliExpress has millions total
-    return { count: 10000000, estimated: true, feeds: feeds.length }
+    const respResult = data?.aliexpress_ds_feedname_get_response?.resp_result?.result
+    const promos = respResult?.promos?.promo || []
+    // Sum product counts across all feeds for a real total
+    const totalProducts = promos.reduce((sum, p) => sum + (p.product_num || 0), 0)
+    return { count: totalProducts || 10000000, estimated: totalProducts === 0, feeds: promos.length }
   } catch {
     return { count: 10000000, estimated: true }
   }
