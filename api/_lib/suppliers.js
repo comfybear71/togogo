@@ -1160,7 +1160,7 @@ export async function searchAllSuppliers(query, page = 1, suppliersParam) {
     r.status === 'fulfilled' && r.value.length > 0 && r.value[0]._live
   )
 
-  return { products: filterNSFW(products), hasLiveData }
+  return { products, hasLiveData }
 }
 
 // ============================================

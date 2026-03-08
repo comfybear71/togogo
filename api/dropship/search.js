@@ -1,4 +1,4 @@
-import { searchAllSuppliers, groupByProduct, parseSuppliers, TRENDING_TERMS } from '../_lib/suppliers.js'
+import { searchAllSuppliers, groupByProduct, parseSuppliers, TRENDING_TERMS, filterNSFW } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -42,6 +42,11 @@ export default async function handler(req, res) {
     }
 
     let products = rawProducts
+
+    // Filter NSFW from category browsing (but allow in direct searches)
+    if (!query && category) {
+      products = filterNSFW(products)
+    }
 
     // Group similar products for price comparison
     products = groupByProduct(products)
