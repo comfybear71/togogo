@@ -9,7 +9,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { messages } = req.body
+    let body = req.body
+    if (typeof body === 'string') body = JSON.parse(body)
+    const { messages } = body || {}
 
     if (!messages || !Array.isArray(messages)) {
       return res.status(400).json({ error: 'Messages array is required' })

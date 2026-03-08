@@ -7,7 +7,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { email, password, name } = req.body
+    // Parse body if needed
+    let body = req.body
+    if (typeof body === 'string') {
+      body = JSON.parse(body)
+    }
+    const { email, password, name } = body || {}
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' })
