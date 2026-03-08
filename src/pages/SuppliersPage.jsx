@@ -298,6 +298,8 @@ export default function SuppliersPage() {
 }
 
 // Product card with price comparison support
+function safe$(val) { return (Number(val) || 0).toFixed(2) }
+
 function ProductCard({ product }) {
   const [showAlts, setShowAlts] = useState(false)
   const hasImage = product.image && product.image.length > 0
@@ -366,11 +368,11 @@ function ProductCard({ product }) {
         <div className="flex items-end justify-between mb-2">
           <div>
             <span className="text-[10px] text-zinc-600 block">Your cost</span>
-            <span className="text-sm font-bold text-white">${product.totalCost.toFixed(2)}</span>
+            <span className="text-sm font-bold text-white">${safe$(product.totalCost)}</span>
           </div>
           <div className="text-right">
             <span className="text-[10px] text-zinc-600 block">Sell for</span>
-            <span className="text-sm font-bold text-[#06D6A0]">${product.suggestedPrice.toFixed(2)}</span>
+            <span className="text-sm font-bold text-[#06D6A0]">${safe$(product.suggestedPrice)}</span>
           </div>
         </div>
 
@@ -379,11 +381,11 @@ function ProductCard({ product }) {
           <div className="flex-1 h-1.5 rounded-full bg-[#1a1a1a] overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-[#06D6A0] to-[#FFD23F]"
-              style={{ width: `${Math.min((product.suggestedMargin / product.suggestedPrice) * 100, 100)}%` }}
+              style={{ width: `${Math.min(((product.suggestedMargin || 0) / (product.suggestedPrice || 1)) * 100, 100)}%` }}
             />
           </div>
           <span className="text-[10px] font-semibold text-[#06D6A0]">
-            ${product.suggestedMargin.toFixed(2)} profit
+            ${safe$(product.suggestedMargin)} profit
           </span>
         </div>
 
@@ -411,7 +413,7 @@ function ProductCard({ product }) {
             {/* Current supplier */}
             <div className="flex items-center justify-between text-[10px] bg-[#06D6A0]/10 rounded-lg px-2 py-1.5">
               <span className="font-semibold text-[#06D6A0]">{product.supplierLogo} {product.supplier}</span>
-              <span className="font-bold text-[#06D6A0]">${product.totalCost.toFixed(2)}</span>
+              <span className="font-bold text-[#06D6A0]">${safe$(product.totalCost)}</span>
             </div>
             {/* Alternatives */}
             {product._alternatives.map((alt) => (
@@ -420,7 +422,7 @@ function ProductCard({ product }) {
                   <span className="text-zinc-300">{alt.supplierLogo} {alt.supplier}</span>
                   <span className="text-zinc-600 ml-1">({alt.deliveryDays}d)</span>
                 </div>
-                <span className="font-semibold text-zinc-300">${alt.totalCost.toFixed(2)}</span>
+                <span className="font-semibold text-zinc-300">${safe$(alt.totalCost)}</span>
               </div>
             ))}
           </div>

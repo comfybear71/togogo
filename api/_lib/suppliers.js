@@ -127,12 +127,12 @@ export async function searchCJ(query, page = 1) {
 }
 
 function normaliseCJProduct(p) {
-  const cost = p.sellPrice || 0
-  const shipping = p.shippingPrice || 0
+  const cost = parseFloat(p.sellPrice) || 0
+  const shipping = parseFloat(p.shippingPrice) || 0
   const suggestedPrice = Math.ceil((cost + shipping) * 2.5 * 100) / 100
   return {
     id: `cj_${p.pid}`,
-    title: p.productNameEn,
+    title: p.productNameEn || 'CJ Product',
     description: p.description || '',
     image: p.productImage || (p.productImageSet?.[0]) || '',
     images: p.productImageSet || [],
@@ -141,7 +141,7 @@ function normaliseCJProduct(p) {
     totalCost: Math.round((cost + shipping) * 100) / 100,
     suggestedPrice,
     suggestedMargin: Math.round((suggestedPrice - cost - shipping) * 100) / 100,
-    deliveryDays: p.logisticsDays || 14,
+    deliveryDays: parseInt(p.logisticsDays) || 14,
     supplier: 'CJ Dropshipping',
     supplierLogo: '📦',
     sourceUrl: p.productUrl || '',
