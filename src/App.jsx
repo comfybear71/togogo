@@ -28,6 +28,8 @@ const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
 
 function PageLoader() {
   return (
@@ -66,6 +68,8 @@ export default function App() {
           <Route path="/guide/:platform" element={<PlatformGuidePage />} />
           <Route path="/launch-store" element={<LaunchStorePage />} />
           <Route path="/promotions" element={<PromotionsPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
