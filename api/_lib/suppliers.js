@@ -510,42 +510,54 @@ const FEED_KEYWORDS = {
   baby: ['baby', 'kid', 'child', 'infant'],
 }
 
-function pickBestFeed(feeds, query) {
-  if (!feeds.length) return 'DS bestselling products'
-  if (!query) return feeds[0]?.promo_name || feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+function pickBestFeeds(feeds, query, count = 3) {
+  const getName = (f) => f?.promo_name || f?.feed_name || f || ''
+  if (!feeds.length) return ['DS bestselling products']
+  if (!query) {
+    // Return a mix of bestselling feeds
+    return feeds.slice(0, count).map(getName)
+  }
 
   const q = query.toLowerCase()
+  const matched = []
 
-  // Find which category the query maps to
-  let bestCategory = null
+  // Find which categories the query maps to
+  const matchedCategories = []
   for (const [cat, keywords] of Object.entries(FEED_KEYWORDS)) {
     if (keywords.some(kw => q.includes(kw))) {
-      bestCategory = cat
-      break
+      matchedCategories.push(cat)
     }
   }
 
-  // Search feeds for a matching name
-  if (bestCategory) {
-    for (const feed of feeds) {
-      const name = (feed.promo_name || feed.feed_name || feed || '').toLowerCase()
-      if (name.includes(bestCategory)) return feed.promo_name || feed.feed_name || feed
-    }
-  }
-
-  // Also try direct query match against feed names
-  const queryWords = q.split(/\s+/)
+  // Search feeds for matching names
   for (const feed of feeds) {
-    const name = (feed.promo_name || feed.feed_name || feed || '').toLowerCase()
-    if (queryWords.some(w => w.length > 2 && name.includes(w))) return feed.promo_name || feed.feed_name || feed
+    const name = getName(feed).toLowerCase()
+    // Check mapped categories
+    if (matchedCategories.some(cat => name.includes(cat))) {
+      matched.push(getName(feed))
+    }
+    // Direct query word match
+    else {
+      const queryWords = q.split(/\s+/)
+      if (queryWords.some(w => w.length > 2 && name.includes(w))) {
+        matched.push(getName(feed))
+      }
+    }
+    if (matched.length >= count) break
   }
 
-  // Fall back to bestselling
-  const bestselling = feeds.find(f => {
-    const n = (f.promo_name || f.feed_name || f || '').toLowerCase()
-    return n.includes('bestsell') || n.includes('best_sell') || n.includes('hot')
-  })
-  return bestselling?.promo_name || bestselling?.feed_name || feeds[0]?.promo_name || feeds[0]?.feed_name || feeds[0] || 'DS bestselling products'
+  // If nothing matched, fall back to bestselling/hot feeds
+  if (matched.length === 0) {
+    for (const feed of feeds) {
+      const n = getName(feed).toLowerCase()
+      if (n.includes('bestsell') || n.includes('best_sell') || n.includes('hot') || n.includes('summer') || n.includes('general')) {
+        matched.push(getName(feed))
+        if (matched.length >= count) break
+      }
+    }
+  }
+
+  return matched.length > 0 ? matched : feeds.slice(0, count).map(getName)
 }
 
 export async function searchAliExpress(query, page = 1) {
@@ -555,37 +567,58 @@ export async function searchAliExpress(query, page = 1) {
   try {
     const feeds = await getAliExpressFeedNames()
 
-    // Try to find a feed matching the query
-    const feedName = pickBestFeed(feeds, query)
+    // Pick up to 3 relevant feeds to search
+    const feedNames = pickBestFeeds(feeds, query, 3)
 
-    const data = await callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
-      feed_name: feedName,
-      target_currency: 'USD',
-      target_language: 'EN',
-      page_no: String(page),
-      page_size: '50',
-      sort: 'volumeDesc',
-    })
+    // Fetch from multiple feeds in parallel for better category coverage
+    const feedResults = await Promise.allSettled(
+      feedNames.map(feedName =>
+        callAliExpressAPI('aliexpress.ds.recommend.feed.get', {
+          feed_name: feedName,
+          target_currency: 'USD',
+          target_language: 'EN',
+          page_no: String(page),
+          page_size: '50',
+          sort: 'volumeDesc',
+        })
+      )
+    )
 
-    const feedResp = data?.aliexpress_ds_recommend_feed_get_response
-    const resp = feedResp?.resp_result?.result || feedResp?.result
-    const productList = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
-    if (productList.length === 0) {
+    let allProducts = []
+    for (const result of feedResults) {
+      if (result.status !== 'fulfilled' || !result.value) continue
+      const feedResp = result.value?.aliexpress_ds_recommend_feed_get_response
+      const resp = feedResp?.resp_result?.result || feedResp?.result
+      const productList = resp?.products?.product || resp?.products?.traffic_product_d_t_o || []
+      allProducts.push(...productList)
+    }
+
+    if (allProducts.length === 0) {
       return getSampleAliExpressProducts(query)
     }
 
-    let products = productList.map(p => normaliseAliExpressProduct(p))
+    let products = allProducts.map(p => normaliseAliExpressProduct(p))
+
+    // Deduplicate by product_id
+    const seen = new Set()
+    products = products.filter(p => {
+      if (seen.has(p.id)) return false
+      seen.add(p.id)
+      return true
+    })
 
     // Client-side keyword filter since feed API doesn't support keyword search
     if (query) {
       const q = query.toLowerCase()
-      const keywords = q.split(/\s+/)
+      const keywords = q.split(/\s+/).filter(kw => kw.length > 1)
       const filtered = products.filter(p => {
         const text = (p.title + ' ' + p.category).toLowerCase()
         return keywords.some(kw => text.includes(kw))
       })
-      // Return filtered results only — don't return irrelevant products
+      // If keyword filter finds matches, use them; otherwise fall back to sample
       if (filtered.length > 0) return filtered
+      // No relevant products in any feed — return sample data with correct category
+      return getSampleAliExpressProducts(query)
     }
 
     return products
