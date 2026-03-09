@@ -68,10 +68,10 @@ export default function AdminRoute({ children }) {
   // Still loading auth state
   if (authLoading || checking) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 text-[#FF6B35] animate-spin" />
-          <p className="text-sm text-gray-500">Checking admin access...</p>
+          <p className="text-sm text-zinc-500">Checking admin access...</p>
         </div>
       </div>
     )
@@ -84,9 +84,9 @@ export default function AdminRoute({ children }) {
 
   // Show login gate
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
-        <Link to="/" className="mb-4 inline-flex items-center gap-1 text-sm text-gray-400 hover:text-[#FF6B35]">
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4">
+      <div className="bg-[#111] border border-white/[0.06] rounded-2xl p-8 max-w-md w-full">
+        <Link to="/" className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-600 hover:text-[#FF6B35]">
           <ArrowLeft className="h-4 w-4" /> Back to site
         </Link>
 
@@ -94,17 +94,17 @@ export default function AdminRoute({ children }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF6B35]/10">
             <Shield className="h-5 w-5 text-[#FF6B35]" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900">Admin Access</h2>
+          <h2 className="text-xl font-bold text-white">Admin Access</h2>
         </div>
 
-        <p className="text-sm text-gray-500 mb-6">
-          Enter your <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-[#FF6B35]">JWT_SECRET</code> from
+        <p className="text-sm text-zinc-500 mb-6">
+          Enter your <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-xs font-mono text-[#FF6B35]">JWT_SECRET</code> from
           your Vercel environment variables to access the admin panel.
         </p>
 
         {error && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="mb-4 rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
 
@@ -114,7 +114,7 @@ export default function AdminRoute({ children }) {
             value={setupSecret}
             onChange={(e) => setSetupSecret(e.target.value)}
             placeholder="Paste your JWT_SECRET here"
-            className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 mb-4 font-mono"
+            className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-3 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 mb-4 font-mono"
             autoFocus
           />
           <button
@@ -126,12 +126,12 @@ export default function AdminRoute({ children }) {
           </button>
         </form>
 
-        <div className="mt-6 rounded-xl bg-gray-50 p-4">
-          <p className="text-xs font-semibold text-gray-700 mb-1">Where to find your JWT_SECRET:</p>
-          <ol className="text-xs text-gray-500 space-y-1 list-decimal list-inside">
-            <li>Go to your <span className="font-medium text-gray-700">Vercel Dashboard</span></li>
-            <li>Open your project → <span className="font-medium text-gray-700">Settings</span> → <span className="font-medium text-gray-700">Environment Variables</span></li>
-            <li>Copy the value of <code className="rounded bg-white px-1 py-0.5 font-mono text-[#FF6B35]">JWT_SECRET</code></li>
+        <div className="mt-6 rounded-xl bg-[#0a0a0a] p-4">
+          <p className="text-xs font-semibold text-zinc-300 mb-1">Where to find your JWT_SECRET:</p>
+          <ol className="text-xs text-zinc-500 space-y-1 list-decimal list-inside">
+            <li>Go to your <span className="font-medium text-zinc-300">Vercel Dashboard</span></li>
+            <li>Open your project → <span className="font-medium text-zinc-300">Settings</span> → <span className="font-medium text-zinc-300">Environment Variables</span></li>
+            <li>Copy the value of <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[#FF6B35]">JWT_SECRET</code></li>
             <li>If it doesn't exist yet, create it with any secure random string</li>
           </ol>
         </div>

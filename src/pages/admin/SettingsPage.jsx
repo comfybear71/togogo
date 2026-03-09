@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, Settings, Save, Key, Shield, Gift,
+  Settings, Save, Key, Shield, Gift,
   Eye, EyeOff, Check, AlertCircle, Loader2, Plus, Trash2,
   Megaphone, CreditCard, Database
 } from 'lucide-react'
@@ -229,21 +228,18 @@ export default function SettingsPage() {
   const sectionCustomFields = customFields.filter((f) => f.category === activeSection)
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-      <div className="mx-auto max-w-6xl">
+    <div>
+      <div>
         {/* Header */}
         <div className="mb-6">
-          <Link to="/admin" className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]">
-            <ArrowLeft className="h-4 w-4" /> Back to Admin
-          </Link>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#FF6B35]/10">
                 <Shield className="h-5 w-5 text-[#FF6B35]" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Admin Settings</h1>
-                <p className="text-sm text-gray-500">Manage referral links, API keys, and platform configuration</p>
+                <h1 className="text-2xl font-bold text-white">Admin Settings</h1>
+                <p className="text-sm text-zinc-500">Manage referral links, API keys, and platform configuration</p>
               </div>
             </div>
             <button
@@ -265,10 +261,10 @@ export default function SettingsPage() {
 
         {/* Error banner */}
         {error && (
-          <div className="mb-4 flex items-center gap-3 p-3 rounded-xl bg-red-50 border border-red-200">
-            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
-            <p className="text-sm text-red-600 flex-1">{error}</p>
-            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 text-sm">
+          <div className="mb-4 flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+            <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-400 flex-1">{error}</p>
+            <button onClick={() => setError(null)} className="text-red-400 hover:text-red-400 text-sm">
               Dismiss
             </button>
           </div>
@@ -284,8 +280,8 @@ export default function SettingsPage() {
                   onClick={() => setActiveSection(s.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
                     activeSection === s.id
-                      ? 'bg-white shadow text-gray-900'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                      ? 'bg-white/[0.08] text-white'
+                      : 'text-zinc-500 hover:text-white hover:bg-white/[0.04]'
                   }`}
                 >
                   <s.icon
@@ -312,27 +308,27 @@ export default function SettingsPage() {
           <div className="flex-1 min-w-0">
             {loading ? (
               <div className="flex items-center justify-center py-20">
-                <Loader2 className="h-8 w-8 text-gray-300 animate-spin" />
+                <Loader2 className="h-8 w-8 text-zinc-700 animate-spin" />
               </div>
             ) : (
-              <div className="rounded-2xl bg-white shadow p-6">
+              <div className="rounded-2xl bg-[#111] p-6">
                 {/* Section header */}
                 <div className="flex items-center gap-3 mb-2">
                   {currentSection && (
                     <currentSection.icon className="h-5 w-5" style={{ color: currentSection.color }} />
                   )}
-                  <h2 className="text-lg font-semibold text-gray-900">{currentSection?.label}</h2>
+                  <h2 className="text-lg font-semibold text-white">{currentSection?.label}</h2>
                 </div>
-                <p className="text-sm text-gray-500 mb-6">{currentSection?.desc}</p>
+                <p className="text-sm text-zinc-500 mb-6">{currentSection?.desc}</p>
 
                 {/* Fields */}
                 <div className="space-y-4">
                   {currentSection?.fields.map((field) => (
                     <div key={field.key}>
-                      <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-zinc-300">
                         {field.label}
                         {field.secret && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 uppercase">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 uppercase">
                             Secret
                           </span>
                         )}
@@ -343,12 +339,12 @@ export default function SettingsPage() {
                           value={settings[field.key] || ''}
                           onChange={(e) => handleChange(field.key, e.target.value)}
                           placeholder={field.placeholder}
-                          className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 pr-10"
+                          className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 pr-10"
                         />
                         {field.secret && (
                           <button
                             onClick={() => toggleSecret(field.key)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-300"
                           >
                             {visibleSecrets[field.key] ? (
                               <EyeOff className="h-4 w-4" />
@@ -368,10 +364,10 @@ export default function SettingsPage() {
 
                   {/* Custom fields added by admin */}
                   {sectionCustomFields.map((field) => (
-                    <div key={field.key} className="relative rounded-xl border border-dashed border-gray-300 p-4">
+                    <div key={field.key} className="relative rounded-xl border border-dashed border-white/[0.1] p-4">
                       <button
                         onClick={() => removeCustomField(field.key)}
-                        className="absolute top-3 right-3 text-gray-400 hover:text-red-500"
+                        className="absolute top-3 right-3 text-zinc-600 hover:text-red-400"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -381,7 +377,7 @@ export default function SettingsPage() {
                           value={field.label}
                           onChange={(e) => updateCustomFieldLabel(field.key, e.target.value)}
                           placeholder="Field name..."
-                          className="w-2/3 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 focus:border-[#FF6B35] focus:outline-none"
+                          className="w-2/3 rounded-lg border border-white/[0.08] bg-[#0a0a0a] px-3 py-1.5 text-sm font-medium text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
                         />
                       </div>
                       <input
@@ -389,7 +385,7 @@ export default function SettingsPage() {
                         value={settings[field.key] || ''}
                         onChange={(e) => handleChange(field.key, e.target.value)}
                         placeholder="Value..."
-                        className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
+                        className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
                       />
                     </div>
                   ))}
@@ -397,7 +393,7 @@ export default function SettingsPage() {
                   {/* Add custom field */}
                   <button
                     onClick={addCustomField}
-                    className="flex items-center gap-2 rounded-xl border border-dashed border-gray-300 px-4 py-3 text-sm font-medium text-gray-500 hover:text-[#FF6B35] hover:border-[#FF6B35]/30 transition-colors w-full justify-center"
+                    className="flex items-center gap-2 rounded-xl border border-dashed border-white/[0.1] px-4 py-3 text-sm font-medium text-zinc-500 hover:text-[#FF6B35] hover:border-[#FF6B35]/30 transition-colors w-full justify-center"
                   >
                     <Plus className="h-4 w-4" />
                     Add Custom Field
@@ -405,8 +401,8 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Save button (bottom) */}
-                <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
-                  <p className="text-xs text-gray-400">
+                <div className="mt-8 pt-6 border-t border-white/[0.06] flex items-center justify-between">
+                  <p className="text-xs text-zinc-600">
                     {currentSection?.fields.filter((f) => settings[f.key]).length} of {currentSection?.fields.length} fields configured
                   </p>
                   <button

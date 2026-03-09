@@ -15,13 +15,28 @@ export default async function handler(req, res) {
       const { search, role, status, sort, limit: lim } = req.query
       const limit = Math.min(parseInt(lim) || 50, 200)
 
+      // Check which tables exist to build safe subqueries
+      let hasOrdersTable = false
+      let hasStoresTable = false
+      try {
+        await sql.query(`SELECT 1 FROM user_orders LIMIT 0`)
+        hasOrdersTable = true
+      } catch { /* table doesn't exist */ }
+      try {
+        await sql.query(`SELECT 1 FROM user_stores LIMIT 0`)
+        hasStoresTable = true
+      } catch { /* table doesn't exist */ }
+
       let query = `
         SELECT u.id, u.email, u.name, u.avatar_url, u.role, u.verification_level,
                u.created_at, u.phone, u.location_suburb, u.location_country, u.bio,
-               u.wallet_balance,
+               u.wallet_balance${hasOrdersTable ? `,
                (SELECT COUNT(*)::int FROM user_orders WHERE user_id = u.id) AS total_orders,
-               (SELECT COALESCE(SUM(sale_price), 0)::numeric FROM user_orders WHERE user_id = u.id) AS total_revenue,
-               (SELECT COUNT(*)::int FROM user_stores WHERE user_id = u.id AND status != 'deleted') AS store_count
+               (SELECT COALESCE(SUM(sale_price), 0)::numeric FROM user_orders WHERE user_id = u.id) AS total_revenue` : `,
+               0 AS total_orders,
+               0 AS total_revenue`}${hasStoresTable ? `,
+               (SELECT COUNT(*)::int FROM user_stores WHERE user_id = u.id AND status != 'deleted') AS store_count` : `,
+               0 AS store_count`}
         FROM users u
         WHERE 1=1
       `
@@ -43,7 +58,7 @@ export default async function handler(req, res) {
 
       // Sort
       if (sort === 'name') query += ` ORDER BY u.name ASC`
-      else if (sort === 'revenue') query += ` ORDER BY total_revenue DESC`
+      else if (sort === 'revenue' && hasOrdersTable) query += ` ORDER BY total_revenue DESC`
       else query += ` ORDER BY u.created_at DESC`
 
       params.push(limit)

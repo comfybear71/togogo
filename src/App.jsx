@@ -5,6 +5,7 @@ import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/admin/AdminRoute'
+import AdminLayout from './components/admin/AdminLayout'
 import StorefrontPage from './pages/StorefrontPage'
 
 // Core pages loaded eagerly for instant navigation
@@ -113,14 +114,14 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         </Route>
 
-        {/* Admin routes — protected by JWT / setup secret */}
-        <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-        <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
-        <Route path="/admin/products" element={<AdminRoute><AdminProducts /></AdminRoute>} />
-        <Route path="/admin/orders" element={<AdminRoute><AdminOrders /></AdminRoute>} />
-        <Route path="/admin/stores" element={<AdminRoute><AdminStores /></AdminRoute>} />
-        <Route path="/admin/marketing" element={<AdminRoute><AdminMarketing /></AdminRoute>} />
-        <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
+        {/* Admin routes — protected by JWT / setup secret, wrapped in dark AdminLayout */}
+        <Route path="/admin" element={<AdminRoute><AdminLayout><AdminDashboard /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/users" element={<AdminRoute><AdminLayout><AdminUsers /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/products" element={<AdminRoute><AdminLayout><AdminProducts /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/orders" element={<AdminRoute><AdminLayout><AdminOrders /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/stores" element={<AdminRoute><AdminLayout><AdminStores /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/marketing" element={<AdminRoute><AdminLayout><AdminMarketing /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/settings" element={<AdminRoute><AdminLayout><AdminSettings /></AdminLayout></AdminRoute>} />
 
         <Route element={<AppLayout />}>
           <Route path="*" element={<NotFoundPage />} />

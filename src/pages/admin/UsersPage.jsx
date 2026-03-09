@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, Search, MoreVertical, Shield, ShieldCheck, ShieldAlert,
+  Search, MoreVertical, Shield, ShieldCheck, ShieldAlert,
   User, X, AlertCircle, Ban, Loader2, Store, RefreshCw,
 } from 'lucide-react'
 
@@ -17,7 +16,7 @@ const verificationBadge = {
   verified: { color: 'text-[#06D6A0]', icon: ShieldCheck, label: 'Verified' },
   basic: { color: 'text-[#FFD23F]', icon: Shield, label: 'Basic' },
   pending: { color: 'text-[#FF6B35]', icon: ShieldAlert, label: 'Pending' },
-  none: { color: 'text-gray-400', icon: Shield, label: 'None' },
+  none: { color: 'text-zinc-600', icon: Shield, label: 'None' },
   suspended: { color: 'text-red-500', icon: Ban, label: 'Suspended' },
 }
 
@@ -94,23 +93,19 @@ export default function UsersPage() {
   const pendingVerifications = users.filter((u) => u.verificationLevel === 'pending')
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="space-y-6">
         <div>
-          <Link to="/admin" className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]">
-            <ArrowLeft className="h-4 w-4" /> Back to Admin
-          </Link>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-              <p className="text-gray-500">
+              <h1 className="text-3xl font-bold text-white">User Management</h1>
+              <p className="text-zinc-500">
                 {loading ? 'Loading...' : `${users.length} user${users.length !== 1 ? 's' : ''} found`}
               </p>
             </div>
             <button
               onClick={fetchUsers}
               disabled={loading}
-              className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow hover:bg-gray-50"
+              className="flex items-center gap-2 rounded-xl bg-[#111] px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-white/[0.04]"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh
@@ -120,21 +115,21 @@ export default function UsersPage() {
 
         {/* Verification Queue */}
         {pendingVerifications.length > 0 && (
-          <div className="rounded-[16px] border-2 border-[#FF6B35]/20 bg-[#FF6B35]/5 p-5 shadow">
+          <div className="rounded-[16px] border-2 border-[#FF6B35]/20 bg-[#FF6B35]/5 p-5">
             <div className="mb-3 flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-[#FF6B35]" />
-              <h2 className="text-lg font-semibold text-gray-900">Verification Queue ({pendingVerifications.length})</h2>
+              <h2 className="text-lg font-semibold text-white">Verification Queue ({pendingVerifications.length})</h2>
             </div>
             <div className="space-y-2">
               {pendingVerifications.map((u) => (
-                <div key={u.id} className="flex items-center justify-between rounded-xl bg-white p-3">
+                <div key={u.id} className="flex items-center justify-between rounded-xl bg-[#111] p-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#FF6B35]/10">
                       <User className="h-5 w-5 text-[#FF6B35]" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{u.name}</p>
-                      <p className="text-xs text-gray-500">{u.email}</p>
+                      <p className="text-sm font-medium text-white">{u.name}</p>
+                      <p className="text-xs text-zinc-500">{u.email}</p>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -148,7 +143,7 @@ export default function UsersPage() {
                     <button
                       onClick={() => updateUser(u.id, { verificationLevel: 'none' })}
                       disabled={updating === u.id}
-                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                      className="rounded-lg bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/[0.1] disabled:opacity-50"
                     >
                       Reject
                     </button>
@@ -160,23 +155,23 @@ export default function UsersPage() {
         )}
 
         {/* Search & Filters */}
-        <div className="rounded-[16px] bg-white p-5 shadow">
+        <div className="rounded-[16px] bg-[#111] p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
               <input
                 type="text"
                 placeholder="Search users by name or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 py-2.5 pl-10 pr-4 text-sm focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
+                className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
               />
             </div>
             <div className="flex gap-2">
               <select
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
+                className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
               >
                 <option value="all">All Roles</option>
                 <option value="buyer">Buyer</option>
@@ -186,7 +181,7 @@ export default function UsersPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
+                className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
               >
                 <option value="joinDate">Newest First</option>
                 <option value="revenue">Revenue</option>
@@ -198,8 +193,8 @@ export default function UsersPage() {
 
         {/* Error */}
         {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 p-4">
-            <p className="text-sm text-red-600">{error}</p>
+          <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-4">
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
 
@@ -212,10 +207,10 @@ export default function UsersPage() {
 
         {/* Empty state */}
         {!loading && users.length === 0 && (
-          <div className="rounded-[16px] bg-white p-12 shadow text-center">
-            <User className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">No users yet</h3>
-            <p className="text-sm text-gray-500">
+          <div className="rounded-[16px] bg-[#111] p-12 text-center">
+            <User className="mx-auto h-12 w-12 text-zinc-600 mb-3" />
+            <h3 className="text-lg font-semibold text-white mb-1">No users yet</h3>
+            <p className="text-sm text-zinc-500">
               {searchQuery ? 'No users match your search. Try different keywords.' : 'Users will appear here once they sign up.'}
             </p>
           </div>
@@ -223,11 +218,11 @@ export default function UsersPage() {
 
         {/* Users Table */}
         {!loading && users.length > 0 && (
-          <div className="rounded-[16px] bg-white p-6 shadow">
+          <div className="rounded-[16px] bg-[#111] p-6">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 text-xs uppercase text-gray-500">
+                  <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                     <th className="pb-3 pr-4">User</th>
                     <th className="pb-3 pr-4">Role</th>
                     <th className="pb-3 pr-4">Verification</th>
@@ -245,7 +240,7 @@ export default function UsersPage() {
                     return (
                       <tr
                         key={u.id}
-                        className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50/50"
+                        className="cursor-pointer border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]"
                         onClick={() => setSelectedUser(u)}
                       >
                         <td className="py-3 pr-4">
@@ -254,12 +249,12 @@ export default function UsersPage() {
                               {u.avatarUrl ? (
                                 <img src={u.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
                               ) : (
-                                <User className="h-4 w-4 text-gray-600" />
+                                <User className="h-4 w-4 text-zinc-400" />
                               )}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">{u.name}</p>
-                              <p className="text-xs text-gray-500">{u.email}</p>
+                              <p className="font-medium text-white">{u.name}</p>
+                              <p className="text-xs text-zinc-500">{u.email}</p>
                             </div>
                           </div>
                         </td>
@@ -281,14 +276,14 @@ export default function UsersPage() {
                               <span className="text-xs font-medium">{u.storeCount}</span>
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="text-xs text-zinc-600">—</span>
                           )}
                         </td>
-                        <td className="py-3 pr-4 text-gray-600">{u.totalOrders || '—'}</td>
-                        <td className="py-3 pr-4 font-medium text-gray-900">
+                        <td className="py-3 pr-4 text-zinc-400">{u.totalOrders || '—'}</td>
+                        <td className="py-3 pr-4 font-medium text-white">
                           {u.totalRevenue > 0 ? `$${u.totalRevenue.toLocaleString()}` : '—'}
                         </td>
-                        <td className="py-3 pr-4 text-gray-600">
+                        <td className="py-3 pr-4 text-zinc-400">
                           {new Date(u.createdAt).toLocaleDateString()}
                         </td>
                         <td className="relative py-3 text-right">
@@ -297,33 +292,33 @@ export default function UsersPage() {
                               e.stopPropagation()
                               setActionMenuUser(actionMenuUser === u.id ? null : u.id)
                             }}
-                            className="rounded-lg p-1.5 hover:bg-gray-100"
+                            className="rounded-lg p-1.5 hover:bg-white/[0.06]"
                           >
-                            <MoreVertical className="h-4 w-4 text-gray-500" />
+                            <MoreVertical className="h-4 w-4 text-zinc-500" />
                           </button>
                           {actionMenuUser === u.id && (
-                            <div className="absolute right-0 top-full z-10 w-44 rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
+                            <div className="absolute right-0 top-full z-10 w-44 rounded-xl border border-white/[0.06] bg-[#111] py-1">
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateUser(u.id, { verificationLevel: 'verified' }) }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.04]"
                               >
                                 <ShieldCheck className="h-4 w-4 text-[#06D6A0]" /> Verify
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateUser(u.id, { role: 'seller' }) }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.04]"
                               >
                                 <Store className="h-4 w-4 text-[#06D6A0]" /> Make Seller
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateUser(u.id, { role: 'admin' }) }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.04]"
                               >
                                 <Shield className="h-4 w-4 text-[#FF6B35]" /> Make Admin
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateUser(u.id, { verificationLevel: 'suspended' }) }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
                               >
                                 <Ban className="h-4 w-4" /> Suspend
                               </button>
@@ -342,14 +337,14 @@ export default function UsersPage() {
         {/* User Detail Modal */}
         {selectedUser && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setSelectedUser(null)}>
-            <div className="w-full max-w-lg rounded-[16px] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-lg rounded-[16px] bg-[#111] p-6" onClick={(e) => e.stopPropagation()}>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">User Profile</h2>
-                <button onClick={() => setSelectedUser(null)} className="rounded-lg p-1 hover:bg-gray-100">
-                  <X className="h-5 w-5 text-gray-500" />
+                <h2 className="text-xl font-bold text-white">User Profile</h2>
+                <button onClick={() => setSelectedUser(null)} className="rounded-lg p-1 hover:bg-white/[0.06]">
+                  <X className="h-5 w-5 text-zinc-500" />
                 </button>
               </div>
-              <div className="flex items-center gap-4 rounded-xl bg-gray-50 p-4">
+              <div className="flex items-center gap-4 rounded-xl bg-[#0a0a0a] p-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#FF6B35] to-[#06D6A0]">
                   {selectedUser.avatarUrl ? (
                     <img src={selectedUser.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
@@ -358,36 +353,36 @@ export default function UsersPage() {
                   )}
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{selectedUser.name}</h3>
-                  <p className="text-sm text-gray-500">{selectedUser.email}</p>
+                  <h3 className="text-lg font-semibold text-white">{selectedUser.name}</h3>
+                  <p className="text-sm text-zinc-500">{selectedUser.email}</p>
                   <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${roleBadge[selectedUser.role] || roleBadge.buyer}`}>
                     {selectedUser.role}
                   </span>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-gray-100 p-3">
-                  <p className="text-xs text-gray-500">Verification</p>
-                  <p className="text-lg font-bold capitalize text-gray-900">{selectedUser.verificationLevel}</p>
+                <div className="rounded-xl border border-white/[0.06] p-3">
+                  <p className="text-xs text-zinc-500">Verification</p>
+                  <p className="text-lg font-bold capitalize text-white">{selectedUser.verificationLevel}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 p-3">
-                  <p className="text-xs text-gray-500">Stores</p>
-                  <p className="text-lg font-bold text-gray-900">{selectedUser.storeCount}</p>
+                <div className="rounded-xl border border-white/[0.06] p-3">
+                  <p className="text-xs text-zinc-500">Stores</p>
+                  <p className="text-lg font-bold text-white">{selectedUser.storeCount}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 p-3">
-                  <p className="text-xs text-gray-500">Total Orders</p>
-                  <p className="text-lg font-bold text-gray-900">{selectedUser.totalOrders}</p>
+                <div className="rounded-xl border border-white/[0.06] p-3">
+                  <p className="text-xs text-zinc-500">Total Orders</p>
+                  <p className="text-lg font-bold text-white">{selectedUser.totalOrders}</p>
                 </div>
-                <div className="rounded-xl border border-gray-100 p-3">
-                  <p className="text-xs text-gray-500">Revenue</p>
-                  <p className="text-lg font-bold text-gray-900">${selectedUser.totalRevenue.toLocaleString()}</p>
+                <div className="rounded-xl border border-white/[0.06] p-3">
+                  <p className="text-xs text-zinc-500">Revenue</p>
+                  <p className="text-lg font-bold text-white">${selectedUser.totalRevenue.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="mt-4 space-y-2 text-sm text-gray-600">
-                {selectedUser.phone && <p><span className="font-medium text-gray-900">Phone:</span> {selectedUser.phone}</p>}
-                {selectedUser.location && <p><span className="font-medium text-gray-900">Location:</span> {selectedUser.location}</p>}
-                <p><span className="font-medium text-gray-900">Joined:</span> {new Date(selectedUser.createdAt).toLocaleDateString()}</p>
-                {selectedUser.bio && <p><span className="font-medium text-gray-900">Bio:</span> {selectedUser.bio}</p>}
+              <div className="mt-4 space-y-2 text-sm text-zinc-400">
+                {selectedUser.phone && <p><span className="font-medium text-white">Phone:</span> {selectedUser.phone}</p>}
+                {selectedUser.location && <p><span className="font-medium text-white">Location:</span> {selectedUser.location}</p>}
+                <p><span className="font-medium text-white">Joined:</span> {new Date(selectedUser.createdAt).toLocaleDateString()}</p>
+                {selectedUser.bio && <p><span className="font-medium text-white">Bio:</span> {selectedUser.bio}</p>}
               </div>
               <div className="mt-5 flex gap-2">
                 <button
@@ -406,7 +401,6 @@ export default function UsersPage() {
             </div>
           </div>
         )}
-      </div>
     </div>
   )
 }
