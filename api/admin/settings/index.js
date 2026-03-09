@@ -5,7 +5,7 @@ import { requireAdmin } from '../../_lib/auth.js'
 async function ensureTable() {
   await sql`
     CREATE TABLE IF NOT EXISTS admin_settings (
-      id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
       key TEXT UNIQUE NOT NULL,
       value TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL,

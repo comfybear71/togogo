@@ -179,7 +179,10 @@ export default function SettingsPage() {
         body: JSON.stringify({ settings: rows }),
       })
 
-      if (!res.ok) throw new Error('Failed to save settings')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.details || errData.error || `Failed to save settings (${res.status})`)
+      }
 
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
