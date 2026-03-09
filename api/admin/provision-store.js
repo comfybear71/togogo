@@ -1,0 +1,153 @@
+// Admin endpoint to manually provision a store + subscription for a user
+// Used when a client has paid but store creation failed
+import { sql } from '../_lib/db.js'
+import { requireAdminOrSetup } from '../_lib/auth.js'
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' })
+  }
+
+  try {
+    await requireAdminOrSetup(req)
+  } catch (err) {
+    return res.status(err?.status || 401).json({ error: err?.message || 'Authentication failed' })
+  }
+
+  try {
+    const { userId, subdomain, storeName, pricePerMonth } = req.body
+
+    if (!userId || !subdomain) {
+      return res.status(400).json({ error: 'userId and subdomain are required' })
+    }
+
+    // Sanitize subdomain
+    const clean = subdomain
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+
+    if (!clean || clean.length < 2 || clean.length > 63) {
+      return res.status(400).json({ error: 'Subdomain must be 2-63 characters' })
+    }
+
+    const fullDomain = `${clean}.togogo.me`
+    const name = storeName || `${clean}'s Store`
+    const price = parseFloat(pricePerMonth) || 19.99
+
+    // Verify user exists
+    const { rows: userRows } = await sql`SELECT id, email, name FROM users WHERE id = ${userId}`
+    if (!userRows[0]) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Create or update the store
+    await sql`
+      INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
+      VALUES (${userId}, ${clean}, ${fullDomain}, ${name}, 'active',
+              ${JSON.stringify({ admin_provisioned: true, provisioned_at: new Date().toISOString() })})
+      ON CONFLICT (user_id) DO UPDATE
+      SET subdomain = ${clean}, full_domain = ${fullDomain}, store_name = ${name},
+          status = 'active', updated_at = NOW()
+    `
+
+    // Create subscription record if one doesn't exist
+    const { rows: existingSub } = await sql`
+      SELECT id FROM subscriptions WHERE user_id = ${userId} AND status = 'active'
+    `
+    if (existingSub.length === 0) {
+      await sql`
+        INSERT INTO subscriptions (user_id, plan, status, price_per_month, started_at, expires_at)
+        VALUES (${userId}, 'premium', 'active', ${price}, NOW(), NOW() + INTERVAL '1 month')
+      `
+    }
+
+    // Upgrade user role to subscriber
+    await sql`
+      UPDATE users SET role = CASE
+        WHEN role = 'buyer' THEN 'subscriber'
+        WHEN role = 'both' THEN 'both'
+        ELSE role
+      END, updated_at = NOW()
+      WHERE id = ${userId}
+    `
+
+    // Try to register subdomain on Vercel
+    let vercelResult = null
+    const vercelToken = process.env.VERCEL_TOKEN
+    const vercelProjectId = process.env.VERCEL_PROJECT_ID
+
+    if (vercelToken && vercelProjectId) {
+      try {
+        // Get team ID
+        let teamParam = ''
+        const projRes = await fetch(`https://api.vercel.com/v9/projects/${vercelProjectId}`, {
+          headers: { Authorization: `Bearer ${vercelToken}` },
+        })
+        const projData = await projRes.json()
+        const teamId = projData.teamId || projData.team?.id
+        if (teamId) teamParam = `?teamId=${teamId}`
+
+        // Check for wildcard
+        const listRes = await fetch(
+          `https://api.vercel.com/v9/projects/${vercelProjectId}/domains${teamParam}`,
+          { headers: { Authorization: `Bearer ${vercelToken}` } }
+        )
+        const listData = await listRes.json()
+        const hasWildcard = listData.domains?.some(d => d.name === '*.togogo.me')
+
+        if (hasWildcard) {
+          vercelResult = { wildcard: true, message: 'Covered by *.togogo.me wildcard' }
+        } else {
+          // Add individual subdomain
+          const addRes = await fetch(
+            `https://api.vercel.com/v10/projects/${vercelProjectId}/domains${teamParam}`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${vercelToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ name: fullDomain }),
+            }
+          )
+          vercelResult = await addRes.json()
+        }
+
+        // Update store with Vercel info
+        const domainId = vercelResult?.wildcard ? 'wildcard' : (vercelResult?.id || 'added')
+        await sql`
+          UPDATE user_stores SET vercel_domain_id = ${domainId}
+          WHERE user_id = ${userId} AND subdomain = ${clean}
+        `.catch(() => {})
+      } catch (err) {
+        vercelResult = { error: err.message }
+      }
+    }
+
+    return res.json({
+      success: true,
+      store: {
+        subdomain: clean,
+        domain: fullDomain,
+        url: `https://${fullDomain}`,
+        status: 'active',
+      },
+      subscription: {
+        plan: 'premium',
+        pricePerMonth: price,
+        status: 'active',
+      },
+      user: {
+        id: userRows[0].id,
+        email: userRows[0].email,
+        name: userRows[0].name,
+      },
+      vercel: vercelResult,
+    })
+  } catch (err) {
+    console.error('Admin provision store error:', err)
+    return res.status(500).json({ error: 'Failed to provision store: ' + err.message })
+  }
+}

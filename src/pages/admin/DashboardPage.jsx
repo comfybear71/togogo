@@ -32,6 +32,8 @@ export default function DashboardPage() {
     activeListings: 0,
     ordersToday: 0,
     revenueToday: 0,
+    subscriptionRevenue: 0,
+    activeStores: 0,
     openDisputes: 0,
   })
   const [dashData, setDashData] = useState(null)
@@ -51,10 +53,10 @@ export default function DashboardPage() {
 
   const statCards = [
     { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: Users, color: '#FF6B35' },
-    { label: 'Active Listings', value: stats.activeListings.toLocaleString(), icon: ShoppingBag, color: '#06D6A0' },
-    { label: 'Orders Today', value: stats.ordersToday.toLocaleString(), icon: Package, color: '#FFD23F' },
-    { label: 'Revenue Today', value: `$${stats.revenueToday.toLocaleString()}`, icon: DollarSign, color: '#06D6A0' },
-    { label: 'Open Disputes', value: stats.openDisputes.toLocaleString(), icon: AlertTriangle, color: '#FF6B35' },
+    { label: 'Active Stores', value: stats.activeStores.toLocaleString(), icon: ShoppingBag, color: '#06D6A0' },
+    { label: 'Active Listings', value: stats.activeListings.toLocaleString(), icon: Package, color: '#FFD23F' },
+    { label: 'MRR', value: `$${(stats.subscriptionRevenue || 0).toLocaleString()}`, icon: DollarSign, color: '#06D6A0' },
+    { label: 'Revenue Today', value: `$${stats.revenueToday.toLocaleString()}`, icon: DollarSign, color: '#FF6B35' },
   ]
 
   const revenueByDay = dashData?.revenueByDay || []

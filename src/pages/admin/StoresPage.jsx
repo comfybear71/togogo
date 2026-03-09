@@ -11,6 +11,8 @@ import {
   Clock,
   XCircle,
   X,
+  Plus,
+  Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -40,6 +42,11 @@ export default function StoresPage() {
   const [loading, setLoading] = useState(true);
   const [deleteModal, setDeleteModal] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [showProvision, setShowProvision] = useState(false);
+  const [provisionForm, setProvisionForm] = useState({ userId: '', subdomain: '', storeName: '', pricePerMonth: '19.99' });
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisionResult, setProvisionResult] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
 
   const apiBase = import.meta.env.VITE_API_URL || '';
 
@@ -98,15 +105,65 @@ export default function StoresPage() {
     }
   }
 
+  // Fetch users for the provision modal dropdown
+  async function fetchUsers() {
+    try {
+      const res = await fetch(`${apiBase}/api/admin/users?limit=200`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAllUsers(data);
+      }
+    } catch (err) {
+      console.error('Fetch users error:', err);
+    }
+  }
+
+  async function handleProvision(e) {
+    e.preventDefault();
+    setProvisioning(true);
+    setProvisionResult(null);
+    try {
+      const res = await fetch(`${apiBase}/api/admin/provision-store`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(provisionForm),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProvisionResult({ error: data.error || 'Failed to provision store' });
+      } else {
+        setProvisionResult({ success: true, data });
+        fetchData(); // Refresh the stores list
+      }
+    } catch (err) {
+      setProvisionResult({ error: 'Network error: ' + err.message });
+    } finally {
+      setProvisioning(false);
+    }
+  }
+
   const totalStores = Object.entries(statusCounts)
     .filter(([k]) => k !== 'deleted')
     .reduce((sum, [, v]) => sum + v, 0);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Stores & Domains</h1>
-        <p className="text-zinc-500">View and manage customer stores and domain registrations.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Stores & Domains</h1>
+          <p className="text-zinc-500">View and manage customer stores and domain registrations.</p>
+        </div>
+        <button
+          onClick={() => { setShowProvision(true); setProvisionResult(null); fetchUsers(); }}
+          className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#FF6B35]/90"
+        >
+          <Plus className="h-4 w-4" /> Provision Store
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -383,6 +440,120 @@ export default function StoresPage() {
                 {deleting ? 'Deleting...' : 'Delete Store'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Provision Store Modal */}
+      {showProvision && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowProvision(false)}>
+          <div className="w-full max-w-lg rounded-[16px] bg-[#111] p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Store className="h-5 w-5 text-[#FF6B35]" />
+                <h2 className="text-lg font-bold text-white">Provision Store for User</h2>
+              </div>
+              <button onClick={() => setShowProvision(false)} className="rounded-lg p-1 hover:bg-white/[0.06]">
+                <X className="h-5 w-5 text-zinc-500" />
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-zinc-400">
+              Manually create a store and subscription for a user. Use this when payment was received but store creation failed.
+            </p>
+            <form onSubmit={handleProvision} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-400">User</label>
+                <select
+                  value={provisionForm.userId}
+                  onChange={(e) => setProvisionForm({ ...provisionForm, userId: e.target.value })}
+                  required
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
+                >
+                  <option value="">Select a user...</option>
+                  {allUsers.map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-400">Subdomain</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={provisionForm.subdomain}
+                    onChange={(e) => setProvisionForm({ ...provisionForm, subdomain: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                    required
+                    placeholder="stu"
+                    className="flex-1 rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
+                  />
+                  <span className="text-sm text-zinc-500">.togogo.me</span>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-400">Store Name</label>
+                <input
+                  type="text"
+                  value={provisionForm.storeName}
+                  onChange={(e) => setProvisionForm({ ...provisionForm, storeName: e.target.value })}
+                  placeholder="Stuart's Store"
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-400">Price Per Month ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={provisionForm.pricePerMonth}
+                  onChange={(e) => setProvisionForm({ ...provisionForm, pricePerMonth: e.target.value })}
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
+                />
+              </div>
+
+              {provisionResult?.error && (
+                <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3">
+                  <p className="text-sm text-red-400">{provisionResult.error}</p>
+                </div>
+              )}
+
+              {provisionResult?.success && (
+                <div className="rounded-xl bg-[#06D6A0]/10 border border-[#06D6A0]/20 p-3">
+                  <p className="text-sm font-medium text-[#06D6A0]">Store provisioned successfully!</p>
+                  <p className="mt-1 text-xs text-zinc-400">
+                    {provisionResult.data.store.domain} is now active for {provisionResult.data.user.name} ({provisionResult.data.user.email})
+                  </p>
+                  <a
+                    href={provisionResult.data.store.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-[#FF6B35] hover:underline"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Visit store
+                  </a>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowProvision(false)}
+                  className="flex-1 rounded-xl bg-white/[0.06] py-2.5 text-sm font-medium text-zinc-300 hover:bg-white/[0.1]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={provisioning || !provisionForm.userId || !provisionForm.subdomain}
+                  className="flex-1 rounded-xl bg-[#FF6B35] py-2.5 text-sm font-medium text-white hover:bg-[#FF6B35]/90 disabled:opacity-50"
+                >
+                  {provisioning ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Provisioning...
+                    </span>
+                  ) : 'Provision Store'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

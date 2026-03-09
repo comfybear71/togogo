@@ -1,15 +1,9 @@
 import { sql } from '../_lib/db.js'
-import { requireAuth } from '../_lib/auth.js'
+import { requireAdminOrSetup } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
   try {
-    const user = await requireAuth(req)
-
-    // Verify admin role
-    const { rows: userRows } = await sql`SELECT role FROM users WHERE id = ${user.id}`
-    if (userRows[0]?.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' })
-    }
+    await requireAdminOrSetup(req)
 
     if (req.method === 'GET') {
       const { search, status } = req.query

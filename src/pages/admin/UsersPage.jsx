@@ -90,6 +90,14 @@ export default function UsersPage() {
     }
   }
 
+  // Close action menu when clicking outside
+  useEffect(() => {
+    if (!actionMenuUser) return
+    const handler = () => setActionMenuUser(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [actionMenuUser])
+
   const pendingVerifications = users.filter((u) => u.verificationLevel === 'pending')
 
   return (
@@ -219,8 +227,8 @@ export default function UsersPage() {
         {/* Users Table */}
         {!loading && users.length > 0 && (
           <div className="rounded-[16px] bg-[#111] p-6">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
+            <div style={{ overflowX: 'auto', overflowY: 'visible' }}>
+              <table className="w-full min-w-[800px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                     <th className="pb-3 pr-4">User</th>
@@ -297,7 +305,7 @@ export default function UsersPage() {
                             <MoreVertical className="h-4 w-4 text-zinc-500" />
                           </button>
                           {actionMenuUser === u.id && (
-                            <div className="absolute right-0 top-full z-10 w-44 rounded-xl border border-white/[0.06] bg-[#111] py-1">
+                            <div className="absolute right-4 top-full z-50 w-44 rounded-xl border border-white/[0.06] bg-[#111] py-1 shadow-xl shadow-black/40">
                               <button
                                 onClick={(e) => { e.stopPropagation(); updateUser(u.id, { verificationLevel: 'verified' }) }}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.04]"
