@@ -5,6 +5,37 @@ import { requireAuth } from '../_lib/auth.js'
 // Vercel API docs: POST /v10/projects/{projectId}/domains
 const VERCEL_API = 'https://api.vercel.com'
 
+// Cache team ID to avoid repeated lookups
+let cachedTeamId = undefined
+
+async function getTeamId(token, projectId) {
+  if (cachedTeamId !== undefined) return cachedTeamId
+  try {
+    const res = await fetch(`${VERCEL_API}/v9/projects/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    cachedTeamId = data.teamId || data.team?.id || null
+    return cachedTeamId
+  } catch {
+    cachedTeamId = null
+    return null
+  }
+}
+
+async function hasWildcardDomain(token, projectId, teamParam) {
+  try {
+    const res = await fetch(
+      `${VERCEL_API}/v9/projects/${projectId}/domains${teamParam}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    const data = await res.json()
+    return data.domains?.some(d => d.name === '*.togogo.me') || false
+  } catch {
+    return false
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -49,7 +80,7 @@ export default async function handler(req, res) {
     const vercelProjectId = process.env.VERCEL_PROJECT_ID
 
     if (!vercelToken || !vercelProjectId) {
-      // Demo mode — simulate success without actual Vercel API call
+      // No Vercel tokens — store in DB only (subdomain will work once wildcard is configured)
       await sql`
         INSERT INTO user_stores (user_id, subdomain, full_domain, status)
         VALUES (${user.id}, ${clean}, ${fullDomain}, 'active')
@@ -62,37 +93,84 @@ export default async function handler(req, res) {
         domain: fullDomain,
         url: `https://${fullDomain}`,
         vercel_configured: false,
+        note: 'VERCEL_TOKEN/VERCEL_PROJECT_ID not set — subdomain stored in DB but not registered on Vercel',
       })
     }
 
-    // Add domain to Vercel project
-    const addDomainRes = await fetch(`${VERCEL_API}/v10/projects/${vercelProjectId}/domains`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${vercelToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ name: fullDomain }),
-    })
+    // Get team ID for Pro/Team Vercel accounts
+    const teamId = await getTeamId(vercelToken, vercelProjectId)
+    const teamParam = teamId ? `?teamId=${teamId}` : ''
 
-    const domainData = await addDomainRes.json()
+    // Check if wildcard *.togogo.me is already configured
+    const wildcardExists = await hasWildcardDomain(vercelToken, vercelProjectId, teamParam)
 
-    if (!addDomainRes.ok) {
-      // Domain might already exist on Vercel — that's OK if it's ours
-      if (domainData.error?.code !== 'domain_already_in_use') {
-        return res.status(400).json({
-          error: domainData.error?.message || 'Failed to create subdomain on Vercel',
-        })
+    let vercelResult = null
+
+    if (wildcardExists) {
+      // Wildcard handles all subdomains — no individual domain needed
+      vercelResult = { wildcard: true, message: 'Covered by *.togogo.me wildcard' }
+    } else {
+      // Add individual subdomain to Vercel project
+      const addDomainRes = await fetch(
+        `${VERCEL_API}/v10/projects/${vercelProjectId}/domains${teamParam}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${vercelToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: fullDomain }),
+        }
+      )
+
+      const domainData = await addDomainRes.json()
+
+      if (!addDomainRes.ok) {
+        // domain_already_in_use means it exists on this project — that's fine
+        // Also handle 'domain_already_exists' variant
+        const errCode = domainData.error?.code || ''
+        if (!errCode.includes('already')) {
+          console.error(`Vercel domain add failed for ${fullDomain}:`, domainData)
+
+          // Try adding wildcard as fallback
+          console.log('Attempting wildcard *.togogo.me as fallback...')
+          const wcRes = await fetch(
+            `${VERCEL_API}/v10/projects/${vercelProjectId}/domains${teamParam}`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${vercelToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ name: '*.togogo.me' }),
+            }
+          )
+          const wcData = await wcRes.json()
+          if (wcRes.ok || (wcData.error?.code || '').includes('already')) {
+            vercelResult = { wildcard: true, message: 'Wildcard *.togogo.me added as fallback' }
+          } else {
+            // Store in DB anyway — the subdomain will work once DNS is configured
+            console.error('Wildcard fallback also failed:', wcData)
+            vercelResult = {
+              error: domainData.error?.message || 'Vercel API error',
+              fallbackError: wcData.error?.message,
+            }
+          }
+        } else {
+          vercelResult = { ...domainData, alreadyExists: true }
+        }
+      } else {
+        vercelResult = domainData
       }
     }
 
-    // Store in database
+    // Store in database regardless — the store entry is needed for the storefront API
     await sql`
       INSERT INTO user_stores (user_id, subdomain, full_domain, status, vercel_domain_id)
-      VALUES (${user.id}, ${clean}, ${fullDomain}, 'active', ${domainData.id || null})
+      VALUES (${user.id}, ${clean}, ${fullDomain}, 'active', ${vercelResult?.id || (vercelResult?.wildcard ? 'wildcard' : null)})
       ON CONFLICT (user_id) DO UPDATE
       SET subdomain = ${clean}, full_domain = ${fullDomain}, status = 'active',
-          vercel_domain_id = ${domainData.id || null}, updated_at = NOW()
+          vercel_domain_id = ${vercelResult?.id || (vercelResult?.wildcard ? 'wildcard' : null)}, updated_at = NOW()
     `
 
     return res.json({
@@ -100,7 +178,8 @@ export default async function handler(req, res) {
       subdomain: clean,
       domain: fullDomain,
       url: `https://${fullDomain}`,
-      vercel: domainData,
+      vercel_configured: !vercelResult?.error,
+      vercel: vercelResult,
     })
   } catch (err) {
     if (err.status === 401) return res.status(401).json({ error: err.message })

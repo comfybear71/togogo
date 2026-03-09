@@ -169,16 +169,90 @@ async function executeStep(stepId, userId, subdomain, fullDomain, storeName) {
 
   switch (stepId) {
     case 'subdomain': {
-      if (!vercelToken || !vercelProjectId) return // Demo mode
-      // Add subdomain to Vercel project — same deployment serves all stores
-      await fetch(`https://api.vercel.com/v10/projects/${vercelProjectId}/domains`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${vercelToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: fullDomain }),
-      })
+      if (!vercelToken || !vercelProjectId) {
+        console.log('Vercel tokens not set — skipping domain registration (demo mode)')
+        return
+      }
+
+      // Get team ID for Pro/Team accounts
+      let teamParam = ''
+      try {
+        const projRes = await fetch(`https://api.vercel.com/v9/projects/${vercelProjectId}`, {
+          headers: { Authorization: `Bearer ${vercelToken}` },
+        })
+        const projData = await projRes.json()
+        const teamId = projData.teamId || projData.team?.id
+        if (teamId) teamParam = `?teamId=${teamId}`
+      } catch (e) {
+        console.log('Could not fetch team ID, continuing without it:', e.message)
+      }
+
+      // First check if wildcard *.togogo.me is already configured
+      // If so, we don't need to add individual subdomains
+      try {
+        const listRes = await fetch(
+          `https://api.vercel.com/v9/projects/${vercelProjectId}/domains${teamParam}`,
+          { headers: { Authorization: `Bearer ${vercelToken}` } }
+        )
+        const listData = await listRes.json()
+        const hasWildcard = listData.domains?.some(d => d.name === '*.togogo.me')
+
+        if (hasWildcard) {
+          console.log(`Wildcard *.togogo.me exists — ${fullDomain} will work automatically`)
+          // Store the Vercel domain info in our DB
+          await sql`
+            UPDATE user_stores SET vercel_domain_id = 'wildcard'
+            WHERE user_id = ${userId} AND subdomain = ${subdomain}
+          `.catch(() => {})
+          return
+        }
+      } catch (e) {
+        console.log('Could not check existing domains:', e.message)
+      }
+
+      // No wildcard — add individual subdomain to Vercel project
+      const addRes = await fetch(
+        `https://api.vercel.com/v10/projects/${vercelProjectId}/domains${teamParam}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${vercelToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name: fullDomain }),
+        }
+      )
+      const addData = await addRes.json()
+
+      if (!addRes.ok && addData.error?.code !== 'domain_already_in_use') {
+        console.error(`Vercel domain add failed for ${fullDomain}:`, addData)
+        // Try adding the wildcard as a fallback
+        console.log('Attempting to add wildcard *.togogo.me as fallback...')
+        const wcRes = await fetch(
+          `https://api.vercel.com/v10/projects/${vercelProjectId}/domains${teamParam}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${vercelToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: '*.togogo.me' }),
+          }
+        )
+        const wcData = await wcRes.json()
+        if (wcRes.ok || wcData.error?.code === 'domain_already_in_use') {
+          console.log('Wildcard domain added successfully')
+        } else {
+          console.error('Wildcard fallback also failed:', wcData)
+        }
+      } else {
+        console.log(`Domain ${fullDomain} added to Vercel project successfully`)
+        // Store the Vercel domain ID
+        await sql`
+          UPDATE user_stores SET vercel_domain_id = ${addData.id || 'added'}
+          WHERE user_id = ${userId} AND subdomain = ${subdomain}
+        `.catch(() => {})
+      }
       break
     }
 
