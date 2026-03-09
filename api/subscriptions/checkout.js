@@ -1,4 +1,4 @@
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 import Stripe from 'stripe'
 
@@ -59,6 +59,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await ensureSchema()
     const user = await requireAuth(req)
     const { storeName, subdomain } = req.body
 

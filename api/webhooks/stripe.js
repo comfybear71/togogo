@@ -1,6 +1,6 @@
 // Stripe webhook handler — processes completed payments
 // Handles: domain purchases, subscription changes, invoice events
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
 
@@ -47,6 +47,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    await ensureSchema()
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object
@@ -238,6 +240,75 @@ export default async function handler(req, res) {
             console.log(`Invoice payment failed (attempt ${attemptCount}/4) — subscription past_due: ${invoice.subscription}`)
           }
         }
+        break
+      }
+
+      // Dispute handling — customer filed a chargeback
+      case 'charge.dispute.created': {
+        const dispute = event.data.object
+        const chargeId = dispute.charge
+        const amount = (dispute.amount || 0) / 100
+        const reason = dispute.reason || 'unknown'
+
+        // Find the subscription or order linked to this charge
+        try {
+          await sql`
+            INSERT INTO disputes (stripe_dispute_id, stripe_charge_id, amount, currency, reason, status, evidence_due_by)
+            VALUES (${dispute.id}, ${chargeId}, ${amount}, ${dispute.currency || 'aud'}, ${reason}, 'open',
+                    ${dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000).toISOString() : null})
+            ON CONFLICT (stripe_dispute_id) DO UPDATE SET status = 'open', updated_at = NOW()
+          `
+        } catch (err) {
+          console.error('Failed to record dispute:', err.message)
+        }
+        console.log(`Dispute created: ${dispute.id} amount=${amount} reason=${reason}`)
+        break
+      }
+
+      case 'charge.dispute.updated': {
+        const dispute = event.data.object
+        const status = dispute.status === 'won' ? 'won' : dispute.status === 'lost' ? 'lost' : 'under_review'
+        try {
+          await sql`
+            UPDATE disputes SET status = ${status}, updated_at = NOW()
+            WHERE stripe_dispute_id = ${dispute.id}
+          `
+        } catch (err) {
+          console.error('Failed to update dispute:', err.message)
+        }
+        console.log(`Dispute updated: ${dispute.id} status=${status}`)
+        break
+      }
+
+      case 'charge.dispute.closed': {
+        const dispute = event.data.object
+        const status = dispute.status === 'won' ? 'won' : 'lost'
+        try {
+          await sql`
+            UPDATE disputes SET status = ${status}, resolved_at = NOW(), updated_at = NOW()
+            WHERE stripe_dispute_id = ${dispute.id}
+          `
+        } catch (err) {
+          console.error('Failed to close dispute:', err.message)
+        }
+        console.log(`Dispute closed: ${dispute.id} status=${status}`)
+        break
+      }
+
+      // Refund handling
+      case 'charge.refunded': {
+        const charge = event.data.object
+        const refundAmount = (charge.amount_refunded || 0) / 100
+        try {
+          await sql`
+            INSERT INTO refunds (stripe_charge_id, amount, currency, status)
+            VALUES (${charge.id}, ${refundAmount}, ${charge.currency || 'aud'}, 'completed')
+            ON CONFLICT (stripe_charge_id) DO UPDATE SET amount = ${refundAmount}, status = 'completed', updated_at = NOW()
+          `
+        } catch (err) {
+          console.error('Failed to record refund:', err.message)
+        }
+        console.log(`Charge refunded: ${charge.id} amount=${refundAmount}`)
         break
       }
 

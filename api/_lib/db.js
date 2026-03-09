@@ -184,6 +184,43 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check` } catch { /* */ }
   try { await sql`ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (status IN ('active', 'past_due', 'cancelled', 'expired'))` } catch { /* */ }
 
+  // Disputes — tracks Stripe chargebacks and customer disputes
+  await sql`
+    CREATE TABLE IF NOT EXISTS disputes (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      stripe_dispute_id TEXT UNIQUE,
+      stripe_charge_id TEXT,
+      order_id UUID REFERENCES user_orders(id) ON DELETE SET NULL,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      amount NUMERIC(10,2) DEFAULT 0,
+      currency TEXT DEFAULT 'aud',
+      reason TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'under_review', 'won', 'lost', 'closed')),
+      admin_note TEXT,
+      evidence_due_by TIMESTAMPTZ,
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
+  // Refunds — tracks refund transactions
+  await sql`
+    CREATE TABLE IF NOT EXISTS refunds (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      stripe_charge_id TEXT UNIQUE,
+      stripe_refund_id TEXT,
+      order_id UUID REFERENCES user_orders(id) ON DELETE SET NULL,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      amount NUMERIC(10,2) DEFAULT 0,
+      currency TEXT DEFAULT 'aud',
+      reason TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed')),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
   // Admin settings (key-value config)
   await sql`
     CREATE TABLE IF NOT EXISTS admin_settings (
@@ -212,4 +249,7 @@ export async function initializeSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_user_domains_user ON user_domains(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_stores_user ON user_stores(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_stores_subdomain ON user_stores(subdomain)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_disputes_stripe ON disputes(stripe_dispute_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_refunds_stripe ON refunds(stripe_charge_id)`
 }

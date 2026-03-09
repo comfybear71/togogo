@@ -1,6 +1,6 @@
 // Public storefront API — serves store info + products by subdomain
 // No auth required — this is the customer-facing store
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   // CORS for subdomain requests
@@ -12,6 +12,8 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  await ensureSchema()
 
   const { subdomain } = req.query
   if (!subdomain) {

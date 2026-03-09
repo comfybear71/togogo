@@ -1,6 +1,6 @@
 // Storefront order API — handles customer purchases on ToGoGo-hosted stores
 // Creates an order record and triggers supplier fulfillment
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -13,6 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await ensureSchema()
     const { subdomain, items, customer } = req.body
 
     if (!subdomain || !items?.length || !customer?.name || !customer?.email) {

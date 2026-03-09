@@ -1,6 +1,6 @@
 // Admin endpoint to manually provision a store + subscription for a user
 // Used when a client has paid but store creation failed
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAdminOrSetup } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -15,6 +15,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await ensureSchema()
     const { userId, email, userName, subdomain, storeName, pricePerMonth } = req.body
 
     if (!subdomain) {
