@@ -4,14 +4,18 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import { sql, ensureSchema } from './db.js'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'togogo-dev-secret-change-me'
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET && (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production')) {
+  throw new Error('JWT_SECRET environment variable is required in production')
+}
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'togogo-dev-secret-change-me'
 const JWT_EXPIRES_IN = '30d'
 
 // Generate JWT token for a user
 export function generateToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
-    JWT_SECRET,
+    EFFECTIVE_JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
   )
 }
@@ -19,7 +23,7 @@ export function generateToken(user) {
 // Verify JWT token and return user payload
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET)
+    return jwt.verify(token, EFFECTIVE_JWT_SECRET)
   } catch {
     return null
   }
@@ -88,7 +92,7 @@ export async function requireAdmin(req) {
 // Admin check that also allows setup secret for initial configuration
 export async function requireAdminOrSetup(req) {
   const setupSecret = req.headers['x-setup-secret']
-  if (setupSecret && setupSecret === JWT_SECRET) {
+  if (setupSecret && setupSecret === EFFECTIVE_JWT_SECRET) {
     return { id: 'setup', role: 'admin' }
   }
   return requireAdmin(req)

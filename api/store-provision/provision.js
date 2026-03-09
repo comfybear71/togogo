@@ -46,21 +46,6 @@ export default async function handler(req, res) {
     // Create provision job record
     const provisionData = JSON.stringify({ provisionId, steps: PROVISION_STEPS.map(s => ({ ...s, status: 'pending' })), currentStep: 0 })
 
-    try {
-      await sql`
-        INSERT INTO store_provisions (
-          id, user_id, store_name, subdomain, full_domain,
-          tier, status, current_step, steps_total, steps_data
-        ) VALUES (
-          ${provisionId}, ${user.id}, ${storeName}, ${clean}, ${fullDomain},
-          ${tier || 'pro'}, 'in_progress', 0, ${PROVISION_STEPS.length},
-          ${JSON.stringify(PROVISION_STEPS.map(s => ({ ...s, status: 'pending' })))}
-        )
-      `
-    } catch (e) {
-      console.log('store_provisions insert skipped:', e.message)
-    }
-
     // Upsert into user_stores — try ON CONFLICT first, fall back to delete+insert
     try {
       await sql`

@@ -46,7 +46,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-6 mt-2 space-y-1">
             <li><strong className="text-white">Connected platforms:</strong> When you authorise connections to eBay, Etsy, Amazon, TikTok Shop, or other marketplaces</li>
             <li><strong className="text-white">Payment processors:</strong> Stripe, for processing payments</li>
-            <li><strong className="text-white">Service providers:</strong> Hosting (Vercel, Supabase), email (SendGrid), and analytics providers</li>
+            <li><strong className="text-white">Service providers:</strong> Hosting (Vercel, Neon), email (SendGrid), and analytics providers</li>
             <li><strong className="text-white">Shipping carriers:</strong> Australia Post, EasyPost, and other carriers for order fulfilment</li>
             <li><strong className="text-white">Legal requirements:</strong> When required by law or to protect our rights</li>
           </ul>
@@ -55,7 +55,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="text-xl font-semibold text-white mb-3">5. Data Storage and Security</h2>
-          <p>Your data is stored securely using Supabase (hosted on AWS). We use encryption in transit (HTTPS/TLS) and at rest. OAuth tokens for connected platforms are stored securely and can be revoked at any time by disconnecting the platform from your account. While we take reasonable steps to protect your information, no method of transmission over the Internet is 100% secure.</p>
+          <p>Your data is stored securely using Vercel Postgres powered by Neon. We use encryption in transit (HTTPS/TLS) and at rest. OAuth tokens for connected platforms are stored securely and can be revoked at any time by disconnecting the platform from your account. While we take reasonable steps to protect your information, no method of transmission over the Internet is 100% secure.</p>
         </section>
 
         <section>

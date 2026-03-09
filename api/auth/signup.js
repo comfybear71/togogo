@@ -18,6 +18,12 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' })
   }
 
+  // Basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address' })
+  }
+
   try {
     // Check if user already exists
     const { rows: existing } = await sql`

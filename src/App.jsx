@@ -68,6 +68,8 @@ function getStoreSubdomain() {
   // Main domains — NOT a storefront
   const mainHosts = ['togogo.me', 'www.togogo.me', 'localhost', '127.0.0.1']
   if (mainHosts.includes(host)) return null
+  // Vercel preview/production URLs are the main app, not a storefront
+  if (host.endsWith('.vercel.app')) return null
   // Check for subdomain of togogo.me (e.g. mystore.togogo.me)
   if (host.endsWith('.togogo.me')) {
     const sub = host.replace('.togogo.me', '')

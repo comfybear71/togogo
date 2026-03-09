@@ -136,7 +136,7 @@ export default function BrowsePage() {
   const [category, setCategory] = useState(searchParams.get('category') || '')
   const [sort, setSort] = useState('deal_score')
 
-  // Real data from Supabase
+  // Real data from API
   const { data: trendingRaw, isLoading: trendingLoading } = useTrendingProducts()
   const { data: dealsRaw, isLoading: dealsLoading } = useDailyDeals()
   const { data: searchResults, isLoading: searchLoading } = useProductSearch(
