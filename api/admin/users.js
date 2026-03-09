@@ -1,5 +1,5 @@
 // Admin users API — list, search, update users
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAdminOrSetup } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -12,20 +12,13 @@ export default async function handler(req, res) {
   // GET — list users with search/filter
   if (req.method === 'GET') {
     try {
+      await ensureSchema()
       const { search, role, status, sort, limit: lim } = req.query
       const limit = Math.min(parseInt(lim) || 50, 200)
 
-      // Check which tables exist to build safe subqueries
-      let hasOrdersTable = false
-      let hasStoresTable = false
-      try {
-        await sql.query(`SELECT 1 FROM user_orders LIMIT 0`)
-        hasOrdersTable = true
-      } catch { /* table doesn't exist */ }
-      try {
-        await sql.query(`SELECT 1 FROM user_stores LIMIT 0`)
-        hasStoresTable = true
-      } catch { /* table doesn't exist */ }
+      // Tables are guaranteed to exist after ensureSchema()
+      const hasOrdersTable = true
+      const hasStoresTable = true
 
       let query = `
         SELECT u.id, u.email, u.name, u.avatar_url, u.role, u.verification_level,
@@ -97,7 +90,7 @@ export default async function handler(req, res) {
       const updates = []
       const params = []
 
-      if (role && ['buyer', 'seller', 'admin'].includes(role)) {
+      if (role && ['buyer', 'subscriber', 'both', 'admin'].includes(role)) {
         params.push(role)
         updates.push(`role = $${params.length}`)
       }

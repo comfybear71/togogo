@@ -48,15 +48,32 @@ export default function OneClickStorePage() {
   // Handle payment callbacks from Stripe redirect
   useEffect(() => {
     const paymentStatus = searchParams.get('payment')
-    const pendingDeploy = sessionStorage.getItem('togogo-deploy-active')
+    const sessionId = searchParams.get('session_id')
 
-    if (paymentStatus === 'success' && pendingDeploy) {
-      // Payment succeeded — resume deploy from payment step
+    if (paymentStatus === 'success') {
+      // Payment succeeded — activate store via API (don't rely on sessionStorage)
+      // sessionStorage may be lost during cross-domain Stripe redirect on mobile
       const savedName = sessionStorage.getItem('togogo-pending-store-name') || ''
       const savedSub = sessionStorage.getItem('togogo-pending-subdomain') || ''
+
+      // Always call activate to ensure store + subscription + role are set
+      const token = localStorage.getItem('togogo-token')
+      if (token) {
+        fetch(`${API_BASE}/api/store-provision/activate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ sessionId }),
+        }).catch(() => {})
+      }
+
       if (savedName) setStoreName(savedName)
-      if (savedSub) setSubdomain(savedSub)
-      setStoreUrl(`https://${savedSub}.togogo.me`)
+      if (savedSub) {
+        setSubdomain(savedSub)
+        setStoreUrl(`https://${savedSub}.togogo.me`)
+      }
       setPhase('deploying')
       setPaymentComplete(true)
       setSearchParams({}, { replace: true })
