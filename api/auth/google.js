@@ -11,10 +11,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Google OAuth not configured' })
   }
 
-  // Use FRONTEND_URL for redirect URI — must match what's registered in Google Cloud Console
-  // Default to togogo.me in production so it always matches the registered redirect URI
-  const baseUrl = process.env.FRONTEND_URL || 'https://togogo.me'
-  const redirectUri = `${baseUrl}/api/auth/google/callback`
+  // OAuth redirect URI must EXACTLY match what's registered in Google Cloud Console
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://togogo.me/api/auth/google/callback'
 
   const state = crypto.randomBytes(16).toString('hex')
 

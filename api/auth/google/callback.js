@@ -27,9 +27,8 @@ export default async function handler(req, res) {
       return res.redirect(`${frontendUrl}/auth?error=${encodeURIComponent('Google sign-in is not configured. Please contact support.')}`)
     }
 
-    // Must match the redirect URI used in /api/auth/google.js
-    const baseUrl = process.env.FRONTEND_URL || 'https://togogo.me'
-    const redirectUri = `${baseUrl}/api/auth/google/callback`
+    // Must EXACTLY match the redirect URI used in /api/auth/google.js and Google Console
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'https://togogo.me/api/auth/google/callback'
 
     const client = new OAuth2Client(clientId, clientSecret, redirectUri)
 
