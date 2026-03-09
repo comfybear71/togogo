@@ -45,9 +45,30 @@ export default async function handler(req, res) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object
-        const { user_id, domain, type } = session.metadata || {}
+        const { user_id, domain, type, store_name, subdomain } = session.metadata || {}
 
-        if (type === 'domain_purchase' && domain && user_id) {
+        if (type === 'store_subscription' && user_id && subdomain) {
+          // Store subscription payment completed — mark store as ready for provisioning
+          console.log(`Store subscription paid: ${store_name} (${subdomain}.togogo.me) for user ${user_id}`)
+
+          // Update store status to provisioning (frontend will detect this and start polling)
+          try {
+            await sql`
+              UPDATE user_stores
+              SET status = 'paid',
+                  provision_data = provision_data::jsonb || ${JSON.stringify({ payment_confirmed: true, paid_at: new Date().toISOString() })}::jsonb,
+                  updated_at = NOW()
+              WHERE user_id = ${user_id} AND subdomain = ${subdomain}
+            `
+          } catch {
+            // Fallback: try without jsonb concat
+            await sql`
+              UPDATE user_stores
+              SET status = 'paid', updated_at = NOW()
+              WHERE user_id = ${user_id} AND subdomain = ${subdomain}
+            `
+          }
+        } else if (type === 'domain_purchase' && domain && user_id) {
           // Update order status
           await sql`
             UPDATE user_orders

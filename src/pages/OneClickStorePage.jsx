@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Rocket, Globe, Store, Shield, Zap, Check, X, AlertCircle,
   Loader2, ArrowRight, ExternalLink, Sparkles, ShoppingCart,
@@ -243,6 +243,7 @@ function ProvisionMonitor({ steps, currentStep, status, storeName, storeUrl, sta
 // ============================================
 export default function OneClickStorePage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const [phase, setPhase] = useState('input') // 'input' | 'provisioning' | 'done'
 
@@ -261,13 +262,22 @@ export default function OneClickStorePage() {
   const [provisionStartTime, setProvisionStartTime] = useState(null)
   const pollRef = useRef(null)
   const checkTimeoutRef = useRef(null)
+  const paymentHandledRef = useRef(false)
 
-  // Restore store name if returning from auth
+  // Restore store name if returning from auth or payment
   useEffect(() => {
     const pending = sessionStorage.getItem('togogo-pending-store-name')
     if (pending && !storeName) {
       setStoreName(pending)
-      sessionStorage.removeItem('togogo-pending-store-name')
+      // Don't clear yet — we may need it for payment success handler
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle cancelled payment
+  useEffect(() => {
+    if (searchParams.get('payment') === 'cancelled') {
+      setError('Payment was cancelled. You can try again when ready.')
+      setSearchParams({}, { replace: true })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -392,15 +402,12 @@ export default function OneClickStorePage() {
     checkExisting()
   }, [startPolling])
 
-  // Launch store
-  const handleLaunch = async () => {
-    if (!user) {
-      // Save input so it's pre-filled after auth
-      if (storeName) sessionStorage.setItem('togogo-pending-store-name', storeName)
-      navigate('/auth?redirect=/create-store')
-      return
-    }
-    if (!storeName.trim() || !subdomain.trim()) return
+  // Start provisioning (called after payment confirmed or if already subscribed)
+  const startProvisioning = useCallback(async () => {
+    const name = storeName || sessionStorage.getItem('togogo-pending-store-name') || ''
+    const sub = subdomain || name.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+
+    if (!name || !sub) return
 
     setLaunching(true)
     setError(null)
@@ -414,8 +421,8 @@ export default function OneClickStorePage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          storeName: storeName.trim(),
-          subdomain: subdomain.trim(),
+          storeName: name.trim(),
+          subdomain: sub.trim(),
           tier: 'pro',
         }),
       })
@@ -427,6 +434,9 @@ export default function OneClickStorePage() {
         setLaunching(false)
         return
       }
+
+      // Clean up session storage
+      sessionStorage.removeItem('togogo-pending-store-name')
 
       setStoreUrl(data.url)
       setPhase('provisioning')
@@ -453,6 +463,69 @@ export default function OneClickStorePage() {
     } catch (err) {
       setError(err.message || 'Something went wrong')
     } finally {
+      setLaunching(false)
+    }
+  }, [storeName, subdomain, startPolling])
+
+  // Handle payment success — auto-trigger provisioning
+  useEffect(() => {
+    if (searchParams.get('payment') === 'success' && user && !paymentHandledRef.current) {
+      paymentHandledRef.current = true
+      setSearchParams({}, { replace: true })
+      startProvisioning()
+    }
+  }, [searchParams, user, startProvisioning, setSearchParams])
+
+  // Launch store — routes through Stripe checkout
+  const handleLaunch = async () => {
+    if (!user) {
+      // Save input so it's pre-filled after auth
+      if (storeName) sessionStorage.setItem('togogo-pending-store-name', storeName)
+      navigate('/auth?redirect=/create-store&tab=signup')
+      return
+    }
+    if (!storeName.trim() || !subdomain.trim()) return
+
+    setLaunching(true)
+    setError(null)
+
+    try {
+      const token = localStorage.getItem('togogo-token')
+
+      // Step 1: Create Stripe checkout session for subscription
+      const res = await fetch(`${API_BASE}/api/subscriptions/checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeName: storeName.trim(),
+          subdomain: subdomain.trim(),
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to create checkout session')
+        setLaunching(false)
+        return
+      }
+
+      // If already subscribed, skip payment and go straight to provisioning
+      if (data.alreadySubscribed) {
+        await startProvisioning()
+        return
+      }
+
+      // Save store name for after Stripe redirect
+      sessionStorage.setItem('togogo-pending-store-name', storeName)
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.url
+    } catch (err) {
+      setError(err.message || 'Something went wrong')
       setLaunching(false)
     }
   }
@@ -569,8 +642,28 @@ export default function OneClickStorePage() {
             <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#FF6B35]/10 border border-[#FF6B35]/20 mb-4">
               <Lock className="h-4 w-4 text-[#FF6B35] flex-shrink-0" />
               <p className="text-[11px] text-zinc-300">
-                You'll need to <span className="text-[#FF6B35] font-medium">sign in or create an account</span> to launch your store. Takes 10 seconds.
+                You'll need to <span className="text-[#FF6B35] font-medium">create an account</span> and subscribe to launch your store.
               </p>
+            </div>
+          )}
+
+          {/* Flow steps indicator */}
+          {storeName.trim() && subdomain.trim() && (
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium ${user ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/[0.06] text-zinc-400'}`}>
+                {user ? <Check className="h-3 w-3" /> : <span className="w-4 h-4 rounded-full border border-zinc-600 flex items-center justify-center text-[8px]">1</span>}
+                Account
+              </div>
+              <ArrowRight className="h-3 w-3 text-zinc-600" />
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium bg-white/[0.06] text-zinc-400">
+                <span className="w-4 h-4 rounded-full border border-zinc-600 flex items-center justify-center text-[8px]">2</span>
+                Payment
+              </div>
+              <ArrowRight className="h-3 w-3 text-zinc-600" />
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium bg-white/[0.06] text-zinc-400">
+                <span className="w-4 h-4 rounded-full border border-zinc-600 flex items-center justify-center text-[8px]">3</span>
+                Live Store
+              </div>
             </div>
           )}
 
@@ -587,23 +680,23 @@ export default function OneClickStorePage() {
             {launching ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Launching your store...
+                {user ? 'Setting up payment...' : 'Redirecting...'}
               </>
             ) : !user ? (
               <>
                 <Lock className="h-5 w-5" />
-                Sign In & Launch
+                Create Account & Subscribe — $19.99/mo
               </>
             ) : (
               <>
-                <Rocket className="h-5 w-5" />
-                Launch My Store
+                <CreditCard className="h-5 w-5" />
+                Subscribe & Launch — $19.99/mo
               </>
             )}
           </button>
 
           <p className="text-[10px] text-zinc-600 text-center mt-3">
-            Fully automated. Your store will be live in ~30 seconds.
+            Secure payment via Stripe. Cancel anytime. Store goes live in ~30 seconds after payment.
           </p>
 
           {/* Want your own domain? */}

@@ -15,6 +15,7 @@ export default function AuthPage() {
   const [searchParams] = useSearchParams();
   const { user, signIn, signUp, signInWithGoogle, demoSignIn } = useAuthStore();
 
+  const redirectTo = searchParams.get('redirect') || '/';
   const [tab, setTab] = useState(searchParams.get('tab') === 'signup' ? 'signup' : 'signin');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -32,8 +33,8 @@ export default function AuthPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (user) navigate('/');
-  }, [user, navigate]);
+    if (user) navigate(redirectTo);
+  }, [user, navigate, redirectTo]);
 
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -41,7 +42,7 @@ export default function AuthPage() {
     setLoading(true);
     try {
       await signIn(email, password);
-      navigate('/');
+      navigate(redirectTo);
     } catch (err) {
       setError(err.message || 'Failed to sign in. Please check your credentials.');
     } finally {
@@ -65,7 +66,7 @@ export default function AuthPage() {
     setLoading(true);
     try {
       await signUp(signupEmail, signupPassword, { name });
-      navigate('/');
+      navigate(redirectTo);
     } catch (err) {
       setError(err.message || 'Failed to create account.');
     } finally {
@@ -231,7 +232,7 @@ export default function AuthPage() {
 
               <button
                 type="button"
-                onClick={() => { demoSignIn(); navigate('/'); }}
+                onClick={() => { demoSignIn(); navigate(redirectTo); }}
                 className="mt-3 flex w-full items-center justify-center gap-3 rounded-xl border border-dashed border-[#FF6B35]/30 bg-[#0a0a0a] py-3.5 font-['Nunito'] text-sm font-semibold text-[#FF6B35]/70 transition-colors hover:border-[#FF6B35]/50 hover:text-[#FF6B35]"
               >
                 Demo Login (Test Mode)
