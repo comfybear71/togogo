@@ -4,153 +4,236 @@ import {
   Rocket, Globe, Store, Shield, Zap, Check, X, AlertCircle,
   Loader2, ArrowRight, ExternalLink, Sparkles, ShoppingCart,
   Server, CreditCard, Link2, Paintbrush, Package, Lock,
-  Settings, ChevronRight, Crown, RefreshCw
+  Settings, ChevronRight, Crown, RefreshCw, Clock
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 // ============================================
-// STEP ICONS — mapped by provision step ID
+// STEP CONFIG — emoji + labels for terminal log
 // ============================================
-const STEP_ICONS = {
-  validate: Settings,
-  subdomain: Globe,
-  dns: Server,
-  ssl: Lock,
-  wordpress: Store,
-  woocommerce: ShoppingCart,
-  theme: Paintbrush,
-  products: Package,
-  payments: CreditCard,
-  connect: Link2,
-  finalize: Sparkles,
+const STEP_CONFIG = {
+  validate:    { emoji: '\u{1F50D}', doneEmoji: '\u{2705}', doneText: 'Store details validated' },
+  subdomain:   { emoji: '\u{1F310}', doneEmoji: '\u{2705}', doneText: null },
+  dns:         { emoji: '\u{1F4E1}', doneEmoji: '\u{2705}', doneText: 'DNS records configured' },
+  ssl:         { emoji: '\u{1F512}', doneEmoji: '\u{2705}', doneText: 'SSL certificate active' },
+  wordpress:   { emoji: '\u{1F4E6}', doneEmoji: '\u{2705}', doneText: 'WordPress installed' },
+  woocommerce: { emoji: '\u{1F6D2}', doneEmoji: '\u{2705}', doneText: 'WooCommerce ready' },
+  theme:       { emoji: '\u{1F3A8}', doneEmoji: '\u{2705}', doneText: 'Store theme applied' },
+  products:    { emoji: '\u{1F4CB}', doneEmoji: '\u{2705}', doneText: 'Product sync configured' },
+  payments:    { emoji: '\u{1F4B3}', doneEmoji: '\u{2705}', doneText: 'Payment gateway active' },
+  connect:     { emoji: '\u{1F517}', doneEmoji: '\u{2705}', doneText: 'Connected to ToGoGo' },
+  finalize:    { emoji: '\u{2728}', doneEmoji: '\u{1F389}', doneText: null },
+}
+
+// Elapsed time formatter
+function formatElapsed(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : `0:${s.toString().padStart(2, '0')}`
 }
 
 // ============================================
-// PROVISION MONITOR COMPONENT
+// PROVISION MONITOR — Terminal Log Style
 // ============================================
-function ProvisionMonitor({ steps, currentStep, status, storeName, storeUrl }) {
+function ProvisionMonitor({ steps, currentStep, status, storeName, storeUrl, startTime }) {
   const completedCount = steps.filter(s => s.status === 'completed').length
   const progress = steps.length > 0 ? (completedCount / steps.length) * 100 : 0
   const isComplete = status === 'completed' || progress === 100
+  const activeStep = steps.find(s => s.status === 'in_progress')
+
+  // Elapsed timer
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    if (isComplete) return
+    const start = startTime || Date.now()
+    const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000))
+    tick()
+    const interval = setInterval(tick, 1000)
+    return () => clearInterval(interval)
+  }, [startTime, isComplete])
+
+  // Estimate remaining time (~2.5s per step average)
+  const remainingSteps = steps.length - completedCount
+  const avgPerStep = completedCount > 0 ? elapsed / completedCount : 2.5
+  const estRemaining = Math.max(0, Math.round(remainingSteps * avgPerStep))
+
+  // Auto-scroll log to bottom
+  const logRef = useRef(null)
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight
+    }
+  }, [completedCount])
 
   return (
     <div className="w-full max-w-lg mx-auto">
-      {/* Header */}
-      <div className="text-center mb-6">
-        {isComplete ? (
-          <>
-            <div className="relative mx-auto mb-4 w-16 h-16">
-              <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20">
-                <Check className="h-8 w-8 text-emerald-400" />
-              </div>
+      {/* ── Terminal container ── */}
+      <div className="rounded-2xl border border-white/[0.08] bg-[#0c0c0c] overflow-hidden shadow-2xl">
+
+        {/* ── Header bar ── */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06] bg-[#111]">
+          <div className="flex items-center gap-2.5">
+            {/* Status dot */}
+            <div className="relative">
+              <div className={`w-2.5 h-2.5 rounded-full ${
+                isComplete ? 'bg-emerald-400' : 'bg-[#FF6B35]'
+              }`} />
+              {!isComplete && (
+                <div className="absolute inset-0 w-2.5 h-2.5 rounded-full bg-[#FF6B35] animate-ping opacity-75" />
+              )}
             </div>
-            <h2 className="text-2xl font-heading font-bold text-white mb-1">
-              {storeName ? `${storeName} is live!` : 'Your store is live!'}
-            </h2>
-            <p className="text-xs text-emerald-400 font-medium">{storeUrl}</p>
-          </>
-        ) : (
-          <>
-            <div className="relative mx-auto mb-4 w-16 h-16">
-              <div className="absolute inset-0 rounded-full border-2 border-[#FF6B35]/20" />
-              <svg className="absolute inset-0 w-16 h-16 -rotate-90" viewBox="0 0 64 64">
-                <circle cx="32" cy="32" r="28" fill="none" stroke="#FF6B35" strokeWidth="3"
-                  strokeDasharray={`${progress * 1.76} 176`} strokeLinecap="round"
-                  className="transition-all duration-700 ease-out" />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-sm font-bold text-white">{Math.round(progress)}%</span>
-              </div>
-            </div>
-            <h2 className="text-xl font-heading font-bold text-white mb-1">
-              Setting up your store
-            </h2>
-            <p className="text-xs text-zinc-500">This takes about 30 seconds...</p>
-          </>
-        )}
-      </div>
-
-      {/* Overall progress bar */}
-      <div className="mb-6">
-        <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ease-out ${
-              isComplete ? 'bg-emerald-500' : 'bg-gradient-to-r from-[#FF6B35] to-[#FFD23F]'
-            }`}
-            style={{ width: `${progress}%` }}
-          />
+            <span className={`text-sm font-semibold ${isComplete ? 'text-emerald-400' : 'text-[#FF6B35]'}`}>
+              {isComplete
+                ? `${storeName || 'Store'} is live!`
+                : 'Setting up your store...'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono text-[#FF6B35]">
+              {formatElapsed(elapsed)} elapsed
+            </span>
+          </div>
         </div>
-        <div className="flex justify-between mt-2">
-          <span className="text-[10px] text-zinc-600">
-            Step {Math.min(completedCount + 1, steps.length)} of {steps.length}
-          </span>
-          <span className="text-[10px] text-zinc-600">
-            {completedCount}/{steps.length} complete
-          </span>
-        </div>
-      </div>
 
-      {/* Steps list */}
-      <div className="rounded-2xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        {steps.map((step, i) => {
-          const Icon = STEP_ICONS[step.id] || Settings
-          const isActive = step.status === 'in_progress'
-          const isDone = step.status === 'completed'
-
-          return (
-            <div
-              key={step.id}
-              className={`flex items-center gap-3 px-4 py-3 transition-all duration-500 ${
-                i > 0 ? 'border-t border-white/[0.04]' : ''
-              } ${isActive ? 'bg-[#FF6B35]/5' : isDone ? 'bg-emerald-500/[0.03]' : ''}`}
-            >
-              {/* Status icon */}
-              <div className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 transition-all duration-500 ${
-                isDone
-                  ? 'bg-emerald-500/15'
-                  : isActive
-                  ? 'bg-[#FF6B35]/15'
-                  : 'bg-white/[0.04]'
-              }`}>
-                {isDone ? (
-                  <Check className="h-4 w-4 text-emerald-400" />
-                ) : isActive ? (
-                  <Loader2 className="h-4 w-4 text-[#FF6B35] animate-spin" />
-                ) : (
-                  <Icon className="h-4 w-4 text-zinc-600" />
-                )}
-              </div>
-
-              {/* Label */}
-              <span className={`text-sm flex-1 transition-colors duration-500 ${
-                isDone
-                  ? 'text-emerald-400 font-medium'
-                  : isActive
-                  ? 'text-white font-medium'
-                  : 'text-zinc-600'
-              }`}>
-                {step.label}
+        {/* ── Progress summary line ── */}
+        <div className="px-4 py-2.5 border-b border-white/[0.06] bg-[#0e0e0e]">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-zinc-400 font-medium">
+              {isComplete
+                ? `\u{2705} All ${steps.length} steps complete`
+                : activeStep
+                ? `\u{270F}\u{FE0F} Step ${completedCount + 1}/${steps.length}: ${activeStep.label}`
+                : `Preparing...`
+              }
+            </span>
+            {!isComplete && estRemaining > 0 && (
+              <span className="text-[10px] text-zinc-600 font-mono">
+                ~{estRemaining}s remaining (est.)
               </span>
+            )}
+          </div>
 
-              {/* Status indicator */}
-              {isDone && (
-                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">
-                  DONE
+          {/* Progress bar */}
+          <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-700 ease-out ${
+                isComplete
+                  ? 'bg-emerald-500'
+                  : 'bg-gradient-to-r from-[#06D6A0] to-[#06D6A0]/60'
+              }`}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <span className="text-[10px] text-zinc-600">
+              {completedCount} done
+            </span>
+            <span className="text-[10px] text-zinc-600">
+              {Math.round(progress)}%
+            </span>
+          </div>
+        </div>
+
+        {/* ── Step log (terminal-style numbered list) ── */}
+        <div ref={logRef} className="px-4 py-3 max-h-[400px] overflow-y-auto space-y-0.5" style={{ scrollBehavior: 'smooth' }}>
+          {steps.map((step, i) => {
+            const config = STEP_CONFIG[step.id] || { emoji: '\u{2699}\u{FE0F}', doneEmoji: '\u{2705}' }
+            const isDone = step.status === 'completed'
+            const isActive = step.status === 'in_progress'
+            const isPending = step.status === 'pending'
+            const stepNum = i + 1
+
+            // Build the done text for subdomain and finalize steps
+            let doneLabel = config.doneText || step.label
+            if (step.id === 'subdomain' && isDone && storeUrl) {
+              doneLabel = `Subdomain created: ${storeUrl.replace('https://', '')}`
+            }
+            if (step.id === 'finalize' && isDone) {
+              doneLabel = `${storeName || 'Your store'} is ready to go!`
+            }
+
+            return (
+              <div key={step.id} className="flex items-start gap-0 font-mono leading-relaxed">
+                {/* Line number */}
+                <span className={`w-8 text-right text-[11px] flex-shrink-0 select-none ${
+                  isDone ? 'text-zinc-600' : isActive ? 'text-zinc-500' : 'text-zinc-700'
+                }`}>
+                  [{stepNum}]
                 </span>
-              )}
-              {isActive && (
-                <div className="flex gap-0.5">
-                  <div className="w-1 h-1 rounded-full bg-[#FF6B35] animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1 h-1 rounded-full bg-[#FF6B35] animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1 h-1 rounded-full bg-[#FF6B35] animate-bounce" style={{ animationDelay: '300ms' }} />
+
+                {/* Content */}
+                <div className="flex-1 ml-2 min-w-0">
+                  {isDone ? (
+                    <span className="text-[12px] text-emerald-400">
+                      {config.doneEmoji} {doneLabel}
+                    </span>
+                  ) : isActive ? (
+                    <span className="text-[12px] text-[#FF6B35]">
+                      {config.emoji} {step.label}
+                      <span className="inline-flex ml-1.5 gap-[2px]">
+                        <span className="inline-block w-[3px] h-[3px] rounded-full bg-[#FF6B35] animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="inline-block w-[3px] h-[3px] rounded-full bg-[#FF6B35] animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="inline-block w-[3px] h-[3px] rounded-full bg-[#FF6B35] animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-[12px] text-zinc-700">
+                      {config.emoji} {step.label}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
-          )
-        })}
+              </div>
+            )
+          })}
+
+          {/* Final line when complete */}
+          {isComplete && (
+            <>
+              <div className="h-px bg-white/[0.06] my-2" />
+              <div className="flex items-start gap-0 font-mono">
+                <span className="w-8 text-right text-[11px] text-zinc-600 flex-shrink-0" />
+                <span className="ml-2 text-[12px] text-emerald-400 font-semibold">
+                  {'\u{1F389}'} Store deployed successfully in {formatElapsed(elapsed)}
+                </span>
+              </div>
+              <div className="flex items-start gap-0 font-mono">
+                <span className="w-8 text-right text-[11px] text-zinc-600 flex-shrink-0" />
+                <span className="ml-2 text-[12px] text-zinc-400">
+                  {'\u{1F517}'} {storeUrl || `https://${storeName?.toLowerCase().replace(/[^a-z0-9]/g, '-')}.togogo.me`}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── Footer status bar ── */}
+        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#0a0a0a]">
+          <div className="flex items-center gap-2">
+            <Clock className="h-3 w-3 text-zinc-600" />
+            <span className="text-[10px] text-zinc-600 font-mono">
+              {formatElapsed(elapsed)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            {steps.map((step, i) => (
+              <div
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-500 ${
+                  step.status === 'completed'
+                    ? 'bg-emerald-400'
+                    : step.status === 'in_progress'
+                    ? 'bg-[#FF6B35] animate-pulse'
+                    : 'bg-zinc-800'
+                }`}
+              />
+            ))}
+          </div>
+          <span className="text-[10px] text-zinc-600 font-mono">
+            {completedCount}/{steps.length}
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -176,6 +259,7 @@ export default function OneClickStorePage() {
   const [provisionSteps, setProvisionSteps] = useState([])
   const [provisionStatus, setProvisionStatus] = useState('pending')
   const [storeUrl, setStoreUrl] = useState('')
+  const [provisionStartTime, setProvisionStartTime] = useState(null)
   const pollRef = useRef(null)
   const checkTimeoutRef = useRef(null)
 
@@ -283,6 +367,7 @@ export default function OneClickStorePage() {
           setStoreUrl(data.store?.url || '')
           setProvisionSteps(data.provision.steps || [])
           setProvisionStatus(data.provision.status)
+          setProvisionStartTime(Date.now())
           setPhase('provisioning')
           startPolling()
         } else if (data.status === 'active') {
@@ -335,6 +420,7 @@ export default function OneClickStorePage() {
 
       setStoreUrl(data.url)
       setPhase('provisioning')
+      setProvisionStartTime(Date.now())
 
       // Start with initial pending steps for immediate UI feedback
       const initialSteps = [
@@ -522,6 +608,7 @@ export default function OneClickStorePage() {
           status={provisionStatus}
           storeName={storeName}
           storeUrl={storeUrl}
+          startTime={provisionStartTime}
         />
       )}
 
@@ -536,6 +623,7 @@ export default function OneClickStorePage() {
             status="completed"
             storeName={storeName}
             storeUrl={storeUrl}
+            startTime={provisionStartTime}
           />
 
           {/* Action buttons */}
