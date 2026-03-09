@@ -130,27 +130,21 @@ export default async function handler(req, res) {
 
     const session = await stripe.checkout.sessions.create(checkoutConfig)
 
-    // Save checkout session ID to existing store record (don't overwrite status if already provisioning/active)
+    // Save checkout session ID to existing store record — MUST succeed so webhook can find it
+    const checkoutData = JSON.stringify({ checkout_session_id: session.id, awaiting_payment: true })
     try {
-      const checkoutData = JSON.stringify({ checkout_session_id: session.id, awaiting_payment: true })
-      // Only update provision_data, don't reset status — provision API already set it
-      const { rowCount } = await sql`
-        UPDATE user_stores
-        SET provision_data = provision_data::jsonb || ${checkoutData}::jsonb, updated_at = NOW()
-        WHERE user_id = ${user.id}
+      // Try upsert: create if missing, update if exists
+      await sql`
+        INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
+        VALUES (${user.id}, ${subdomain}, ${subdomain + '.togogo.me'}, ${storeName}, 'pending', ${checkoutData})
+        ON CONFLICT (user_id) DO UPDATE
+        SET provision_data = user_stores.provision_data::jsonb || ${checkoutData}::jsonb,
+            subdomain = ${subdomain}, full_domain = ${subdomain + '.togogo.me'},
+            store_name = ${storeName}, updated_at = NOW()
       `
-      if (!rowCount) {
-        // No existing store record — create one
-        await sql`
-          INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
-          VALUES (
-            ${user.id}, ${subdomain}, ${subdomain + '.togogo.me'}, ${storeName}, 'pending',
-            ${checkoutData}
-          )
-        `
-      }
-    } catch {
-      // Silent — store record creation is best-effort at this stage
+    } catch (storeErr) {
+      // Log but don't fail — webhook will create the store record as fallback
+      console.error('Checkout store record save failed:', storeErr.message)
     }
 
     return res.json({ url: session.url, sessionId: session.id })

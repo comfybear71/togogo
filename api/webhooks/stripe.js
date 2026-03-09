@@ -58,21 +58,65 @@ export default async function handler(req, res) {
           // Store subscription payment completed — activate the store
           console.log(`Store subscription paid: ${store_name} (${subdomain}.togogo.me) for user ${user_id}`)
 
+          const fullDomain = `${subdomain}.togogo.me`
+          const paymentData = JSON.stringify({ payment_confirmed: true, paid_at: new Date().toISOString(), checkout_session_id: session.id })
+
+          // Ensure store record exists and is active (CREATE if missing, UPDATE if exists)
           try {
             await sql`
-              UPDATE user_stores
-              SET status = 'active',
-                  provision_data = provision_data::jsonb || ${JSON.stringify({ payment_confirmed: true, paid_at: new Date().toISOString() })}::jsonb,
+              INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
+              VALUES (${user_id}, ${subdomain}, ${fullDomain}, ${store_name || subdomain + "'s Store"}, 'active', ${paymentData})
+              ON CONFLICT (user_id) DO UPDATE
+              SET status = 'active', subdomain = ${subdomain}, full_domain = ${fullDomain},
+                  store_name = COALESCE(NULLIF(${store_name || ''}, ''), user_stores.store_name),
                   updated_at = NOW()
-              WHERE user_id = ${user_id} AND subdomain = ${subdomain}
             `
-          } catch {
+          } catch (storeErr) {
+            console.error('Store activation failed, retrying simple update:', storeErr.message)
             await sql`
-              UPDATE user_stores
-              SET status = 'active', updated_at = NOW()
+              UPDATE user_stores SET status = 'active', updated_at = NOW()
               WHERE user_id = ${user_id} AND subdomain = ${subdomain}
-            `
+            `.catch(e => console.error('Store activation retry also failed:', e.message))
           }
+
+          // Fallback: create subscription record if customer.subscription.created webhook doesn't fire
+          try {
+            const stripeSubId = session.subscription
+            const priceAmount = (session.amount_total || 1999) / 100
+            if (stripeSubId) {
+              const { rows: existingSub } = await sql`
+                SELECT id FROM subscriptions WHERE stripe_subscription_id = ${stripeSubId}
+              `
+              if (existingSub.length === 0) {
+                await sql`
+                  INSERT INTO subscriptions (user_id, plan, status, stripe_subscription_id, price_per_month, started_at, expires_at)
+                  VALUES (${user_id}, 'premium', 'active', ${stripeSubId}, ${priceAmount}, NOW(), NOW() + INTERVAL '1 month')
+                `
+                console.log(`Subscription fallback created for user ${user_id}`)
+              }
+            } else {
+              // No Stripe subscription ID — create a record anyway so we have a trail
+              const { rows: anySub } = await sql`
+                SELECT id FROM subscriptions WHERE user_id = ${user_id} AND status IN ('active', 'past_due')
+              `
+              if (anySub.length === 0) {
+                await sql`
+                  INSERT INTO subscriptions (user_id, plan, status, price_per_month, started_at, expires_at)
+                  VALUES (${user_id}, 'premium', 'active', ${(session.amount_total || 1999) / 100}, NOW(), NOW() + INTERVAL '1 month')
+                `
+                console.log(`Subscription record created (no stripe sub ID) for user ${user_id}`)
+              }
+            }
+          } catch (subErr) {
+            console.error('Subscription fallback creation failed:', subErr.message)
+          }
+
+          // Upgrade user role
+          await sql`
+            UPDATE users SET role = CASE WHEN role = 'buyer' THEN 'subscriber' WHEN role = 'both' THEN 'both' ELSE role END, updated_at = NOW()
+            WHERE id = ${user_id}
+          `.catch(e => console.error('User role upgrade failed:', e.message))
+
         } else if (type === 'domain_purchase' && domain && user_id) {
           await sql`
             UPDATE user_orders
