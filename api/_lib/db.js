@@ -1,5 +1,9 @@
 // Vercel Postgres (Neon) database connection
-// Uses @vercel/postgres which auto-connects via POSTGRES_URL env var
+// @vercel/postgres auto-connects via POSTGRES_URL env var
+// Fall back to DATABASE_URL if POSTGRES_URL is not set (common with Neon integrations)
+if (!process.env.POSTGRES_URL && process.env.DATABASE_URL) {
+  process.env.POSTGRES_URL = process.env.DATABASE_URL
+}
 import { sql } from '@vercel/postgres'
 
 export { sql }
