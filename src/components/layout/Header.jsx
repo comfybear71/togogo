@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
+import { Store, LayoutDashboard } from 'lucide-react'
 import Logo from './Logo'
 
 export default function Header() {
@@ -12,6 +13,38 @@ export default function Header() {
         <Link to="/" className="shrink-0">
           <Logo size="sm" />
         </Link>
+
+        {/* Nav links (desktop only, authenticated) */}
+        {user && (
+          <nav className="hidden xl:flex items-center gap-1">
+            <NavLink
+              to="/my-shop"
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-[#FF6B35] bg-[#FF6B35]/10'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`
+              }
+            >
+              <Store className="w-4 h-4" />
+              My Shop
+            </NavLink>
+            <NavLink
+              to="/dashboard"
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'text-[#FF6B35] bg-[#FF6B35]/10'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
+                }`
+              }
+            >
+              <LayoutDashboard className="w-4 h-4" />
+              Dashboard
+            </NavLink>
+          </nav>
+        )}
 
         {/* Right actions */}
         <div className="flex items-center">
