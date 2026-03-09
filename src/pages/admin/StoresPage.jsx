@@ -43,7 +43,9 @@ export default function StoresPage() {
   const [deleteModal, setDeleteModal] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [showProvision, setShowProvision] = useState(false);
-  const [provisionForm, setProvisionForm] = useState({ userId: '', subdomain: '', storeName: '', pricePerMonth: '19.99' });
+  const [provisionForm, setProvisionForm] = useState({ userId: '', email: '', userName: '', subdomain: '', storeName: '', pricePerMonth: '19.99' });
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState(null);
   const [provisioning, setProvisioning] = useState(false);
   const [provisionResult, setProvisionResult] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
@@ -107,16 +109,24 @@ export default function StoresPage() {
 
   // Fetch users for the provision modal dropdown
   async function fetchUsers() {
+    setLoadingUsers(true);
+    setUsersError(null);
     try {
       const res = await fetch(`${apiBase}/api/admin/users?limit=200`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setAllUsers(data);
+        setAllUsers(Array.isArray(data) ? data : []);
+      } else {
+        console.error('Fetch users failed:', res.status);
+        setUsersError('Could not load users');
       }
     } catch (err) {
       console.error('Fetch users error:', err);
+      setUsersError('Could not load users');
+    } finally {
+      setLoadingUsers(false);
     }
   }
 
@@ -131,7 +141,14 @@ export default function StoresPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(provisionForm),
+        body: JSON.stringify({
+          userId: provisionForm.userId || undefined,
+          email: provisionForm.email || undefined,
+          userName: provisionForm.userName || undefined,
+          subdomain: provisionForm.subdomain,
+          storeName: provisionForm.storeName,
+          pricePerMonth: provisionForm.pricePerMonth,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -463,18 +480,56 @@ export default function StoresPage() {
             <form onSubmit={handleProvision} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-400">User</label>
-                <select
-                  value={provisionForm.userId}
-                  onChange={(e) => setProvisionForm({ ...provisionForm, userId: e.target.value })}
-                  required
-                  className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
-                >
-                  <option value="">Select a user...</option>
-                  {allUsers.map((u) => (
-                    <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
-                  ))}
-                </select>
+                {allUsers.length > 0 ? (
+                  <select
+                    value={provisionForm.userId}
+                    onChange={(e) => {
+                      const user = allUsers.find(u => u.id === e.target.value);
+                      setProvisionForm({ ...provisionForm, userId: e.target.value, email: user?.email || '', userName: user?.name || '' });
+                    }}
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
+                  >
+                    <option value="">Select existing user or enter email below...</option>
+                    {allUsers.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                    ))}
+                  </select>
+                ) : (
+                  loadingUsers ? (
+                    <p className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-zinc-500">Loading users...</p>
+                  ) : usersError ? (
+                    <p className="rounded-xl border border-red-500/20 bg-red-500/5 px-3 py-2.5 text-sm text-red-400">{usersError} — enter email below to create a new user</p>
+                  ) : (
+                    <p className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-zinc-500">No existing users — enter email below to create one</p>
+                  )
+                )}
               </div>
+              {!provisionForm.userId && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-zinc-400">Email <span className="text-[#FF6B35]">*</span></label>
+                    <input
+                      type="email"
+                      value={provisionForm.email}
+                      onChange={(e) => setProvisionForm({ ...provisionForm, email: e.target.value })}
+                      required={!provisionForm.userId}
+                      placeholder="user@example.com"
+                      className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
+                    />
+                    <p className="mt-1 text-xs text-zinc-600">User will be created automatically if they don't exist</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-zinc-400">User Name</label>
+                    <input
+                      type="text"
+                      value={provisionForm.userName}
+                      onChange={(e) => setProvisionForm({ ...provisionForm, userName: e.target.value })}
+                      placeholder="Stuart"
+                      className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="mb-1 block text-sm font-medium text-zinc-400">Subdomain</label>
                 <div className="flex items-center gap-2">
@@ -543,7 +598,7 @@ export default function StoresPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={provisioning || !provisionForm.userId || !provisionForm.subdomain}
+                  disabled={provisioning || (!provisionForm.userId && !provisionForm.email) || !provisionForm.subdomain}
                   className="flex-1 rounded-xl bg-[#FF6B35] py-2.5 text-sm font-medium text-white hover:bg-[#FF6B35]/90 disabled:opacity-50"
                 >
                   {provisioning ? (

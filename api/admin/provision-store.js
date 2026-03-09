@@ -15,10 +15,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { userId, subdomain, storeName, pricePerMonth } = req.body
+    const { userId, email, userName, subdomain, storeName, pricePerMonth } = req.body
 
-    if (!userId || !subdomain) {
-      return res.status(400).json({ error: 'userId and subdomain are required' })
+    if (!subdomain) {
+      return res.status(400).json({ error: 'subdomain is required' })
+    }
+    if (!userId && !email) {
+      return res.status(400).json({ error: 'Either userId or email is required' })
     }
 
     // Sanitize subdomain
@@ -36,16 +39,35 @@ export default async function handler(req, res) {
     const name = storeName || `${clean}'s Store`
     const price = parseFloat(pricePerMonth) || 19.99
 
-    // Verify user exists
-    const { rows: userRows } = await sql`SELECT id, email, name FROM users WHERE id = ${userId}`
+    let userRows
+    if (userId) {
+      // Look up by ID
+      const result = await sql`SELECT id, email, name FROM users WHERE id = ${userId}`
+      userRows = result.rows
+    } else {
+      // Look up by email, create if not found
+      const result = await sql`SELECT id, email, name FROM users WHERE email = ${email.toLowerCase().trim()}`
+      userRows = result.rows
+      if (!userRows[0]) {
+        // Auto-create user with provided email
+        const newName = userName || email.split('@')[0]
+        const created = await sql`
+          INSERT INTO users (email, name, role)
+          VALUES (${email.toLowerCase().trim()}, ${newName}, 'subscriber')
+          RETURNING id, email, name
+        `
+        userRows = created.rows
+      }
+    }
     if (!userRows[0]) {
       return res.status(404).json({ error: 'User not found' })
     }
+    const resolvedUserId = userRows[0].id
 
     // Create or update the store
     await sql`
       INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
-      VALUES (${userId}, ${clean}, ${fullDomain}, ${name}, 'active',
+      VALUES (${resolvedUserId}, ${clean}, ${fullDomain}, ${name}, 'active',
               ${JSON.stringify({ admin_provisioned: true, provisioned_at: new Date().toISOString() })})
       ON CONFLICT (user_id) DO UPDATE
       SET subdomain = ${clean}, full_domain = ${fullDomain}, store_name = ${name},
@@ -54,12 +76,12 @@ export default async function handler(req, res) {
 
     // Create subscription record if one doesn't exist
     const { rows: existingSub } = await sql`
-      SELECT id FROM subscriptions WHERE user_id = ${userId} AND status = 'active'
+      SELECT id FROM subscriptions WHERE user_id = ${resolvedUserId} AND status IN ('active', 'past_due')
     `
     if (existingSub.length === 0) {
       await sql`
         INSERT INTO subscriptions (user_id, plan, status, price_per_month, started_at, expires_at)
-        VALUES (${userId}, 'premium', 'active', ${price}, NOW(), NOW() + INTERVAL '1 month')
+        VALUES (${resolvedUserId}, 'premium', 'active', ${price}, NOW(), NOW() + INTERVAL '1 month')
       `
     }
 
@@ -70,7 +92,7 @@ export default async function handler(req, res) {
         WHEN role = 'both' THEN 'both'
         ELSE role
       END, updated_at = NOW()
-      WHERE id = ${userId}
+      WHERE id = ${resolvedUserId}
     `
 
     // Try to register subdomain on Vercel
@@ -119,7 +141,7 @@ export default async function handler(req, res) {
         const domainId = vercelResult?.wildcard ? 'wildcard' : (vercelResult?.id || 'added')
         await sql`
           UPDATE user_stores SET vercel_domain_id = ${domainId}
-          WHERE user_id = ${userId} AND subdomain = ${clean}
+          WHERE user_id = ${resolvedUserId} AND subdomain = ${clean}
         `.catch(() => {})
       } catch (err) {
         vercelResult = { error: err.message }
