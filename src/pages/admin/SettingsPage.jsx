@@ -121,17 +121,34 @@ export default function SettingsPage() {
   const [error, setError] = useState(null)
   const [visibleSecrets, setVisibleSecrets] = useState({})
   const [customFields, setCustomFields] = useState([])
+  const [setupSecret, setSetupSecret] = useState(sessionStorage.getItem('togogo-setup-secret') || '')
+  const [hasAccess, setHasAccess] = useState(!!user || !!sessionStorage.getItem('togogo-setup-secret'))
+
+  // If no user and no setup secret, show secret prompt
+  const handleSetupLogin = () => {
+    if (setupSecret) {
+      sessionStorage.setItem('togogo-setup-secret', setupSecret)
+      setHasAccess(true)
+      setLoading(true)
+    }
+  }
+
+  // Build auth headers — use token if logged in, otherwise try setup secret
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('togogo-token')
+    if (token) return { Authorization: `Bearer ${token}` }
+    // Fallback: use setup secret stored in sessionStorage (for initial setup)
+    const secret = sessionStorage.getItem('togogo-setup-secret')
+    if (secret) return { 'x-setup-secret': secret }
+    return {}
+  }
 
   // Load settings from API
   useEffect(() => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
     const loadSettings = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/admin/settings`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem('togogo-token')}` },
+          headers: getAuthHeaders(),
         })
         if (!res.ok) throw new Error('Failed to load settings')
         const data = await res.json()
@@ -174,7 +191,7 @@ export default function SettingsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('togogo-token')}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({ settings: rows }),
       })
@@ -222,6 +239,37 @@ export default function SettingsPage() {
 
   const currentSection = SECTIONS.find((s) => s.id === activeSection)
   const sectionCustomFields = customFields.filter((f) => f.category === activeSection)
+
+  // Show setup secret prompt if not logged in
+  if (!hasAccess) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow p-8 max-w-md w-full">
+          <div className="flex items-center gap-3 mb-4">
+            <Shield className="h-6 w-6 text-[#FF6B35]" />
+            <h2 className="text-xl font-bold text-gray-900">Admin Setup</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Enter your JWT secret to access admin settings. This is for initial setup before admin login is configured.
+          </p>
+          <input
+            type="password"
+            value={setupSecret}
+            onChange={(e) => setSetupSecret(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSetupLogin()}
+            placeholder="JWT_SECRET from your environment"
+            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 mb-4"
+          />
+          <button
+            onClick={handleSetupLogin}
+            className="w-full rounded-xl bg-[#FF6B35] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#FF6B35]/90 transition-colors"
+          >
+            Access Settings
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">

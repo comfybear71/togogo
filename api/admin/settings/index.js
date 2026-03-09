@@ -2,31 +2,24 @@
 import { sql } from '../../_lib/db.js'
 import { requireAdmin } from '../../_lib/auth.js'
 
-async function ensureTable() {
-  await sql`
-    CREATE TABLE IF NOT EXISTS admin_settings (
-      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      "key" TEXT UNIQUE NOT NULL,
-      "value" TEXT NOT NULL DEFAULT '',
-      category TEXT NOT NULL,
-      label TEXT,
-      is_secret BOOLEAN DEFAULT false,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `
+async function checkAdmin(req) {
+  // Allow setup secret for initial configuration (before admin user exists)
+  const setupSecret = req.headers['x-setup-secret']
+  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
+    return { id: 'setup', role: 'admin' }
+  }
+  return requireAdmin(req)
 }
 
 export default async function handler(req, res) {
   try {
-    await requireAdmin(req)
+    await checkAdmin(req)
   } catch (err) {
-    return res.status(err.status || 401).json({ error: err.message })
+    return res.status(err?.status || 401).json({ error: err?.message || 'Authentication failed' })
   }
 
   if (req.method === 'GET') {
     try {
-      await ensureTable()
       const { category } = req.query
       let result
       if (category) {
@@ -45,14 +38,14 @@ export default async function handler(req, res) {
       }
       return res.json(result.rows)
     } catch (err) {
+      // Table might not exist yet — return empty
       console.error('Failed to load admin settings:', err)
-      return res.status(500).json({ error: 'Failed to load settings', details: err.message })
+      return res.json([])
     }
   }
 
   if (req.method === 'PUT') {
     try {
-      await ensureTable()
       const { key, value, category, label, is_secret } = req.body
       if (!key || !category) {
         return res.status(400).json({ error: 'Key and category are required' })
