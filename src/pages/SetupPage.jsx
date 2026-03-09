@@ -9,20 +9,19 @@ import { usePlatformConnections, useConnectPlatform, useConnectPlatformKeys, use
 import { useAuthStore } from '../stores/authStore'
 
 const ALL_PLATFORMS = [
-  { id: 'shopify', name: 'Shopify', color: '#95BF47', category: 'storefront', authType: 'oauth', needsShopName: true, desc: 'Own branded store' },
-  { id: 'woocommerce', name: 'WooCommerce', color: '#7F54B3', category: 'storefront', authType: 'wc_auth', needsStoreUrl: true, desc: 'WordPress store' },
-  { id: 'squarespace', name: 'Squarespace', color: '#000000', category: 'storefront', authType: 'oauth', desc: 'Beautiful templates' },
-  { id: 'bigcommerce', name: 'BigCommerce', color: '#34313F', category: 'storefront', authType: 'oauth', desc: 'Enterprise scale' },
-  { id: 'wix', name: 'Wix', color: '#0C6EFC', category: 'storefront', authType: 'oauth', desc: 'Drag & drop builder' },
-  { id: 'prestashop', name: 'PrestaShop', color: '#DF0067', category: 'storefront', authType: 'api_keys', desc: 'Open source (EU)' },
-  { id: 'bigcartel', name: 'Big Cartel', color: '#222222', category: 'storefront', authType: 'oauth', desc: 'Artists & makers' },
+  { id: 'woocommerce', name: 'WooCommerce', color: '#7F54B3', category: 'storefront', authType: 'wc_auth', needsStoreUrl: true, desc: 'Your own WordPress store' },
   { id: 'amazon', name: 'Amazon', color: '#FF9900', category: 'marketplace', authType: 'oauth', desc: 'Biggest marketplace' },
   { id: 'ebay', name: 'eBay', color: '#E53238', category: 'marketplace', authType: 'oauth', desc: 'Auctions & fixed' },
   { id: 'etsy', name: 'Etsy', color: '#F56400', category: 'marketplace', authType: 'oauth', desc: 'Handmade & creative' },
   { id: 'tiktok', name: 'TikTok Shop', color: '#000000', category: 'marketplace', authType: 'oauth', desc: 'Social commerce' },
   { id: 'facebook', name: 'Facebook Marketplace', color: '#1877F2', category: 'marketplace', authType: 'oauth', desc: 'Local & shipping' },
   { id: 'depop', name: 'Depop', color: '#FF2300', category: 'marketplace', authType: 'api_keys', desc: 'Fashion & streetwear' },
-  { id: 'popup', name: 'Pop-Up Shop', color: '#9333EA', category: 'other', authType: 'none', desc: 'In-person events' },
+  { id: 'instagram', name: 'Instagram', color: '#E1306C', category: 'marketing', authType: 'oauth', desc: 'Photos, stories & reels' },
+  { id: 'facebook-marketing', name: 'Facebook', color: '#1877F2', category: 'marketing', authType: 'oauth', desc: 'Pages, groups & ads' },
+  { id: 'tiktok-marketing', name: 'TikTok', color: '#ff0050', category: 'marketing', authType: 'oauth', desc: 'Viral short videos' },
+  { id: 'pinterest', name: 'Pinterest', color: '#E60023', category: 'marketing', authType: 'oauth', desc: 'Visual discovery & pins' },
+  { id: 'youtube', name: 'YouTube', color: '#FF0000', category: 'marketing', authType: 'oauth', desc: 'Product videos & shorts' },
+  { id: 'x-twitter', name: 'X (Twitter)', color: '#ffffff', category: 'marketing', authType: 'oauth', desc: 'Announcements & deals' },
 ]
 
 const PRODUCT_TYPES = [
@@ -296,10 +295,51 @@ export default function SetupPage() {
         {/* Step 1: Select platforms */}
         {currentStep === 0 && (
           <div>
+            {/* Your Own Store — WooCommerce featured */}
+            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+              Your Own Store
+            </p>
+            <div className="mb-6">
+              {ALL_PLATFORMS.filter((p) => p.category === 'storefront').map((p) => {
+                const connected = isConnected(p.id)
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => togglePlatform(p.id)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all duration-200 text-left ${
+                      selectedPlatforms.includes(p.id)
+                        ? 'bg-[#7F54B3]/10 border-[#7F54B3]/40'
+                        : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
+                    }`}
+                  >
+                    <div
+                      className="flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0 text-sm font-bold"
+                      style={{ backgroundColor: `${p.color}15`, color: p.color }}
+                    >
+                      W
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-white">{p.name}</p>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#7F54B3]/15 text-[#7F54B3]">Recommended</span>
+                        {connected && (
+                          <div className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">{p.desc} — we build and host it for you</p>
+                    </div>
+                    {selectedPlatforms.includes(p.id) && (
+                      <Check className="h-5 w-5 text-[#7F54B3] flex-shrink-0" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Marketplaces & Marketing */}
             {[
-              { key: 'storefront', label: 'Your Own Store' },
               { key: 'marketplace', label: 'Marketplaces' },
-              { key: 'other', label: 'Other' },
+              { key: 'marketing', label: 'Marketing Channels' },
             ].map((group) => (
               <div key={group.key}>
                 <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">

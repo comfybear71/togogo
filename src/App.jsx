@@ -5,19 +5,23 @@ import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 
-const HomePage = lazy(() => import('./pages/HomePage'))
+// Core pages loaded eagerly for instant navigation
+import HomePage from './pages/HomePage'
+import SetupPage from './pages/SetupPage'
+import MyShopPage from './pages/MyShopPage'
+import SuppliersPage from './pages/SuppliersPage'
+import PromotionsPage from './pages/PromotionsPage'
+import PlatformsPage from './pages/PlatformsPage'
+import SubscriptionPage from './pages/SubscriptionPage'
+import AuthPage from './pages/AuthPage'
+
+// Less-visited pages stay lazy
 const BrowsePage = lazy(() => import('./pages/BrowsePage'))
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'))
 const WatchlistPage = lazy(() => import('./pages/WatchlistPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
-const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage'))
-const AuthPage = lazy(() => import('./pages/AuthPage'))
 const AssistantPage = lazy(() => import('./pages/AssistantPage'))
-const SuppliersPage = lazy(() => import('./pages/SuppliersPage'))
-const PlatformsPage = lazy(() => import('./pages/PlatformsPage'))
-const SetupPage = lazy(() => import('./pages/SetupPage'))
 const PlatformGuidePage = lazy(() => import('./pages/PlatformGuidePage'))
-const PromotionsPage = lazy(() => import('./pages/PromotionsPage'))
 const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage'))
 const AdminUsers = lazy(() => import('./pages/admin/UsersPage'))
 const AdminProducts = lazy(() => import('./pages/admin/ProductsPage'))
@@ -27,7 +31,6 @@ const AdminSettings = lazy(() => import('./pages/admin/SettingsPage'))
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
-const MyShopPage = lazy(() => import('./pages/MyShopPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
