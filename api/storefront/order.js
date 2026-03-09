@@ -64,17 +64,20 @@ export default async function handler(req, res) {
       const qty = item.quantity || 1
       const salePrice = parseFloat(product.sale_price) * qty
       const supplierCost = parseFloat(product.supplier_cost) * qty
-      const commission = salePrice * 0.05 // 5% ToGoGo commission
-      const profit = salePrice - supplierCost - commission
+      const commissionRate = 0.05 // 5% ToGoGo commission
+      const commission = Math.round(salePrice * commissionRate * 100) / 100
+      const profit = Math.round((salePrice - supplierCost - commission) * 100) / 100
 
       const { rows: orderRows } = await sql`
         INSERT INTO user_orders (
           user_id, supplier, product_title, product_image,
-          supplier_cost, sale_price, profit, platform, platform_order_id,
+          supplier_cost, sale_price, profit, commission, commission_rate, quantity,
+          platform, platform_order_id,
           customer_name, customer_email, shipping_address, status, notes
         ) VALUES (
           ${store.user_id}, ${product.supplier || 'togogo'}, ${product.title}, ${product.image},
-          ${supplierCost}, ${salePrice}, ${profit}, 'togogo-store', ${orderRef},
+          ${supplierCost}, ${salePrice}, ${profit}, ${commission}, ${commissionRate}, ${qty},
+          'togogo-store', ${orderRef},
           ${customer.name}, ${customer.email},
           ${JSON.stringify(customer.address || {})},
           'pending',

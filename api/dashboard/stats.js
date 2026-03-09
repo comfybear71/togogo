@@ -27,11 +27,14 @@ export default async function handler(req, res) {
         WHERE user_id = ${user.id}
         ORDER BY connected_at DESC
       `,
-      // Order aggregates
+      // Order aggregates — includes full money breakdown
       sql`
         SELECT
           COUNT(*)::int AS total_orders,
+          COALESCE(SUM(quantity), COUNT(*))::int AS total_items_sold,
           COALESCE(SUM(sale_price), 0)::float AS total_revenue,
+          COALESCE(SUM(supplier_cost), 0)::float AS total_supplier_cost,
+          COALESCE(SUM(CASE WHEN commission > 0 THEN commission ELSE sale_price * 0.05 END), 0)::float AS total_commission,
           COALESCE(SUM(profit), 0)::float AS total_profit,
           COUNT(CASE WHEN status = 'pending' THEN 1 END)::int AS pending_orders,
           COUNT(CASE WHEN status = 'processing' THEN 1 END)::int AS processing_orders,
@@ -60,8 +63,8 @@ export default async function handler(req, res) {
       // Recent orders (last 10)
       sql`
         SELECT id, supplier, product_title, product_image,
-               supplier_cost, sale_price, profit, platform,
-               platform_order_id, customer_name, status,
+               supplier_cost, sale_price, profit, commission, commission_rate, quantity,
+               platform, platform_order_id, customer_name, customer_email, status,
                tracking_number, notes, created_at
         FROM user_orders
         WHERE user_id = ${user.id}
@@ -99,7 +102,10 @@ export default async function handler(req, res) {
       domains: domainsResult.rows,
       orders: {
         total: orderStats.total_orders || 0,
+        itemsSold: orderStats.total_items_sold || 0,
         revenue: orderStats.total_revenue || 0,
+        supplierCost: orderStats.total_supplier_cost || 0,
+        commission: orderStats.total_commission || 0,
         profit: orderStats.total_profit || 0,
         pending: orderStats.pending_orders || 0,
         processing: orderStats.processing_orders || 0,
