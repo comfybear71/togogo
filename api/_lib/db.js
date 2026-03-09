@@ -8,6 +8,23 @@ import { sql } from '@vercel/postgres'
 
 export { sql }
 
+// Auto-initialize: ensure schema exists on first query
+let schemaReady = false
+let schemaPromise = null
+
+export async function ensureSchema() {
+  if (schemaReady) return
+  if (schemaPromise) return schemaPromise
+  schemaPromise = initializeSchema()
+    .then(() => { schemaReady = true })
+    .catch((err) => {
+      schemaPromise = null
+      console.error('Auto-init schema failed:', err)
+      throw err
+    })
+  return schemaPromise
+}
+
 // Initialize schema — run once on first deploy
 export async function initializeSchema() {
   await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`

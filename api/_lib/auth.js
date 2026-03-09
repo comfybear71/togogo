@@ -2,7 +2,7 @@
 // JWT-based auth with Google OAuth + email/password
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
-import { sql } from './db.js'
+import { sql, ensureSchema } from './db.js'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'togogo-dev-secret-change-me'
 const JWT_EXPIRES_IN = '30d'
@@ -55,6 +55,8 @@ export async function getCurrentUser(req) {
   const payload = verifyToken(token)
   if (!payload) return null
 
+  await ensureSchema()
+
   // Fetch fresh user data from DB
   const { rows } = await sql`
     SELECT id, email, name, avatar_url, bio, role, wallet_balance,
@@ -94,6 +96,7 @@ export async function requireAdminOrSetup(req) {
 
 // Find or create user from Google OAuth profile
 export async function findOrCreateGoogleUser({ googleId, email, name, avatarUrl }) {
+  await ensureSchema()
   // Check if user exists by google_id
   let { rows } = await sql`
     SELECT * FROM users WHERE google_id = ${googleId}

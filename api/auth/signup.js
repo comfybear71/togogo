@@ -1,10 +1,12 @@
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import { hashPassword, generateToken } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+
+  await ensureSchema()
 
   const { email, password, name } = req.body || {}
 
