@@ -21,11 +21,20 @@ export default function AuthCallbackPage() {
 
     if (token) {
       handleAuthCallback(token)
-        .then(() => {
+        .then((user) => {
           // Check for a pending redirect (e.g. from create-store → auth → Google → callback)
           const pendingRedirect = sessionStorage.getItem('togogo-auth-redirect')
           sessionStorage.removeItem('togogo-auth-redirect')
-          navigate(pendingRedirect || '/', { replace: true })
+
+          if (pendingRedirect) {
+            navigate(pendingRedirect, { replace: true })
+          } else if (user?.has_store) {
+            // User has an existing store — go to their control panel
+            navigate('/my-shop', { replace: true })
+          } else {
+            // No store yet — take them to create one
+            navigate('/create-store', { replace: true })
+          }
         })
         .catch(() => {
           setError('Authentication failed')

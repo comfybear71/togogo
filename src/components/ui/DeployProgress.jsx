@@ -209,6 +209,7 @@ export default function DeployProgress({
   onOpenPanel,        // Called to open the user's control panel
   externalSteps,      // Optional server-polled steps
   externalStatus,     // Optional server status
+  paymentError,       // Error message from payment attempt
 }) {
   const [steps, setSteps] = useState(() =>
     DEPLOY_STEPS.map((s) => ({ ...s, status: 'pending' }))
@@ -369,10 +370,34 @@ export default function DeployProgress({
     return () => clearInterval(interval)
   }, [isComplete, cancelled])
 
-  // ── Auto-scroll ──
+  // ── Auto-scroll — only if user hasn't scrolled up manually ──
+  const userScrolledUpRef = useRef(false)
+
+  // Track whether user has manually scrolled up
   useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight
+    const el = logRef.current
+    if (!el) return
+    const handleScroll = () => {
+      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+      // If user scrolled more than 60px from bottom, they're browsing
+      userScrolledUpRef.current = distFromBottom > 60
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
+    if (logRef.current && !userScrolledUpRef.current) {
+      // Scroll to keep the active step visible (centered if possible)
+      const activeIdx = steps.findIndex((s) => s.status === 'in_progress')
+      if (activeIdx >= 0) {
+        const stepEls = logRef.current.children
+        if (stepEls[activeIdx]) {
+          stepEls[activeIdx].scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      } else {
+        logRef.current.scrollTop = logRef.current.scrollHeight
+      }
     }
   }, [steps])
 
@@ -446,7 +471,7 @@ export default function DeployProgress({
                 {isComplete
                   ? `\u{1F389} ${storeName || 'Store'} is LIVE!`
                   : isPaused
-                  ? '\u{1F4B3} Complete payment to continue...'
+                  ? '\u{23F8}\u{FE0F} Paused — tap below to pay'
                   : 'Deploying your store...'}
               </span>
               {!isComplete && activeStep && !isPaused && (
@@ -601,19 +626,29 @@ export default function DeployProgress({
                         </span>
                         {!isPaymentStep && (
                           <span className="flex gap-[3px] ml-0.5">
-                            <span className={`w-1 h-1 rounded-full animate-bounce ${
-                              isPaymentStep ? 'bg-[#FFD23F]' : 'bg-[#06D6A0]'
-                            }`} style={{ animationDelay: '0ms' }} />
-                            <span className={`w-1 h-1 rounded-full animate-bounce ${
-                              isPaymentStep ? 'bg-[#FFD23F]' : 'bg-[#06D6A0]'
-                            }`} style={{ animationDelay: '150ms' }} />
-                            <span className={`w-1 h-1 rounded-full animate-bounce ${
-                              isPaymentStep ? 'bg-[#FFD23F]' : 'bg-[#06D6A0]'
-                            }`} style={{ animationDelay: '300ms' }} />
+                            <span className={`w-1 h-1 rounded-full animate-bounce bg-[#06D6A0]`} style={{ animationDelay: '0ms' }} />
+                            <span className={`w-1 h-1 rounded-full animate-bounce bg-[#06D6A0]`} style={{ animationDelay: '150ms' }} />
+                            <span className={`w-1 h-1 rounded-full animate-bounce bg-[#06D6A0]`} style={{ animationDelay: '300ms' }} />
                           </span>
                         )}
                       </div>
                       <p className="text-[10px] text-zinc-500 mt-0.5">{step.detail}</p>
+                      {isPaymentStep && isPaused && (
+                        <div className="mt-2">
+                          {paymentError && (
+                            <p className="text-[10px] text-red-400 mb-1.5">{paymentError}</p>
+                          )}
+                          <button
+                            onClick={() => onPaymentNeeded && onPaymentNeeded()}
+                            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl bg-[#FFD23F] text-black text-xs font-bold hover:bg-[#FFD23F]/90 transition-colors"
+                          >
+                            {'\u{1F4B3}'} Complete Payment — $19.99/mo
+                          </button>
+                          <p className="text-[9px] text-zinc-600 text-center mt-1">
+                            Secure checkout via Stripe
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : isCancelled ? (
                     <span className="text-[12px] text-red-400/50 line-through">

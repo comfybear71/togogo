@@ -34,6 +34,7 @@ export default function OneClickStorePage() {
   const [storeUrl, setStoreUrl] = useState('')
   const [paymentComplete, setPaymentComplete] = useState(false)
   const [paymentCancelled, setPaymentCancelled] = useState(false)
+  const [paymentError, setPaymentError] = useState(null)
   const checkTimeoutRef = useRef(null)
 
   // Restore store name if returning from auth or payment
@@ -192,6 +193,8 @@ export default function OneClickStorePage() {
     // If already returning from successful payment, skip
     if (paymentComplete) return
 
+    setPaymentError(null)
+
     try {
       const token = localStorage.getItem('togogo-token')
       sessionStorage.setItem('togogo-deploy-active', 'true')
@@ -223,9 +226,9 @@ export default function OneClickStorePage() {
       }
 
       // No checkout URL returned — treat as error
-      setError('Payment setup failed. Please try again.')
+      setPaymentError('Payment setup failed. Tap the button to try again.')
     } catch {
-      setError('Payment setup failed. Please try again.')
+      setPaymentError('Could not connect to payment. Tap the button to try again.')
     }
   }, [storeName, subdomain, paymentComplete])
 
@@ -452,6 +455,7 @@ export default function OneClickStorePage() {
           onPaymentNeeded={handlePaymentNeeded}
           paymentComplete={paymentComplete}
           paymentCancelled={paymentCancelled}
+          paymentError={paymentError}
           onComplete={handleDeployComplete}
           onOpenPanel={handleOpenPanel}
         />
