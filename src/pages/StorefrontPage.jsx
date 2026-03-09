@@ -3,29 +3,39 @@ import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle,
 } from 'lucide-react'
+import { DUMMY_PRODUCTS, enrichProduct } from '../lib/dummyShopData'
+import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
-// ─── Demo data for preview storefronts ───────────────────────────────────
-const DEMO_STORE = {
-  store: {
-    id: 'demo',
-    name: 'My Store',
-    subdomain: 'mystore',
-    owner: 'Store Owner',
-    createdAt: new Date().toISOString(),
-  },
-  products: [
-    { id: 'd1', title: 'Wireless Bluetooth Earbuds', description: 'Premium sound quality with active noise cancellation. 30-hour battery life with charging case.', image: 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop', price: 49.99, category: 'Electronics', totalSold: 128 },
-    { id: 'd2', title: 'Minimalist Leather Wallet', description: 'Slim genuine leather wallet with RFID blocking. Holds up to 8 cards plus cash.', image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=400&h=400&fit=crop', price: 34.99, category: 'Accessories', totalSold: 85 },
-    { id: 'd3', title: 'Stainless Steel Water Bottle', description: 'Double-wall vacuum insulated. Keeps drinks cold 24hrs or hot 12hrs. 750ml capacity.', image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop', price: 29.99, category: 'Home & Kitchen', totalSold: 203 },
-    { id: 'd4', title: 'LED Desk Lamp with Wireless Charger', description: 'Adjustable brightness and colour temperature. Built-in 10W Qi wireless charging pad.', image: 'https://images.unsplash.com/photo-1507473885765-e6ed057ab6fe?w=400&h=400&fit=crop', price: 59.99, category: 'Electronics', totalSold: 67 },
-    { id: 'd5', title: 'Organic Cotton T-Shirt', description: '100% organic cotton, pre-shrunk. Available in multiple colours. Relaxed fit.', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop', price: 24.99, category: 'Clothing', totalSold: 312 },
-    { id: 'd6', title: 'Portable Bluetooth Speaker', description: 'Waterproof IPX7 rating. 20W output with deep bass. 16-hour playtime.', image: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400&h=400&fit=crop', price: 39.99, category: 'Electronics', totalSold: 156 },
-    { id: 'd7', title: 'Bamboo Sunglasses', description: 'Handcrafted bamboo frames with polarised UV400 lenses. Eco-friendly and lightweight.', image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop', price: 44.99, category: 'Accessories', totalSold: 91 },
-    { id: 'd8', title: 'Scented Soy Candle Set', description: 'Set of 3 hand-poured soy candles. Lavender, vanilla, and eucalyptus. 45-hour burn time each.', image: 'https://images.unsplash.com/photo-1602607423591-78b1c89f4428?w=400&h=400&fit=crop', price: 32.99, category: 'Home & Kitchen', totalSold: 178 },
-  ],
-  categories: ['Electronics', 'Accessories', 'Home & Kitchen', 'Clothing'],
+// ─── Build demo data from the full supplier catalog ──────────────────────
+function buildDemoStore(subdomain) {
+  const products = DUMMY_PRODUCTS.map(enrichProduct).map((p) => ({
+    id: p.id,
+    title: p.title,
+    description: `${p.supplier} · Ships in ${p.deliveryDays} days`,
+    image: p.image,
+    price: p.suggestedPrice,
+    category: p.category.charAt(0).toUpperCase() + p.category.slice(1),
+    totalSold: p.sold || 0,
+  }))
+  const categories = [...new Set(products.map((p) => p.category))]
+  return {
+    store: {
+      id: 'demo',
+      name: subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Store',
+      subdomain,
+      owner: 'Store Owner',
+      createdAt: new Date().toISOString(),
+    },
+    products,
+    categories,
+  }
+}
+
+// ─── Read saved theme from localStorage (set in MyShopPage) ──────────────
+function getSavedThemeId() {
+  try { return localStorage.getItem('togogo-store-theme') || DEFAULT_THEME_ID } catch { return DEFAULT_THEME_ID }
 }
 
 // ─── Cart state (in-memory, persisted to sessionStorage per store) ────────
@@ -58,7 +68,6 @@ function useCart(subdomain) {
 export default function StorefrontPage({ subdomain }) {
   const [storeData, setStoreData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
   const [isDemo, setIsDemo] = useState(false)
   const [view, setView] = useState('grid') // grid | product | cart | checkout | success
   const [selectedProduct, setSelectedProduct] = useState(null)
@@ -66,16 +75,14 @@ export default function StorefrontPage({ subdomain }) {
   const [selectedCategory, setSelectedCategory] = useState('')
   const cart = useCart(subdomain)
 
+  const theme = useMemo(() => getThemeById(getSavedThemeId()), [])
+
   useEffect(() => {
     fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}`)
       .then((r) => r.ok ? r.json() : Promise.reject('Store not found'))
       .then((data) => setStoreData(data))
       .catch(() => {
-        // Fall back to demo preview data so store owners can preview the experience
-        const demo = structuredClone(DEMO_STORE)
-        demo.store.subdomain = subdomain
-        demo.store.name = subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Store'
-        setStoreData(demo)
+        setStoreData(buildDemoStore(subdomain))
         setIsDemo(true)
       })
       .finally(() => setLoading(false))
@@ -90,17 +97,17 @@ export default function StorefrontPage({ subdomain }) {
     })
   }, [storeData?.products, searchQuery, selectedCategory])
 
-  // ─── Loading / Error / Not Found ────────────────────────────────────
+  // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
     <div className="flex min-h-screen items-center justify-center bg-white">
       <div className="text-center">
-        <Loader2 className="mx-auto h-10 w-10 text-[#FF6B35] animate-spin" />
+        <Loader2 className="mx-auto h-10 w-10 animate-spin" style={{ color: theme.accent }} />
         <p className="mt-3 text-sm text-gray-500">Loading store...</p>
       </div>
     </div>
   )
 
-  if (error) return (
+  if (!storeData) return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="text-center max-w-md px-6">
         <Store className="mx-auto h-16 w-16 text-gray-300 mb-4" />
@@ -108,7 +115,7 @@ export default function StorefrontPage({ subdomain }) {
         <p className="text-gray-500 mb-6">
           The store at <strong>{subdomain}.togogo.me</strong> doesn't exist or hasn't been set up yet.
         </p>
-        <a href="https://togogo.me" className="inline-block rounded-xl bg-[#FF6B35] px-6 py-3 text-sm font-medium text-white hover:bg-[#FF6B35]/90">
+        <a href="https://togogo.me" className="inline-block rounded-xl px-6 py-3 text-sm font-medium text-white" style={{ backgroundColor: theme.accent }}>
           Visit ToGoGo
         </a>
       </div>
@@ -119,18 +126,19 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Success View ────────────────────────────────────────────────────
   if (view === 'success') return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-6">
+    <div className={`flex min-h-screen items-center justify-center ${theme.pageBg} p-6`}>
       <div className="max-w-md text-center">
         <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#06D6A0]/10">
           <CheckCircle className="h-10 w-10 text-[#06D6A0]" />
         </div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Order Placed!</h1>
-        <p className="text-gray-500 mb-6">
+        <h1 className={`text-2xl font-bold ${theme.textPrimary} mb-2`}>Order Placed!</h1>
+        <p className={`${theme.textSecondary} mb-6`}>
           Thank you for your order. {store.owner} will process it shortly and you'll receive updates via email.
         </p>
         <button
           onClick={() => { setView('grid'); cart.clear() }}
-          className="rounded-xl bg-[#FF6B35] px-6 py-3 text-sm font-medium text-white hover:bg-[#FF6B35]/90"
+          className="rounded-xl px-6 py-3 text-sm font-medium text-white transition-colors"
+          style={{ backgroundColor: theme.accent }}
         >
           Continue Shopping
         </button>
@@ -144,6 +152,8 @@ export default function StorefrontPage({ subdomain }) {
       store={store}
       cart={cart}
       subdomain={subdomain}
+      theme={theme}
+      isDemo={isDemo}
       onBack={() => setView('cart')}
       onSuccess={() => setView('success')}
     />
@@ -151,17 +161,17 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Detail View ────────────────────────────────────────────
   if (view === 'product' && selectedProduct) return (
-    <div className="min-h-screen bg-white">
-      <StoreHeader store={store} cart={cart} onCartClick={() => setView('cart')} />
+    <div className={`min-h-screen ${theme.pageBg}`}>
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
       <div className="mx-auto max-w-4xl px-4 py-8">
         <button
           onClick={() => setView('grid')}
-          className="mb-6 flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]"
+          className={`mb-6 flex items-center gap-1 text-sm ${theme.textSecondary}`}
         >
           <ChevronLeft className="h-4 w-4" /> Back to products
         </button>
         <div className="grid gap-8 md:grid-cols-2">
-          <div className="aspect-square overflow-hidden rounded-2xl bg-gray-100">
+          <div className={`aspect-square overflow-hidden rounded-2xl ${theme.cardBg}`}>
             {selectedProduct.image ? (
               <img src={selectedProduct.image} alt={selectedProduct.title} className="h-full w-full object-cover" />
             ) : (
@@ -171,26 +181,27 @@ export default function StorefrontPage({ subdomain }) {
             )}
           </div>
           <div>
-            <p className="text-sm font-medium text-[#FF6B35] mb-1">{selectedProduct.category}</p>
-            <h1 className="text-2xl font-bold text-gray-900 mb-3">{selectedProduct.title}</h1>
-            <p className="text-3xl font-bold text-gray-900 mb-4">${selectedProduct.price.toFixed(2)}</p>
+            <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{selectedProduct.category}</p>
+            <h1 className={`text-2xl font-bold ${theme.textPrimary} mb-3`}>{selectedProduct.title}</h1>
+            <p className={`text-3xl font-bold ${theme.textPrimary} mb-4`}>${selectedProduct.price.toFixed(2)}</p>
             {selectedProduct.description && (
-              <p className="text-gray-600 mb-6 leading-relaxed">{selectedProduct.description}</p>
+              <p className={`${theme.textSecondary} mb-6 leading-relaxed`}>{selectedProduct.description}</p>
             )}
             <div className="flex gap-3 mb-6">
-              <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${theme.textSecondary}`} style={{ backgroundColor: theme.accentLight }}>
                 <Truck className="h-4 w-4" /> Free Shipping
               </div>
-              <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${theme.textSecondary}`} style={{ backgroundColor: theme.accentLight }}>
                 <Shield className="h-4 w-4" /> Buyer Protection
               </div>
             </div>
             {selectedProduct.totalSold > 0 && (
-              <p className="text-xs text-gray-400 mb-4">{selectedProduct.totalSold} sold</p>
+              <p className={`text-xs ${theme.textMuted} mb-4`}>{selectedProduct.totalSold.toLocaleString()} sold</p>
             )}
             <button
               onClick={() => { cart.add(selectedProduct); setView('cart') }}
-              className="w-full rounded-xl bg-[#FF6B35] py-3.5 text-sm font-semibold text-white hover:bg-[#FF6B35]/90 transition-colors"
+              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors"
+              style={{ backgroundColor: theme.accent }}
             >
               Add to Cart — ${selectedProduct.price.toFixed(2)}
             </button>
@@ -202,21 +213,21 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Cart View ──────────────────────────────────────────────────────
   if (view === 'cart') return (
-    <div className="min-h-screen bg-gray-50">
-      <StoreHeader store={store} cart={cart} onCartClick={() => {}} />
+    <div className={`min-h-screen ${theme.pageBg}`}>
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => {}} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <button
           onClick={() => setView('grid')}
-          className="mb-6 flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]"
+          className={`mb-6 flex items-center gap-1 text-sm ${theme.textSecondary}`}
         >
           <ChevronLeft className="h-4 w-4" /> Continue shopping
         </button>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Your Cart ({cart.count})</h1>
+        <h1 className={`text-2xl font-bold ${theme.textPrimary} mb-6`}>Your Cart ({cart.count})</h1>
         {cart.items.length === 0 ? (
-          <div className="rounded-2xl bg-white p-12 text-center shadow-sm">
+          <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} p-12 text-center shadow-sm`}>
             <ShoppingCart className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <p className="text-gray-500">Your cart is empty</p>
-            <button onClick={() => setView('grid')} className="mt-4 text-sm font-medium text-[#FF6B35] hover:underline">
+            <p className={theme.textSecondary}>Your cart is empty</p>
+            <button onClick={() => setView('grid')} className="mt-4 text-sm font-medium hover:underline" style={{ color: theme.accent }}>
               Browse products
             </button>
           </div>
@@ -224,7 +235,7 @@ export default function StorefrontPage({ subdomain }) {
           <>
             <div className="space-y-3 mb-6">
               {cart.items.map((item) => (
-                <div key={item.id} className="flex items-center gap-4 rounded-xl bg-white p-4 shadow-sm">
+                <div key={item.id} className={`flex items-center gap-4 rounded-xl ${theme.cardBg} ${theme.cardBorder} p-4 shadow-sm`}>
                   <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
                     {item.image ? (
                       <img src={item.image} alt="" className="h-full w-full object-cover" />
@@ -233,33 +244,34 @@ export default function StorefrontPage({ subdomain }) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{item.title}</p>
-                    <p className="text-sm font-semibold text-gray-700">${item.price.toFixed(2)}</p>
+                    <p className={`font-medium ${theme.textPrimary} truncate`}>{item.title}</p>
+                    <p className={`text-sm font-semibold ${theme.textSecondary}`}>${item.price.toFixed(2)}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className="rounded-lg bg-gray-100 p-1.5 hover:bg-gray-200">
+                    <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className={`rounded-lg p-1.5 ${theme.cardBg}`} style={{ backgroundColor: theme.accentLight }}>
                       <Minus className="h-3.5 w-3.5" />
                     </button>
-                    <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                    <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className="rounded-lg bg-gray-100 p-1.5 hover:bg-gray-200">
+                    <span className={`w-6 text-center text-sm font-medium ${theme.textPrimary}`}>{item.quantity}</span>
+                    <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className={`rounded-lg p-1.5 ${theme.cardBg}`} style={{ backgroundColor: theme.accentLight }}>
                       <Plus className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="w-20 text-right font-semibold text-gray-900">${(item.price * item.quantity).toFixed(2)}</p>
-                  <button onClick={() => cart.remove(item.id)} className="p-1.5 text-gray-400 hover:text-red-500">
+                  <p className={`w-20 text-right font-semibold ${theme.textPrimary}`}>${(item.price * item.quantity).toFixed(2)}</p>
+                  <button onClick={() => cart.remove(item.id)} className={`p-1.5 ${theme.textMuted} hover:text-red-500`}>
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               ))}
             </div>
-            <div className="rounded-xl bg-white p-5 shadow-sm">
-              <div className="flex justify-between text-lg font-bold text-gray-900 mb-4">
+            <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
+              <div className={`flex justify-between text-lg font-bold ${theme.textPrimary} mb-4`}>
                 <span>Total</span>
                 <span>${cart.total.toFixed(2)}</span>
               </div>
               <button
                 onClick={() => setView('checkout')}
-                className="w-full rounded-xl bg-[#FF6B35] py-3.5 text-sm font-semibold text-white hover:bg-[#FF6B35]/90"
+                className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors"
+                style={{ backgroundColor: theme.accent }}
               >
                 Proceed to Checkout
               </button>
@@ -272,16 +284,16 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${theme.pageBg}`}>
       {isDemo && (
         <div className="bg-amber-500 px-4 py-2 text-center text-xs font-medium text-white">
           Preview Mode — This is a demo storefront with sample products
         </div>
       )}
-      <StoreHeader store={store} cart={cart} onCartClick={() => setView('cart')} />
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
 
       {/* Hero */}
-      <div className="bg-gradient-to-br from-[#FF6B35] to-[#FF8F5E] py-12 px-4 text-center text-white">
+      <div className={`${theme.heroBg} py-12 px-4 text-center text-white`}>
         <h1 className="text-3xl font-bold md:text-4xl">{store.name}</h1>
         <p className="mt-2 text-white/80">Quality products, fast shipping</p>
       </div>
@@ -290,20 +302,22 @@ export default function StorefrontPage({ subdomain }) {
         {/* Search + Filters */}
         <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.textMuted}`} />
             <input
               type="text"
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
+              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight }}
             />
           </div>
           {storeData.categories.length > 0 && (
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
+              className={`rounded-xl border px-4 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
+              style={{ borderColor: theme.accentLight }}
             >
               <option value="">All Categories</option>
               {storeData.categories.map((c) => (
@@ -315,12 +329,12 @@ export default function StorefrontPage({ subdomain }) {
 
         {/* Products */}
         {filteredProducts.length === 0 ? (
-          <div className="rounded-2xl bg-white py-16 text-center shadow-sm">
+          <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} py-16 text-center shadow-sm`}>
             <Package className="mx-auto h-16 w-16 text-gray-300 mb-3" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+            <h3 className={`text-lg font-semibold ${theme.textPrimary} mb-1`}>
               {storeData.products.length === 0 ? 'Coming Soon' : 'No matches'}
             </h3>
-            <p className="text-sm text-gray-500">
+            <p className={`text-sm ${theme.textSecondary}`}>
               {storeData.products.length === 0
                 ? 'This store is setting up — check back soon!'
                 : 'Try a different search or category.'}
@@ -332,7 +346,7 @@ export default function StorefrontPage({ subdomain }) {
               <div
                 key={product.id}
                 onClick={() => { setSelectedProduct(product); setView('product') }}
-                className="group cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm transition-all hover:shadow-md"
+                className={`group cursor-pointer overflow-hidden rounded-2xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-md`}
               >
                 <div className="aspect-square overflow-hidden bg-gray-100">
                   {product.image ? (
@@ -348,13 +362,16 @@ export default function StorefrontPage({ subdomain }) {
                   )}
                 </div>
                 <div className="p-3">
-                  <p className="text-xs text-gray-400 mb-0.5">{product.category}</p>
-                  <h3 className="text-sm font-medium text-gray-900 line-clamp-2 mb-2">{product.title}</h3>
+                  <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
+                  <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
                   <div className="flex items-center justify-between">
-                    <p className="text-lg font-bold text-gray-900">${product.price.toFixed(2)}</p>
+                    <p className={`text-lg font-bold ${theme.textPrimary}`}>${product.price.toFixed(2)}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                      className="rounded-lg bg-[#FF6B35]/10 p-2 text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white transition-colors"
+                      className="rounded-lg p-2 transition-colors hover:text-white"
+                      style={{ backgroundColor: theme.accentLight, color: theme.accent }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.accent; e.currentTarget.style.color = '#fff' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = theme.accentLight; e.currentTarget.style.color = theme.accent }}
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -367,9 +384,9 @@ export default function StorefrontPage({ subdomain }) {
       </div>
 
       {/* Powered by ToGoGo footer */}
-      <footer className="border-t border-gray-200 bg-white py-6 text-center">
-        <p className="text-xs text-gray-400">
-          Powered by <a href="https://togogo.me" className="font-medium text-[#FF6B35] hover:underline">ToGoGo</a>
+      <footer className={`border-t ${theme.footerBg} py-6 text-center`} style={{ borderColor: theme.accentLight }}>
+        <p className={`text-xs ${theme.textMuted}`}>
+          Powered by <a href="https://togogo.me" className="font-medium hover:underline" style={{ color: theme.accent }}>ToGoGo</a>
         </p>
       </footer>
     </div>
@@ -377,24 +394,25 @@ export default function StorefrontPage({ subdomain }) {
 }
 
 // ─── Store Header ─────────────────────────────────────────────────────────
-function StoreHeader({ store, cart, onCartClick }) {
+function StoreHeader({ store, cart, theme, onCartClick }) {
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
+    <header className={`sticky top-0 z-40 border-b ${theme.headerBg} backdrop-blur`} style={{ borderColor: theme.accentLight }}>
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FF6B35]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
             <Store className="h-4 w-4 text-white" />
           </div>
-          <span className="text-lg font-bold text-gray-900">{store.name}</span>
+          <span className={`text-lg font-bold ${theme.headerText}`}>{store.name}</span>
         </div>
         <button
           onClick={onCartClick}
-          className="relative flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+          className={`relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${theme.headerText} transition-colors`}
+          style={{ backgroundColor: theme.accentLight }}
         >
           <ShoppingCart className="h-4 w-4" />
           Cart
           {cart.count > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#FF6B35] text-xs font-bold text-white">
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: theme.accent }}>
               {cart.count}
             </span>
           )}
@@ -405,7 +423,7 @@ function StoreHeader({ store, cart, onCartClick }) {
 }
 
 // ─── Checkout View ────────────────────────────────────────────────────────
-function CheckoutView({ store, cart, subdomain, onBack, onSuccess }) {
+function CheckoutView({ store, cart, subdomain, theme, isDemo, onBack, onSuccess }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', city: '', state: '', zip: '', country: 'Australia' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -413,6 +431,15 @@ function CheckoutView({ store, cart, subdomain, onBack, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name || !form.email) return setError('Name and email are required')
+
+    // In demo mode, simulate a successful order
+    if (isDemo) {
+      setSubmitting(true)
+      await new Promise(r => setTimeout(r, 1200))
+      setSubmitting(false)
+      onSuccess()
+      return
+    }
 
     setSubmitting(true)
     setError(null)
@@ -449,87 +476,55 @@ function CheckoutView({ store, cart, subdomain, onBack, onSuccess }) {
     }
   }
 
+  const inputClass = `rounded-lg border px-3 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
+    <div className={`min-h-screen ${theme.pageBg}`}>
+      <header className={`border-b ${theme.headerBg}`} style={{ borderColor: theme.accentLight }}>
         <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-4">
-          <button onClick={onBack} className="rounded-lg p-1 hover:bg-gray-100">
-            <ChevronLeft className="h-5 w-5 text-gray-600" />
+          <button onClick={onBack} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
+            <ChevronLeft className="h-5 w-5" style={{ color: theme.accent }} />
           </button>
-          <h1 className="text-lg font-bold text-gray-900">Checkout</h1>
+          <h1 className={`text-lg font-bold ${theme.headerText}`}>Checkout</h1>
         </div>
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Order Summary */}
-          <div className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Order Summary</h2>
+          <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
+            <h2 className={`text-sm font-semibold ${theme.textPrimary} mb-3`}>Order Summary</h2>
             {cart.items.map((item) => (
               <div key={item.id} className="flex justify-between py-2 text-sm">
-                <span className="text-gray-600">{item.title} x{item.quantity}</span>
-                <span className="font-medium text-gray-900">${(item.price * item.quantity).toFixed(2)}</span>
+                <span className={theme.textSecondary}>{item.title} x{item.quantity}</span>
+                <span className={`font-medium ${theme.textPrimary}`}>${(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
-            <div className="mt-3 border-t border-gray-100 pt-3 flex justify-between text-base font-bold text-gray-900">
+            <div className={`mt-3 border-t pt-3 flex justify-between text-base font-bold ${theme.textPrimary}`} style={{ borderColor: theme.accentLight }}>
               <span>Total</span>
               <span>${cart.total.toFixed(2)}</span>
             </div>
           </div>
 
           {/* Contact Details */}
-          <div className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Contact Details</h2>
+          <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
+            <h2 className={`text-sm font-semibold ${theme.textPrimary} mb-4`}>Contact Details</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input
-                type="text" placeholder="Full Name *" value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-                required
-              />
-              <input
-                type="email" placeholder="Email *" value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-                required
-              />
-              <input
-                type="tel" placeholder="Phone" value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="col-span-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              />
+              <input type="text" placeholder="Full Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputClass} style={{ borderColor: theme.accentLight }} required />
+              <input type="email" placeholder="Email *" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inputClass} style={{ borderColor: theme.accentLight }} required />
+              <input type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={`col-span-full ${inputClass}`} style={{ borderColor: theme.accentLight }} />
             </div>
           </div>
 
           {/* Shipping Address */}
-          <div className="rounded-xl bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4">Shipping Address</h2>
+          <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
+            <h2 className={`text-sm font-semibold ${theme.textPrimary} mb-4`}>Shipping Address</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <input
-                type="text" placeholder="Street Address" value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                className="col-span-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              />
-              <input
-                type="text" placeholder="City" value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              />
-              <input
-                type="text" placeholder="State" value={form.state}
-                onChange={(e) => setForm({ ...form, state: e.target.value })}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              />
-              <input
-                type="text" placeholder="Postcode" value={form.zip}
-                onChange={(e) => setForm({ ...form, zip: e.target.value })}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              />
-              <input
-                type="text" placeholder="Country" value={form.country}
-                onChange={(e) => setForm({ ...form, country: e.target.value })}
-                className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              />
+              <input type="text" placeholder="Street Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className={`col-span-full ${inputClass}`} style={{ borderColor: theme.accentLight }} />
+              <input type="text" placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className={inputClass} style={{ borderColor: theme.accentLight }} />
+              <input type="text" placeholder="State" value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className={inputClass} style={{ borderColor: theme.accentLight }} />
+              <input type="text" placeholder="Postcode" value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} className={inputClass} style={{ borderColor: theme.accentLight }} />
+              <input type="text" placeholder="Country" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className={inputClass} style={{ borderColor: theme.accentLight }} />
             </div>
           </div>
 
@@ -542,13 +537,14 @@ function CheckoutView({ store, cart, subdomain, onBack, onSuccess }) {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-xl bg-[#FF6B35] py-3.5 text-sm font-semibold text-white hover:bg-[#FF6B35]/90 disabled:opacity-50"
+            className="w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
+            style={{ backgroundColor: theme.accent }}
           >
             {submitting ? 'Placing Order...' : `Place Order — $${cart.total.toFixed(2)}`}
           </button>
 
-          <p className="text-center text-xs text-gray-400">
-            Powered by <a href="https://togogo.me" className="text-[#FF6B35] hover:underline">ToGoGo</a> — Secure checkout
+          <p className={`text-center text-xs ${theme.textMuted}`}>
+            Powered by <a href="https://togogo.me" className="hover:underline" style={{ color: theme.accent }}>ToGoGo</a> — Secure checkout
           </p>
         </form>
       </div>

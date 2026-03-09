@@ -8,6 +8,7 @@ import {
 import { useAuthStore } from '../stores/authStore'
 import { DUMMY_PRODUCTS, DUMMY_SUPPLIERS, enrichProduct, getProductsForTier, getSuppliersForTier } from '../lib/dummyShopData'
 import { SELLING_PLANS } from '../lib/constants'
+import { STOREFRONT_THEMES, getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
 function safe$(val) { return (Number(val) || 0).toFixed(2) }
 
@@ -26,6 +27,8 @@ export default function MyShopPage() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [storeTheme, setStoreTheme] = useState(() => localStorage.getItem('togogo-store-theme') || DEFAULT_THEME_ID)
+  const [showThemePicker, setShowThemePicker] = useState(false)
   const [storeName] = useState(() => localStorage.getItem('togogo-store-name') || 'My Store')
   const [storeConnection] = useState(() => {
     try {
@@ -158,6 +161,87 @@ export default function MyShopPage() {
           <p className="text-lg font-bold text-[#06D6A0]">${safe$(totalProfit)}</p>
           <p className="text-[9px] text-zinc-600">Per sale combined</p>
         </div>
+      </div>
+
+      {/* Store Theme */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Store Theme</h2>
+          <button
+            onClick={() => setShowThemePicker(!showThemePicker)}
+            className="flex items-center gap-1.5 text-[10px] font-medium text-[#FF6B35] hover:text-[#FF6B35]/80 transition-colors"
+          >
+            <Palette className="h-3 w-3" />
+            {showThemePicker ? 'Close' : 'Change Theme'}
+          </button>
+        </div>
+
+        {/* Current theme preview */}
+        {!showThemePicker && (
+          <div className="rounded-xl bg-[#111] border border-white/[0.06] p-3 flex items-center gap-3">
+            <div className="flex gap-1">
+              <div className="h-8 w-8 rounded-lg" style={{ backgroundColor: getThemeById(storeTheme).preview.bg, border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="h-full w-full rounded-lg flex items-center justify-center">
+                  <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: getThemeById(storeTheme).preview.accent }} />
+                </div>
+              </div>
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-white">{getThemeById(storeTheme).name}</p>
+              <p className="text-[10px] text-zinc-500">{getThemeById(storeTheme).description}</p>
+            </div>
+            <a
+              href={`/?store=${storeName.toLowerCase().replace(/\s+/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.04] text-[10px] font-medium text-zinc-400 hover:text-white transition-colors"
+            >
+              <Eye className="h-3 w-3" /> Preview
+            </a>
+          </div>
+        )}
+
+        {/* Theme picker grid */}
+        {showThemePicker && (
+          <div className="grid grid-cols-2 gap-2">
+            {STOREFRONT_THEMES.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => {
+                  setStoreTheme(t.id)
+                  localStorage.setItem('togogo-store-theme', t.id)
+                }}
+                className={`rounded-xl border p-3 text-left transition-all ${
+                  storeTheme === t.id
+                    ? 'border-[#FF6B35]/50 bg-[#FF6B35]/5'
+                    : 'border-white/[0.06] bg-[#111] hover:border-white/[0.12]'
+                }`}
+              >
+                {/* Mini preview */}
+                <div
+                  className="h-16 rounded-lg mb-2 overflow-hidden flex flex-col"
+                  style={{ backgroundColor: t.preview.bg }}
+                >
+                  <div className="h-5 w-full" style={{ backgroundColor: t.preview.accent }} />
+                  <div className="flex-1 p-1.5 flex gap-1">
+                    <div className="flex-1 rounded-sm" style={{ backgroundColor: t.preview.card, border: '1px solid rgba(0,0,0,0.05)' }} />
+                    <div className="flex-1 rounded-sm" style={{ backgroundColor: t.preview.card, border: '1px solid rgba(0,0,0,0.05)' }} />
+                    <div className="flex-1 rounded-sm" style={{ backgroundColor: t.preview.card, border: '1px solid rgba(0,0,0,0.05)' }} />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold text-white">{t.name}</p>
+                    <p className="text-[9px] text-zinc-500">{t.description}</p>
+                  </div>
+                  {storeTheme === t.id && (
+                    <Check className="h-4 w-4 text-[#FF6B35] flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Listed Products */}

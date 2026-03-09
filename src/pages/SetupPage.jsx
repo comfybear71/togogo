@@ -295,7 +295,32 @@ export default function SetupPage() {
         {/* Step 1: Select platforms */}
         {currentStep === 0 && (
           <div>
-            {/* Your Own Store — WooCommerce featured */}
+            {/* One-Click ToGoGo Store — featured prominently */}
+            <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+              Fastest Option
+            </p>
+            <button
+              onClick={() => navigate('/create-store')}
+              className="w-full mb-6 rounded-2xl bg-gradient-to-r from-[#FF6B35]/15 to-[#FFD23F]/10 border border-[#FF6B35]/30 p-5 text-left transition-all hover:border-[#FF6B35]/50 hover:shadow-lg hover:shadow-[#FF6B35]/5"
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FF6B35]/20">
+                  <Zap className="h-6 w-6 text-[#FF6B35]" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-sm font-bold text-white">One-Click ToGoGo Store</p>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-[#06D6A0]/15 text-[#06D6A0]">30 sec setup</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400">
+                    Get your own storefront at <strong className="text-zinc-300">yourname.togogo.me</strong> — with products, checkout & hosting included. No code needed.
+                  </p>
+                </div>
+                <ArrowRight className="h-5 w-5 text-[#FF6B35] flex-shrink-0" />
+              </div>
+            </button>
+
+            {/* Your Own Store — WooCommerce */}
             <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3">
               Your Own Store
             </p>
