@@ -1,138 +1,97 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
-  ArrowLeft,
-  Search,
-  MoreVertical,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
-  User,
-  X,
-  AlertCircle,
-  Ban,
-} from 'lucide-react';
-import { useAuthStore } from '../../stores/authStore';
+  ArrowLeft, Search, MoreVertical, Shield, ShieldCheck, ShieldAlert,
+  User, X, AlertCircle, Ban, Loader2, Store, RefreshCw,
+} from 'lucide-react'
 
-const sampleUsers = [
-  {
-    id: '1',
-    name: 'Sarah Mitchell',
-    email: 'sarah.m@example.com',
-    avatar: null,
-    role: 'seller',
-    trustScore: 92,
-    verificationLevel: 'verified',
-    joinDate: '2025-08-14',
-    status: 'active',
-    totalOrders: 156,
-    totalRevenue: 12400,
-    phone: '+1 (555) 123-4567',
-    address: 'Portland, OR',
-    bio: 'Eco-friendly artisan goods maker.',
-  },
-  {
-    id: '2',
-    name: 'James Kowalski',
-    email: 'james.k@example.com',
-    avatar: null,
-    role: 'buyer',
-    trustScore: 78,
-    verificationLevel: 'basic',
-    joinDate: '2025-11-02',
-    status: 'active',
-    totalOrders: 23,
-    totalRevenue: 0,
-    phone: '+1 (555) 234-5678',
-    address: 'Austin, TX',
-    bio: 'Love discovering handmade products.',
-  },
-  {
-    id: '3',
-    name: 'Aisha Rahman',
-    email: 'aisha.r@example.com',
-    avatar: null,
-    role: 'seller',
-    trustScore: 88,
-    verificationLevel: 'pending',
-    joinDate: '2025-12-20',
-    status: 'active',
-    totalOrders: 67,
-    totalRevenue: 5230,
-    phone: '+1 (555) 345-6789',
-    address: 'Brooklyn, NY',
-    bio: 'Handmade jewelry and accessories.',
-  },
-  {
-    id: '4',
-    name: 'Miguel Lopez',
-    email: 'miguel.l@example.com',
-    avatar: null,
-    role: 'buyer',
-    trustScore: 45,
-    verificationLevel: 'none',
-    joinDate: '2026-01-15',
-    status: 'suspended',
-    totalOrders: 8,
-    totalRevenue: 0,
-    phone: '+1 (555) 456-7890',
-    address: 'Miami, FL',
-    bio: '',
-  },
-  {
-    id: '5',
-    name: 'Emily Chen',
-    email: 'emily.c@example.com',
-    avatar: null,
-    role: 'admin',
-    trustScore: 100,
-    verificationLevel: 'verified',
-    joinDate: '2025-06-01',
-    status: 'active',
-    totalOrders: 0,
-    totalRevenue: 0,
-    phone: '+1 (555) 567-8901',
-    address: 'San Francisco, CA',
-    bio: 'Platform administrator.',
-  },
-];
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const roleBadge = {
   admin: 'bg-[#FF6B35]/10 text-[#FF6B35]',
   seller: 'bg-[#06D6A0]/10 text-[#06D6A0]',
   buyer: 'bg-[#FFD23F]/10 text-[#FFD23F]',
-};
+}
 
 const verificationBadge = {
   verified: { color: 'text-[#06D6A0]', icon: ShieldCheck, label: 'Verified' },
   basic: { color: 'text-[#FFD23F]', icon: Shield, label: 'Basic' },
   pending: { color: 'text-[#FF6B35]', icon: ShieldAlert, label: 'Pending' },
   none: { color: 'text-gray-400', icon: Shield, label: 'None' },
-};
+  suspended: { color: 'text-red-500', icon: Ban, label: 'Suspended' },
+}
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('togogo-token')
+  if (token) return { Authorization: `Bearer ${token}` }
+  const secret = sessionStorage.getItem('togogo-setup-secret')
+  if (secret) return { 'x-setup-secret': secret }
+  return {}
+}
 
 export default function UsersPage() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [verificationFilter, setVerificationFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('joinDate');
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [actionMenuUser, setActionMenuUser] = useState(null);
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [sortBy, setSortBy] = useState('joinDate')
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [actionMenuUser, setActionMenuUser] = useState(null)
+  const [updating, setUpdating] = useState(null)
 
-  const pendingVerifications = sampleUsers.filter((u) => u.verificationLevel === 'pending');
+  const fetchUsers = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams()
+      if (searchQuery) params.set('search', searchQuery)
+      if (roleFilter !== 'all') params.set('role', roleFilter)
+      if (sortBy === 'name') params.set('sort', 'name')
+      else if (sortBy === 'revenue') params.set('sort', 'revenue')
 
-  const filteredUsers = sampleUsers
-    .filter((u) => {
-      if (searchQuery && !u.name.toLowerCase().includes(searchQuery.toLowerCase()) && !u.email.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      if (roleFilter !== 'all' && u.role !== roleFilter) return false;
-      if (verificationFilter !== 'all' && u.verificationLevel !== verificationFilter) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'joinDate') return new Date(b.joinDate) - new Date(a.joinDate);
-      if (sortBy === 'trustScore') return b.trustScore - a.trustScore;
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      return 0;
-    });
+      const res = await fetch(`${API_BASE}/api/admin/users?${params}`, {
+        headers: getAuthHeaders(),
+      })
+      if (!res.ok) throw new Error('Failed to load users')
+      const data = await res.json()
+      setUsers(data)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [roleFilter, sortBy])
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => fetchUsers(), 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  const updateUser = async (userId, updates) => {
+    setUpdating(userId)
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/users`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ userId, ...updates }),
+      })
+      if (!res.ok) throw new Error('Failed to update user')
+      await fetchUsers()
+      setActionMenuUser(null)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUpdating(null)
+    }
+  }
+
+  const pendingVerifications = users.filter((u) => u.verificationLevel === 'pending')
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -141,8 +100,22 @@ export default function UsersPage() {
           <Link to="/admin" className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#FF6B35]">
             <ArrowLeft className="h-4 w-4" /> Back to Admin
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="text-gray-500">Manage users, verifications, and permissions.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
+              <p className="text-gray-500">
+                {loading ? 'Loading...' : `${users.length} user${users.length !== 1 ? 's' : ''} found`}
+              </p>
+            </div>
+            <button
+              onClick={fetchUsers}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow hover:bg-gray-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Verification Queue */}
@@ -165,10 +138,18 @@ export default function UsersPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button className="rounded-lg bg-[#06D6A0] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#06D6A0]/90">
-                      Approve
+                    <button
+                      onClick={() => updateUser(u.id, { verificationLevel: 'verified' })}
+                      disabled={updating === u.id}
+                      className="rounded-lg bg-[#06D6A0] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#06D6A0]/90 disabled:opacity-50"
+                    >
+                      {updating === u.id ? 'Saving...' : 'Approve'}
                     </button>
-                    <button className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200">
+                    <button
+                      onClick={() => updateUser(u.id, { verificationLevel: 'none' })}
+                      disabled={updating === u.id}
+                      className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                    >
                       Reject
                     </button>
                   </div>
@@ -203,134 +184,160 @@ export default function UsersPage() {
                 <option value="admin">Admin</option>
               </select>
               <select
-                value={verificationFilter}
-                onChange={(e) => setVerificationFilter(e.target.value)}
-                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
-              >
-                <option value="all">All Verification</option>
-                <option value="verified">Verified</option>
-                <option value="basic">Basic</option>
-                <option value="pending">Pending</option>
-                <option value="none">None</option>
-              </select>
-              <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
                 className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#FF6B35] focus:outline-none"
               >
                 <option value="joinDate">Newest First</option>
-                <option value="trustScore">Trust Score</option>
+                <option value="revenue">Revenue</option>
                 <option value="name">Name A-Z</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Users Table */}
-        <div className="rounded-[16px] bg-white p-6 shadow">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs uppercase text-gray-500">
-                  <th className="pb-3 pr-4">User</th>
-                  <th className="pb-3 pr-4">Role</th>
-                  <th className="pb-3 pr-4">Trust Score</th>
-                  <th className="pb-3 pr-4">Verification</th>
-                  <th className="pb-3 pr-4">Joined</th>
-                  <th className="pb-3 pr-4">Status</th>
-                  <th className="pb-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((u) => {
-                  const vBadge = verificationBadge[u.verificationLevel];
-                  const VIcon = vBadge.icon;
-                  return (
-                    <tr
-                      key={u.id}
-                      className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50/50"
-                      onClick={() => setSelectedUser(u)}
-                    >
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#FF6B35]/20 to-[#06D6A0]/20">
-                            <User className="h-4 w-4 text-gray-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{u.name}</p>
-                            <p className="text-xs text-gray-500">{u.email}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${roleBadge[u.role]}`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-16 rounded-full bg-gray-100">
-                            <div
-                              className="h-2 rounded-full"
-                              style={{
-                                width: `${u.trustScore}%`,
-                                backgroundColor: u.trustScore >= 80 ? '#06D6A0' : u.trustScore >= 50 ? '#FFD23F' : '#FF6B35',
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs text-gray-600">{u.trustScore}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4">
-                        <div className={`flex items-center gap-1 ${vBadge.color}`}>
-                          <VIcon className="h-4 w-4" />
-                          <span className="text-xs font-medium">{vBadge.label}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 pr-4 text-gray-600">{new Date(u.joinDate).toLocaleDateString()}</td>
-                      <td className="py-3 pr-4">
-                        <span
-                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
-                            u.status === 'active' ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-100 text-red-600'
-                          }`}
-                        >
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="relative py-3 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActionMenuUser(actionMenuUser === u.id ? null : u.id);
-                          }}
-                          className="rounded-lg p-1.5 hover:bg-gray-100"
-                        >
-                          <MoreVertical className="h-4 w-4 text-gray-500" />
-                        </button>
-                        {actionMenuUser === u.id && (
-                          <div className="absolute right-0 top-full z-10 w-40 rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
-                            <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-                              <ShieldCheck className="h-4 w-4 text-[#06D6A0]" /> Verify
-                            </button>
-                            <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-                              <AlertCircle className="h-4 w-4 text-[#FFD23F]" /> Warn
-                            </button>
-                            <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">
-                              <ShieldAlert className="h-4 w-4 text-[#FF6B35]" /> Suspend
-                            </button>
-                            <button className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50">
-                              <Ban className="h-4 w-4" /> Ban
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Error */}
+        {error && (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+            <p className="text-sm text-red-600">{error}</p>
           </div>
-        </div>
+        )}
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 text-[#FF6B35] animate-spin" />
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && users.length === 0 && (
+          <div className="rounded-[16px] bg-white p-12 shadow text-center">
+            <User className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">No users yet</h3>
+            <p className="text-sm text-gray-500">
+              {searchQuery ? 'No users match your search. Try different keywords.' : 'Users will appear here once they sign up.'}
+            </p>
+          </div>
+        )}
+
+        {/* Users Table */}
+        {!loading && users.length > 0 && (
+          <div className="rounded-[16px] bg-white p-6 shadow">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 text-xs uppercase text-gray-500">
+                    <th className="pb-3 pr-4">User</th>
+                    <th className="pb-3 pr-4">Role</th>
+                    <th className="pb-3 pr-4">Verification</th>
+                    <th className="pb-3 pr-4">Stores</th>
+                    <th className="pb-3 pr-4">Orders</th>
+                    <th className="pb-3 pr-4">Revenue</th>
+                    <th className="pb-3 pr-4">Joined</th>
+                    <th className="pb-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => {
+                    const vBadge = verificationBadge[u.verificationLevel] || verificationBadge.none
+                    const VIcon = vBadge.icon
+                    return (
+                      <tr
+                        key={u.id}
+                        className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50/50"
+                        onClick={() => setSelectedUser(u)}
+                      >
+                        <td className="py-3 pr-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[#FF6B35]/20 to-[#06D6A0]/20">
+                              {u.avatarUrl ? (
+                                <img src={u.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                              ) : (
+                                <User className="h-4 w-4 text-gray-600" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{u.name}</p>
+                              <p className="text-xs text-gray-500">{u.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${roleBadge[u.role] || roleBadge.buyer}`}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <div className={`flex items-center gap-1 ${vBadge.color}`}>
+                            <VIcon className="h-4 w-4" />
+                            <span className="text-xs font-medium">{vBadge.label}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-4">
+                          {u.storeCount > 0 ? (
+                            <div className="flex items-center gap-1 text-[#06D6A0]">
+                              <Store className="h-3.5 w-3.5" />
+                              <span className="text-xs font-medium">{u.storeCount}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-600">{u.totalOrders || '—'}</td>
+                        <td className="py-3 pr-4 font-medium text-gray-900">
+                          {u.totalRevenue > 0 ? `$${u.totalRevenue.toLocaleString()}` : '—'}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-600">
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="relative py-3 text-right">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setActionMenuUser(actionMenuUser === u.id ? null : u.id)
+                            }}
+                            className="rounded-lg p-1.5 hover:bg-gray-100"
+                          >
+                            <MoreVertical className="h-4 w-4 text-gray-500" />
+                          </button>
+                          {actionMenuUser === u.id && (
+                            <div className="absolute right-0 top-full z-10 w-44 rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateUser(u.id, { verificationLevel: 'verified' }) }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <ShieldCheck className="h-4 w-4 text-[#06D6A0]" /> Verify
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateUser(u.id, { role: 'seller' }) }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <Store className="h-4 w-4 text-[#06D6A0]" /> Make Seller
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateUser(u.id, { role: 'admin' }) }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                              >
+                                <Shield className="h-4 w-4 text-[#FF6B35]" /> Make Admin
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); updateUser(u.id, { verificationLevel: 'suspended' }) }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Ban className="h-4 w-4" /> Suspend
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* User Detail Modal */}
         {selectedUser && (
@@ -344,24 +351,28 @@ export default function UsersPage() {
               </div>
               <div className="flex items-center gap-4 rounded-xl bg-gray-50 p-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#FF6B35] to-[#06D6A0]">
-                  <User className="h-8 w-8 text-white" />
+                  {selectedUser.avatarUrl ? (
+                    <img src={selectedUser.avatarUrl} alt="" className="h-16 w-16 rounded-full object-cover" />
+                  ) : (
+                    <User className="h-8 w-8 text-white" />
+                  )}
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">{selectedUser.name}</h3>
                   <p className="text-sm text-gray-500">{selectedUser.email}</p>
-                  <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${roleBadge[selectedUser.role]}`}>
+                  <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${roleBadge[selectedUser.role] || roleBadge.buyer}`}>
                     {selectedUser.role}
                   </span>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-gray-100 p-3">
-                  <p className="text-xs text-gray-500">Trust Score</p>
-                  <p className="text-lg font-bold text-gray-900">{selectedUser.trustScore}/100</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 p-3">
                   <p className="text-xs text-gray-500">Verification</p>
                   <p className="text-lg font-bold capitalize text-gray-900">{selectedUser.verificationLevel}</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 p-3">
+                  <p className="text-xs text-gray-500">Stores</p>
+                  <p className="text-lg font-bold text-gray-900">{selectedUser.storeCount}</p>
                 </div>
                 <div className="rounded-xl border border-gray-100 p-3">
                   <p className="text-xs text-gray-500">Total Orders</p>
@@ -373,17 +384,23 @@ export default function UsersPage() {
                 </div>
               </div>
               <div className="mt-4 space-y-2 text-sm text-gray-600">
-                <p><span className="font-medium text-gray-900">Phone:</span> {selectedUser.phone}</p>
-                <p><span className="font-medium text-gray-900">Location:</span> {selectedUser.address}</p>
-                <p><span className="font-medium text-gray-900">Joined:</span> {new Date(selectedUser.joinDate).toLocaleDateString()}</p>
+                {selectedUser.phone && <p><span className="font-medium text-gray-900">Phone:</span> {selectedUser.phone}</p>}
+                {selectedUser.location && <p><span className="font-medium text-gray-900">Location:</span> {selectedUser.location}</p>}
+                <p><span className="font-medium text-gray-900">Joined:</span> {new Date(selectedUser.createdAt).toLocaleDateString()}</p>
                 {selectedUser.bio && <p><span className="font-medium text-gray-900">Bio:</span> {selectedUser.bio}</p>}
               </div>
               <div className="mt-5 flex gap-2">
-                <button className="flex-1 rounded-xl bg-[#06D6A0] py-2.5 text-sm font-medium text-white hover:bg-[#06D6A0]/90">
+                <button
+                  onClick={() => { updateUser(selectedUser.id, { verificationLevel: 'verified' }); setSelectedUser(null) }}
+                  className="flex-1 rounded-xl bg-[#06D6A0] py-2.5 text-sm font-medium text-white hover:bg-[#06D6A0]/90"
+                >
                   Verify User
                 </button>
-                <button className="flex-1 rounded-xl bg-gray-100 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200">
-                  Send Message
+                <button
+                  onClick={() => { updateUser(selectedUser.id, { role: 'seller' }); setSelectedUser(null) }}
+                  className="flex-1 rounded-xl bg-[#FF6B35] py-2.5 text-sm font-medium text-white hover:bg-[#FF6B35]/90"
+                >
+                  Make Seller
                 </button>
               </div>
             </div>
@@ -391,5 +408,5 @@ export default function UsersPage() {
         )}
       </div>
     </div>
-  );
+  )
 }
