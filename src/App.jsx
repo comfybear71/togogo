@@ -36,6 +36,13 @@ const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
 const OneClickStorePage = lazy(() => import('./pages/OneClickStorePage'))
+const CartPage = lazy(() => import('./pages/CartPage'))
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'))
+const OrdersPage = lazy(() => import('./pages/OrdersPage'))
+const InboxPage = lazy(() => import('./pages/InboxPage'))
+const SellPage = lazy(() => import('./pages/SellPage'))
+const MarketingPage = lazy(() => import('./pages/MarketingPage'))
+const ShippingPage = lazy(() => import('./pages/ShippingPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
@@ -110,6 +117,13 @@ export default function App() {
           <Route path="/product/:id" element={<ProductDetailPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/subscription" element={<SubscriptionPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+          <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
+          <Route path="/inbox" element={<ProtectedRoute><InboxPage /></ProtectedRoute>} />
+          <Route path="/sell" element={<SellPage />} />
+          <Route path="/marketing" element={<ProtectedRoute><MarketingPage /></ProtectedRoute>} />
+          <Route path="/shipping" element={<ShippingPage />} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         </Route>
