@@ -262,6 +262,15 @@ export default function OneClickStorePage() {
   const pollRef = useRef(null)
   const checkTimeoutRef = useRef(null)
 
+  // Restore store name if returning from auth
+  useEffect(() => {
+    const pending = sessionStorage.getItem('togogo-pending-store-name')
+    if (pending && !storeName) {
+      setStoreName(pending)
+      sessionStorage.removeItem('togogo-pending-store-name')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-generate subdomain from store name
   useEffect(() => {
     if (storeName) {
@@ -386,6 +395,8 @@ export default function OneClickStorePage() {
   // Launch store
   const handleLaunch = async () => {
     if (!user) {
+      // Save input so it's pre-filled after auth
+      if (storeName) sessionStorage.setItem('togogo-pending-store-name', storeName)
       navigate('/auth?redirect=/create-store')
       return
     }
@@ -553,6 +564,16 @@ export default function OneClickStorePage() {
             )}
           </div>
 
+          {/* Sign-in notice */}
+          {!user && storeName.trim() && subdomain.trim() && (
+            <div className="flex items-center gap-2.5 p-3 rounded-xl bg-[#FF6B35]/10 border border-[#FF6B35]/20 mb-4">
+              <Lock className="h-4 w-4 text-[#FF6B35] flex-shrink-0" />
+              <p className="text-[11px] text-zinc-300">
+                You'll need to <span className="text-[#FF6B35] font-medium">sign in or create an account</span> to launch your store. Takes 10 seconds.
+              </p>
+            </div>
+          )}
+
           {/* Launch button */}
           <button
             onClick={handleLaunch}
@@ -567,6 +588,11 @@ export default function OneClickStorePage() {
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
                 Launching your store...
+              </>
+            ) : !user ? (
+              <>
+                <Lock className="h-5 w-5" />
+                Sign In & Launch
               </>
             ) : (
               <>
