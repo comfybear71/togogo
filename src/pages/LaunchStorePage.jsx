@@ -195,18 +195,13 @@ export default function LaunchStorePage() {
       let url = storeUrl.trim().replace(/\/+$/, '')
       if (!url.startsWith('http')) url = 'https://' + url
 
-      // Try real connection first, fall back to simulated demo mode
-      try {
-        const result = await connectMutation.mutateAsync({ platform: 'woocommerce', shop_url: url })
-        if (result.type === 'oauth' && result.url) {
-          window.location.href = result.url
-          return
-        }
-      } catch {
-        // Real connection failed — simulate a successful demo connection
+      const result = await connectMutation.mutateAsync({ platform: 'woocommerce', shop_url: url })
+      if (result.type === 'oauth' && result.url) {
+        window.location.href = result.url
+        return
       }
 
-      // Simulated connection: save to localStorage and advance
+      // Save connection and advance
       const connection = {
         platform: 'woocommerce',
         shop_url: url,
@@ -214,13 +209,9 @@ export default function LaunchStorePage() {
         status: 'active',
         connected_at: new Date().toISOString(),
         products_synced: 0,
-        demo: true,
       }
       localStorage.setItem('togogo-store-connection', JSON.stringify(connection))
       localStorage.setItem('togogo-store-name', storeName || connection.shop_name)
-
-      // Simulate brief loading, then advance to done step
-      await new Promise(r => setTimeout(r, 1500))
       setStep(5) // done step
     } catch (err) { setError(err.message) }
     finally { setConnecting(false) }
@@ -550,13 +541,11 @@ export default function LaunchStorePage() {
                         <button
                           onClick={() => {
                             if (!user) { navigate('/auth?redirect=/launch-store'); return }
-                            // Simulate a successful marketplace connection
                             const connection = {
                               platform: m.id,
                               shop_name: storeName || `My ${m.name} Store`,
                               status: 'active',
                               connected_at: new Date().toISOString(),
-                              demo: true,
                             }
                             localStorage.setItem(`togogo-marketplace-${m.id}`, JSON.stringify(connection))
                             refetchConnections()

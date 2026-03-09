@@ -167,13 +167,9 @@ export default function OneClickStorePage() {
       const data = await res.json()
 
       if (!res.ok) {
-        // If provisioning fails, still show the progress (it simulates client-side)
-        // Only block on real errors
-        if (data.error && !data.error.includes('demo')) {
-          setError(data.error)
-          setLaunching(false)
-          return
-        }
+        setError(data.error || 'Failed to start store provisioning')
+        setLaunching(false)
+        return
       }
 
       if (data.url) setStoreUrl(data.url)
@@ -185,10 +181,7 @@ export default function OneClickStorePage() {
       // Start the deploy progress UI!
       setPhase('deploying')
     } catch {
-      // Even on API failure, start the deploy animation (demo mode)
-      sessionStorage.setItem('togogo-pending-store-name', storeName.trim())
-      sessionStorage.setItem('togogo-pending-subdomain', subdomain.trim())
-      setPhase('deploying')
+      setError('Failed to connect. Please check your connection and try again.')
     } finally {
       setLaunching(false)
     }
@@ -229,11 +222,10 @@ export default function OneClickStorePage() {
         return
       }
 
-      // If no URL returned (demo mode), simulate payment success after a brief delay
-      setTimeout(() => setPaymentComplete(true), 2000)
+      // No checkout URL returned — treat as error
+      setError('Payment setup failed. Please try again.')
     } catch {
-      // Demo mode — simulate payment success
-      setTimeout(() => setPaymentComplete(true), 2000)
+      setError('Payment setup failed. Please try again.')
     }
   }, [storeName, subdomain, paymentComplete])
 

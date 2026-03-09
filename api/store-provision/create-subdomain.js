@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         subdomain: clean,
         domain: fullDomain,
         url: `https://${fullDomain}`,
-        demo: true,
+        vercel_configured: false,
       })
     }
 

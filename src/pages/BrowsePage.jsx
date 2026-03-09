@@ -21,26 +21,6 @@ const TABS = [
   { id: 'new', label: 'Just Added', icon: Clock, color: '#a78bfa' },
 ]
 
-// Curated products — used as fallback when DB is empty, and for the value/new tabs
-const FEATURED = [
-  { id: 'f1', name: 'Apple AirPods Pro 2', brand: 'Apple', category: 'electronics', image_url: 'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?w=400&h=400&fit=crop', best_price: 189.99, original_price: 249.99, deal_score: 96, retailer_name: 'Amazon', price_count: 8, tag: 'trending' },
-  { id: 'f2', name: 'Dyson V15 Detect Vacuum', brand: 'Dyson', category: 'home', image_url: 'https://images.unsplash.com/photo-1558317374-067fb5f30001?w=400&h=400&fit=crop', best_price: 449.00, original_price: 749.99, deal_score: 93, retailer_name: 'eBay', price_count: 5, tag: 'deal' },
-  { id: 'f3', name: 'Samsung 65" Crystal UHD TV', brand: 'Samsung', category: 'electronics', image_url: 'https://images.unsplash.com/photo-1593359677879-a4bb92f829d1?w=400&h=400&fit=crop', best_price: 597.00, original_price: 999.99, deal_score: 91, retailer_name: 'Best Buy', price_count: 12, tag: 'deal' },
-  { id: 'f4', name: 'Nike Air Max 90', brand: 'Nike', category: 'fashion', image_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop', best_price: 89.97, original_price: 130.00, deal_score: 85, retailer_name: 'Nike', price_count: 6, tag: 'trending' },
-  { id: 'f5', name: 'Instant Pot Duo 7-in-1', brand: 'Instant Pot', category: 'home', image_url: 'https://images.unsplash.com/photo-1585515320310-259814833e62?w=400&h=400&fit=crop', best_price: 59.99, original_price: 89.99, deal_score: 87, retailer_name: 'Amazon', price_count: 7, tag: 'value' },
-  { id: 'f6', name: 'Bose QuietComfort 45', brand: 'Bose', category: 'electronics', image_url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400&h=400&fit=crop', best_price: 229.00, original_price: 329.99, deal_score: 86, retailer_name: 'Target', price_count: 10, tag: 'deal' },
-  { id: 'f7', name: 'KitchenAid Stand Mixer', brand: 'KitchenAid', category: 'home', image_url: 'https://images.unsplash.com/photo-1594385208974-2f8bb07dcc56?w=400&h=400&fit=crop', best_price: 279.99, original_price: 449.99, deal_score: 89, retailer_name: 'Amazon', price_count: 8, tag: 'trending' },
-  { id: 'f8', name: 'Pampers Baby Dry Size 4', brand: 'Pampers', category: 'baby', image_url: 'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=400&h=400&fit=crop', best_price: 32.99, original_price: 54.99, deal_score: 92, retailer_name: 'Walmart', price_count: 9, tag: 'value' },
-  { id: 'f9', name: 'Stanley Quencher H2.0 40oz', brand: 'Stanley', category: 'home', image_url: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop', best_price: 35.00, original_price: 45.00, deal_score: 88, retailer_name: 'Amazon', price_count: 4, tag: 'trending' },
-  { id: 'f10', name: 'CeraVe Moisturizing Cream 16oz', brand: 'CeraVe', category: 'health', image_url: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=400&fit=crop', best_price: 14.99, original_price: 21.99, deal_score: 84, retailer_name: 'Walmart', price_count: 6, tag: 'value' },
-  { id: 'f11', name: 'Meta Quest 3 128GB', brand: 'Meta', category: 'electronics', image_url: 'https://images.unsplash.com/photo-1622979135225-d2ba269cf1ac?w=400&h=400&fit=crop', best_price: 399.99, original_price: 499.99, deal_score: 90, retailer_name: 'Amazon', price_count: 5, tag: 'new' },
-  { id: 'f12', name: 'Lululemon Align Leggings', brand: 'Lululemon', category: 'fashion', image_url: 'https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=400&h=400&fit=crop', best_price: 68.00, original_price: 98.00, deal_score: 82, retailer_name: 'Lululemon', price_count: 3, tag: 'trending' },
-  { id: 'f13', name: 'Crocs Classic Clog', brand: 'Crocs', category: 'fashion', image_url: 'https://images.unsplash.com/photo-1603808033192-082d6919d3e1?w=400&h=400&fit=crop', best_price: 34.99, original_price: 54.99, deal_score: 83, retailer_name: 'Amazon', price_count: 7, tag: 'value' },
-  { id: 'f14', name: 'Sony WH-1000XM5', brand: 'Sony', category: 'electronics', image_url: 'https://images.unsplash.com/photo-1618366712010-f4ae9c647dcb?w=400&h=400&fit=crop', best_price: 279.99, original_price: 399.99, deal_score: 94, retailer_name: 'Best Buy', price_count: 9, tag: 'deal' },
-  { id: 'f15', name: 'Ninja Air Fryer AF101', brand: 'Ninja', category: 'home', image_url: 'https://images.unsplash.com/photo-1648411898498-1f7dd9e78e24?w=400&h=400&fit=crop', best_price: 69.99, original_price: 119.99, deal_score: 88, retailer_name: 'Target', price_count: 6, tag: 'deal' },
-  { id: 'f16', name: 'Sydney to Melbourne Flight', brand: 'Jetstar', category: 'travel', image_url: 'https://images.unsplash.com/photo-1436491865332-7a61a109db05?w=400&h=400&fit=crop', best_price: 59.00, original_price: 129.00, deal_score: 93, retailer_name: 'Skyscanner', price_count: 6, tag: 'deal' },
-]
-
 function getSavings(original, best) {
   if (!original || original <= best) return 0
   return Math.round(((original - best) / original) * 100)
@@ -163,42 +143,22 @@ export default function BrowsePage() {
     query ? { query, category: category || undefined, sort } : {}
   )
 
-  // Merge real data with curated fallbacks
+  // Real data only — no fallback dummy data
   const trending = useMemo(() => {
-    const real = normalizeDeals(trendingRaw)
-    if (real) return real
-    return FEATURED.filter((p) => p.tag === 'trending' || p.deal_score >= 85)
-      .sort((a, b) => b.deal_score - a.deal_score)
+    return normalizeDeals(trendingRaw) || []
   }, [trendingRaw])
 
   const hotDeals = useMemo(() => {
-    const real = normalizeDeals(dealsRaw)
-    if (real) return real
-    return FEATURED.filter((p) => p.tag === 'deal' || getSavings(p.original_price, p.best_price) >= 25)
-      .sort((a, b) => getSavings(b.original_price, b.best_price) - getSavings(a.original_price, a.best_price))
+    return normalizeDeals(dealsRaw) || []
   }, [dealsRaw])
 
-  const bestValue = useMemo(() => {
-    return [...FEATURED]
-      .filter((p) => p.tag === 'value' || p.best_price < 100)
-      .sort((a, b) => a.best_price - b.best_price)
-  }, [])
-
-  const justAdded = useMemo(() => {
-    return [...FEATURED]
-      .filter((p) => p.tag === 'new' || p.tag === 'trending')
-      .sort((a, b) => b.deal_score - a.deal_score)
-  }, [])
+  const bestValue = useMemo(() => [], [])
+  const justAdded = useMemo(() => [], [])
 
   // Active products based on tab or search
   const activeProducts = useMemo(() => {
     if (query) {
-      if (searchResults && searchResults.length > 0) return searchResults
-      // Fallback: search curated products
-      const q = query.toLowerCase()
-      return FEATURED.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q)
-      )
+      return (searchResults && searchResults.length > 0) ? searchResults : []
     }
     switch (activeTab) {
       case 'trending': return trending

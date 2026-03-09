@@ -3,35 +3,9 @@ import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle,
 } from 'lucide-react'
-import { DUMMY_PRODUCTS, enrichProduct } from '../lib/dummyShopData'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
-
-// ─── Build demo data from the full supplier catalog ──────────────────────
-function buildDemoStore(subdomain) {
-  const products = DUMMY_PRODUCTS.map(enrichProduct).map((p) => ({
-    id: p.id,
-    title: p.title,
-    description: `${p.supplier} · Ships in ${p.deliveryDays} days`,
-    image: p.image,
-    price: p.suggestedPrice,
-    category: p.category.charAt(0).toUpperCase() + p.category.slice(1),
-    totalSold: p.sold || 0,
-  }))
-  const categories = [...new Set(products.map((p) => p.category))]
-  return {
-    store: {
-      id: 'demo',
-      name: subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Store',
-      subdomain,
-      owner: 'Store Owner',
-      createdAt: new Date().toISOString(),
-    },
-    products,
-    categories,
-  }
-}
 
 // ─── Read saved theme from localStorage (set in MyShopPage) ──────────────
 function getSavedThemeId() {
@@ -68,7 +42,6 @@ function useCart(subdomain) {
 export default function StorefrontPage({ subdomain }) {
   const [storeData, setStoreData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [isDemo, setIsDemo] = useState(false)
   const [view, setView] = useState('grid') // grid | product | cart | checkout | success
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -82,8 +55,7 @@ export default function StorefrontPage({ subdomain }) {
       .then((r) => r.ok ? r.json() : Promise.reject('Store not found'))
       .then((data) => setStoreData(data))
       .catch(() => {
-        setStoreData(buildDemoStore(subdomain))
-        setIsDemo(true)
+        setStoreData(null)
       })
       .finally(() => setLoading(false))
   }, [subdomain])
@@ -153,7 +125,6 @@ export default function StorefrontPage({ subdomain }) {
       cart={cart}
       subdomain={subdomain}
       theme={theme}
-      isDemo={isDemo}
       onBack={() => setView('cart')}
       onSuccess={() => setView('success')}
     />
@@ -285,11 +256,6 @@ export default function StorefrontPage({ subdomain }) {
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className={`min-h-screen ${theme.pageBg}`}>
-      {isDemo && (
-        <div className="bg-amber-500 px-4 py-2 text-center text-xs font-medium text-white">
-          Preview Mode — This is a demo storefront with sample products
-        </div>
-      )}
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
 
       {/* Hero */}
@@ -423,7 +389,7 @@ function StoreHeader({ store, cart, theme, onCartClick }) {
 }
 
 // ─── Checkout View ────────────────────────────────────────────────────────
-function CheckoutView({ store, cart, subdomain, theme, isDemo, onBack, onSuccess }) {
+function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', city: '', state: '', zip: '', country: 'Australia' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -431,15 +397,6 @@ function CheckoutView({ store, cart, subdomain, theme, isDemo, onBack, onSuccess
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.name || !form.email) return setError('Name and email are required')
-
-    // In demo mode, simulate a successful order
-    if (isDemo) {
-      setSubmitting(true)
-      await new Promise(r => setTimeout(r, 1200))
-      setSubmitting(false)
-      onSuccess()
-      return
-    }
 
     setSubmitting(true)
     setError(null)

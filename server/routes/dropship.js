@@ -1134,14 +1134,8 @@ async function importFromAliExpress(url) {
   }
 }
 
-function getSampleAliExpressProducts(query) {
-  const q = query || 'Product'
-  return [
-    { id: 'ae_sample_1', title: `${q} - Hot Seller`, description: 'Top-rated AliExpress product with 10k+ orders', image: '', images: [], cost: 4.99, originalPrice: 9.99, shipping: 0, totalCost: 4.99, suggestedPrice: 14.99, suggestedMargin: 10.00, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.96, orders: 10532, discount: 50, _live: false },
-    { id: 'ae_sample_2', title: `${q} - Budget Pick`, description: 'Affordable option with free shipping worldwide', image: '', images: [], cost: 2.49, originalPrice: 4.99, shipping: 0, totalCost: 2.49, suggestedPrice: 9.99, suggestedMargin: 7.50, deliveryDays: 20, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.92, orders: 5210, discount: 50, _live: false },
-    { id: 'ae_sample_3', title: `${q} - Premium Quality`, description: 'Higher quality variant with faster shipping option', image: '', images: [], cost: 8.99, originalPrice: 14.99, shipping: 0, totalCost: 8.99, suggestedPrice: 24.99, suggestedMargin: 16.00, deliveryDays: 10, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.98, orders: 3420, discount: 40, _live: false },
-    { id: 'ae_sample_4', title: `${q} - Bundle (5 Pack)`, description: 'Multi-pack for better per-unit margins', image: '', images: [], cost: 11.99, originalPrice: 19.99, shipping: 0, totalCost: 11.99, suggestedPrice: 34.99, suggestedMargin: 23.00, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', sourceUrl: '', minOrderQty: 1, category: 'General', rating: 0.94, orders: 1876, discount: 40, _live: false },
-  ]
+function getSampleAliExpressProducts() {
+  return []
 }
 
 // --- Manual/DB suppliers ---
@@ -1176,41 +1170,20 @@ async function searchManualSuppliers(query) {
 // ============================================
 // SAMPLE DATA (shown when API keys not configured)
 // ============================================
-function getSampleCJProducts(query) {
-  const q = query || 'Product'
-  return [
-    { id: 'cj_sample_1', title: `${q} - Premium Quality`, description: 'High-quality product with fast shipping from CJ warehouse', image: '', images: [], cost: 5.99, shipping: 2.50, totalCost: 8.49, suggestedPrice: 21.99, suggestedMargin: 13.50, deliveryDays: 12, supplier: 'CJ Dropshipping', supplierLogo: '📦', sourceUrl: '', minOrderQty: 1, category: 'General', _live: false },
-    { id: 'cj_sample_2', title: `${q} - Budget Option`, description: 'Affordable option perfect for testing your market', image: '', images: [], cost: 3.49, shipping: 1.99, totalCost: 5.48, suggestedPrice: 14.99, suggestedMargin: 9.51, deliveryDays: 18, supplier: 'CJ Dropshipping', supplierLogo: '📦', sourceUrl: '', minOrderQty: 1, category: 'General', _live: false },
-    { id: 'cj_sample_3', title: `${q} - Deluxe Version`, description: 'Premium tier with better packaging and faster shipping', image: '', images: [], cost: 12.99, shipping: 3.50, totalCost: 16.49, suggestedPrice: 39.99, suggestedMargin: 23.50, deliveryDays: 8, supplier: 'CJ Dropshipping', supplierLogo: '📦', sourceUrl: '', minOrderQty: 1, category: 'General', _live: false },
-    { id: 'cj_sample_4', title: `${q} - Value Pack (3x)`, description: 'Bundle pack — sell individually for higher margins', image: '', images: [], cost: 9.99, shipping: 3.99, totalCost: 13.98, suggestedPrice: 34.99, suggestedMargin: 21.01, deliveryDays: 14, supplier: 'CJ Dropshipping', supplierLogo: '📦', sourceUrl: '', minOrderQty: 1, category: 'General', _live: false },
-  ]
+function getSampleCJProducts() {
+  return []
 }
 
-function getSamplePrintfulProducts(query) {
-  const q = query || 'Custom'
-  return [
-    { id: 'pf_sample_1', title: `${q} T-Shirt`, description: 'Unisex cotton tee — add your own design', image: '', images: [], cost: 12.50, shipping: 4.50, totalCost: 17.00, suggestedPrice: 29.99, suggestedMargin: 12.99, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-    { id: 'pf_sample_2', title: `${q} Mug`, description: '11oz ceramic mug — full wrap print', image: '', images: [], cost: 7.50, shipping: 4.50, totalCost: 12.00, suggestedPrice: 22.99, suggestedMargin: 10.99, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-    { id: 'pf_sample_3', title: `${q} Phone Case`, description: 'Tough snap case for iPhone/Samsung — your design', image: '', images: [], cost: 10.00, shipping: 4.50, totalCost: 14.50, suggestedPrice: 27.99, suggestedMargin: 13.49, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-    { id: 'pf_sample_4', title: `${q} Poster Print`, description: 'Museum-quality poster on thick matte paper', image: '', images: [], cost: 8.00, shipping: 4.50, totalCost: 12.50, suggestedPrice: 24.99, suggestedMargin: 12.49, deliveryDays: 5, supplier: 'Printful', supplierLogo: '🎨', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-  ]
+function getSamplePrintfulProducts() {
+  return []
 }
 
-function getSamplePrintifyProducts(query) {
-  const q = query || 'Custom'
-  return [
-    { id: 'py_sample_1', title: `${q} T-Shirt`, description: 'Gildan 64000 unisex tee — your custom design', image: '', images: [], cost: 8.50, shipping: 4.00, totalCost: 12.50, suggestedPrice: 27.99, suggestedMargin: 15.49, deliveryDays: 5, supplier: 'Printify', supplierLogo: '🖨️', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-    { id: 'py_sample_2', title: `${q} Mug`, description: 'Classic 11oz mug — vibrant sublimation print', image: '', images: [], cost: 5.50, shipping: 4.00, totalCost: 9.50, suggestedPrice: 19.99, suggestedMargin: 10.49, deliveryDays: 5, supplier: 'Printify', supplierLogo: '🖨️', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-    { id: 'py_sample_3', title: `${q} Hoodie`, description: 'Unisex pullover hoodie — DTG printed your design', image: '', images: [], cost: 20.00, shipping: 4.50, totalCost: 24.50, suggestedPrice: 49.99, suggestedMargin: 25.49, deliveryDays: 5, supplier: 'Printify', supplierLogo: '🖨️', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-  ]
+function getSamplePrintifyProducts() {
+  return []
 }
 
-function getSampleGootenProducts(query) {
-  const q = query || 'Custom'
-  return [
-    { id: 'gt_sample_1', title: `${q} T-Shirt`, description: 'Next Level unisex tee — premium DTG print', image: '', images: [], cost: 9.00, shipping: 4.50, totalCost: 13.50, suggestedPrice: 28.99, suggestedMargin: 15.49, deliveryDays: 6, supplier: 'Gooten', supplierLogo: '🏭', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-    { id: 'gt_sample_2', title: `${q} Canvas Print`, description: 'Gallery wrapped canvas — high-res print on wood frame', image: '', images: [], cost: 14.00, shipping: 5.00, totalCost: 19.00, suggestedPrice: 44.99, suggestedMargin: 25.99, deliveryDays: 6, supplier: 'Gooten', supplierLogo: '🏭', sourceUrl: '', minOrderQty: 1, category: 'Custom', customisable: true, _live: false },
-  ]
+function getSampleGootenProducts() {
+  return []
 }
 
 export default router

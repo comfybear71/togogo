@@ -81,23 +81,6 @@ export const useAuthStore = create(
         }
       },
 
-      // Demo sign-in for testing (no database required)
-      demoSignIn: () => {
-        const demoUser = {
-          id: 'demo-user-001',
-          email: 'test@togogo.com',
-          name: 'Test User',
-          avatar_url: null,
-          role: 'both',
-          wallet_balance: 0,
-          location_suburb: null,
-          location_country: null,
-          verification_level: 'basic',
-        }
-        localStorage.setItem('togogo-token', 'demo-token')
-        set({ user: demoUser, profile: demoUser, loading: false })
-      },
-
       signOut: async () => {
         localStorage.removeItem('togogo-token')
         set({ user: null, profile: null })

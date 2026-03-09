@@ -6,7 +6,6 @@ import {
   Search, Filter, ChevronDown, AlertCircle, Rocket, Check, Star
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
-import { DUMMY_PRODUCTS, DUMMY_SUPPLIERS, enrichProduct, getProductsForTier, getSuppliersForTier } from '../lib/dummyShopData'
 import { SELLING_PLANS } from '../lib/constants'
 import { STOREFRONT_THEMES, getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
@@ -62,20 +61,8 @@ export default function MyShopPage() {
     saveProducts(listedProducts.filter(p => p.id !== productId))
   }
 
-  // Available products for the "Add Product" modal
-  const availableProducts = useMemo(() => {
-    let products = getProductsForTier(tier)
-    const listedIds = new Set(listedProducts.map(p => p.id))
-    products = products.filter(p => !listedIds.has(p.id))
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      products = products.filter(p => p.title.toLowerCase().includes(q) || p.category.includes(q))
-    }
-    if (selectedCategory) {
-      products = products.filter(p => p.category === selectedCategory)
-    }
-    return products
-  }, [tier, listedProducts, searchQuery, selectedCategory])
+  // Available products — fetched from real supplier APIs via the Suppliers page
+  const availableProducts = []
 
   // Stats
   const totalRevenue = listedProducts.reduce((sum, p) => sum + (p.suggestedPrice || 0), 0)
@@ -119,7 +106,7 @@ export default function MyShopPage() {
             <p className="text-[10px] text-zinc-500">
               {storeConnection
                 ? `Connected to ${storeConnection.platform}`
-                : 'Demo mode — set up your store to go live'}
+                : 'Set up your store to go live'}
             </p>
           </div>
         </div>
@@ -411,81 +398,19 @@ export default function MyShopPage() {
               </div>
             </div>
 
-            {/* Product list */}
+            {/* Product list — directs to Suppliers page for real products */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {availableProducts.length === 0 ? (
-                <div className="text-center py-8">
-                  <Package className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
-                  <p className="text-xs text-zinc-500">No matching products found</p>
-                </div>
-              ) : (
-                availableProducts.map((product) => {
-                  const isLockedSupplier = !isPaid && DUMMY_SUPPLIERS.find(s => s.id === product.supplierId)?.tier === 'paid'
-                  return (
-                    <div
-                      key={product.id}
-                      className={`rounded-xl border p-3 transition-all ${
-                        isLockedSupplier
-                          ? 'bg-[#111] border-white/[0.04] opacity-50'
-                          : 'bg-[#111] border-white/[0.06] hover:border-white/[0.12]'
-                      }`}
-                    >
-                      <div className="flex gap-3">
-                        <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#0a0a0a] flex-shrink-0">
-                          {product.image ? (
-                            <img
-                              src={product.image}
-                              alt={product.title}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.target.style.display = 'none'
-                                e.target.parentElement.innerHTML = '<div class="w-full h-full flex items-center justify-center text-2xl">' + (product.supplierLogo || '📦') + '</div>'
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-2xl">
-                              {product.supplierLogo}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-xs font-semibold text-white truncate">{product.title}</h4>
-                          <p className="text-[10px] text-zinc-500 mt-0.5">
-                            {product.supplierLogo} {product.supplier}
-                            {product.customisable && (
-                              <span className="ml-1 text-[#a78bfa]">
-                                <Palette className="h-2.5 w-2.5 inline" /> Custom
-                              </span>
-                            )}
-                          </p>
-                          <div className="flex items-center gap-3 mt-1.5">
-                            <span className="text-[10px] text-zinc-600">Cost: <span className="text-zinc-300">${safe$(product.cost)}</span></span>
-                            <span className="text-[10px] text-zinc-600">Sell: <span className="text-white font-medium">${safe$(product.suggestedPrice)}</span></span>
-                            <span className="text-[10px] font-semibold text-[#06D6A0]">
-                              +${safe$(product.margin)} profit
-                            </span>
-                          </div>
-                        </div>
-                        {isLockedSupplier ? (
-                          <button
-                            onClick={() => setShowUpgradeModal(true)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#FFD23F]/10 border border-[#FFD23F]/20 text-[10px] font-semibold text-[#FFD23F] flex-shrink-0 self-center"
-                          >
-                            <Lock className="h-3 w-3" /> Pro
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => addProduct(product)}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#FF6B35] text-white text-[10px] font-semibold hover:bg-[#FF6B35]/90 transition-colors flex-shrink-0 self-center"
-                          >
-                            <Plus className="h-3 w-3" /> Add
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })
-              )}
+              <div className="text-center py-8">
+                <Package className="h-8 w-8 text-zinc-700 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500 mb-4">Browse our supplier catalog to find products to sell.</p>
+                <Link
+                  to="/suppliers"
+                  onClick={() => setShowAddModal(false)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold hover:bg-[#FF6B35]/90 transition-colors"
+                >
+                  <Search className="h-4 w-4" /> Browse Suppliers
+                </Link>
+              </div>
             </div>
           </div>
         </div>

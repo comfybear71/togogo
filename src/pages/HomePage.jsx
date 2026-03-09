@@ -1,8 +1,6 @@
-import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BookOpen } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
-import { DUMMY_PRODUCTS, DUMMY_SUPPLIERS } from '../lib/dummyShopData'
 
 const QUICK_STARTS = [
   { id: 'sell', emoji: '🏷️', label: 'Start Selling', border: 'hover:border-[#FF6B35]/30' },
@@ -45,36 +43,9 @@ const TOOLS = [
   },
 ]
 
-// Pick one random product per supplier
-function getRandomProductPerSupplier() {
-  const supplierColors = {}
-  for (const s of DUMMY_SUPPLIERS) {
-    supplierColors[s.id] = s.color
-  }
-  const grouped = {}
-  for (const p of DUMMY_PRODUCTS) {
-    if (!grouped[p.supplierId]) grouped[p.supplierId] = []
-    grouped[p.supplierId].push(p)
-  }
-  return DUMMY_SUPPLIERS.map((s) => {
-    const products = grouped[s.id] || []
-    const pick = products[Math.floor(Math.random() * products.length)]
-    return pick ? {
-      id: pick.id,
-      supplier: s.name,
-      image: pick.image.replace('w=400', 'w=200').replace('h=400', 'h=200'),
-      title: pick.title,
-      price: `$${pick.suggestedPrice.toFixed(2)}`,
-      color: s.color,
-    } : null
-  }).filter(Boolean)
-}
-
 export default function HomePage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  // Random products — changes on each page load/refresh
-  const showcaseProducts = useMemo(() => getRandomProductPerSupplier(), [])
 
   const handleGetStarted = () => {
     navigate('/create-store')
@@ -224,45 +195,6 @@ export default function HomePage() {
               <span className="text-[10px] font-medium text-zinc-400 group-hover:text-zinc-200 transition-colors leading-tight">{item.label}</span>
             </button>
           ))}
-        </div>
-
-        {/* === Product showcase from suppliers === */}
-        <div className="fade-up w-full" style={{ marginTop: '20px', maxWidth: '360px', animationDelay: '1.3s' }}>
-          <p className="text-[10px] text-zinc-600 uppercase tracking-wider text-center mb-3">Products from our suppliers</p>
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {showcaseProducts.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => navigate('/suppliers')}
-                className="flex-shrink-0 w-[100px] rounded-xl bg-[#0e0e0e] border border-white/[0.06] overflow-hidden hover:border-white/[0.12] transition-all active:scale-[0.97]"
-              >
-                <div className="w-full h-[80px] overflow-hidden bg-[#111]">
-                  <img
-                    src={product.image}
-                    alt={product.title}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      e.target.style.display = 'none'
-                      e.target.parentElement.innerHTML = `<div class="w-full h-full flex items-center justify-center"><span class="text-lg font-bold" style="color:${product.color}">${product.supplier.charAt(0)}</span></div>`
-                    }}
-                  />
-                </div>
-                <div className="p-2">
-                  <p className="text-[9px] text-zinc-400 truncate">{product.title}</p>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-[10px] font-bold text-white">{product.price}</span>
-                    <span
-                      className="text-[7px] font-bold px-1 py-0.5 rounded"
-                      style={{ backgroundColor: `${product.color}20`, color: product.color }}
-                    >
-                      {product.supplier.split(' ')[0]}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Footer */}
