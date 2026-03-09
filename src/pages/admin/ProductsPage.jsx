@@ -92,11 +92,56 @@ export default function ProductsPage() {
     );
   }
 
+  // Summary stats
+  const totalProducts = products.length;
+  const activeProducts = products.filter(p => p.is_active).length;
+  const totalSupplierCost = products.reduce((s, p) => s + (parseFloat(p.supplier_cost) || 0), 0);
+  const totalCommission = products.reduce((s, p) => s + ((parseFloat(p.supplier_cost) || 0) * commissionRate), 0);
+  const totalWePay = totalSupplierCost + totalCommission;
+  const totalSaleValue = products.reduce((s, p) => s + (parseFloat(p.sale_price) || 0), 0);
+  const totalProfit = totalSaleValue - totalWePay;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">Product Management</h1>
-        <p className="text-zinc-500">Manage listings, review reports, and moderate products.</p>
+        <p className="text-zinc-500">All products across all sellers — costs, commission, and profit at a glance.</p>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="rounded-[16px] bg-[#111] p-4">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total Products</p>
+          <p className="text-xl font-bold text-white">{totalProducts}</p>
+          <p className="text-[10px] text-zinc-600">{activeProducts} active</p>
+        </div>
+        <div className="rounded-[16px] bg-[#111] p-4">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Supplier Cost</p>
+          <p className="text-xl font-bold text-zinc-300">${totalSupplierCost.toFixed(2)}</p>
+          <p className="text-[10px] text-zinc-600">Raw cost total</p>
+        </div>
+        <div className="rounded-[16px] bg-[#111] p-4">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Commission</p>
+          <p className="text-xl font-bold text-[#FFD23F]">${totalCommission.toFixed(2)}</p>
+          <p className="text-[10px] text-zinc-600">{(commissionRate * 100).toFixed(0)}% platform fee</p>
+        </div>
+        <div className="rounded-[16px] bg-[#111] p-4">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">We Pay</p>
+          <p className="text-xl font-bold text-zinc-300">${totalWePay.toFixed(2)}</p>
+          <p className="text-[10px] text-zinc-600">Cost + commission</p>
+        </div>
+        <div className="rounded-[16px] bg-[#111] p-4">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Sale Value</p>
+          <p className="text-xl font-bold text-white">${totalSaleValue.toFixed(2)}</p>
+          <p className="text-[10px] text-zinc-600">Listed total</p>
+        </div>
+        <div className="rounded-[16px] bg-[#111] p-4">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total Profit</p>
+          <p className={`text-xl font-bold ${totalProfit > 0 ? 'text-[#06D6A0]' : 'text-red-400'}`}>
+            {totalProfit > 0 ? '+' : ''}${totalProfit.toFixed(2)}
+          </p>
+          <p className="text-[10px] text-zinc-600">If all sold once</p>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -154,7 +199,9 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                   <th className="pb-3 pr-4">Product</th>
-                  <th className="pb-3 pr-4">Cost</th>
+                  <th className="pb-3 pr-4">Supplier Cost</th>
+                  <th className="pb-3 pr-4">Commission</th>
+                  <th className="pb-3 pr-4">We Pay</th>
                   <th className="pb-3 pr-4">Sale Price</th>
                   <th className="pb-3 pr-4">Profit</th>
                   <th className="pb-3 pr-4">Category</th>
@@ -168,7 +215,8 @@ export default function ProductsPage() {
                 {filteredProducts.map((p) => {
                   const status = p.is_active ? 'active' : 'inactive';
                   const supplierCost = parseFloat(p.supplier_cost || 0);
-                  const userCost = supplierCost + (supplierCost * commissionRate);
+                  const commissionAmt = supplierCost * commissionRate;
+                  const userCost = supplierCost + commissionAmt;
                   const salePrice = parseFloat(p.sale_price || 0);
                   const profit = salePrice - userCost;
                   return (
@@ -185,7 +233,12 @@ export default function ProductsPage() {
                           <p className="font-medium text-white max-w-[200px] truncate">{p.title}</p>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 text-zinc-400">${userCost.toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-zinc-400">${supplierCost.toFixed(2)}</td>
+                      <td className="py-3 pr-4">
+                        <span className="text-[#FFD23F]">${commissionAmt.toFixed(2)}</span>
+                        <span className="text-zinc-600 text-[10px] ml-1">({(commissionRate * 100).toFixed(0)}%)</span>
+                      </td>
+                      <td className="py-3 pr-4 font-medium text-zinc-300">${userCost.toFixed(2)}</td>
                       <td className="py-3 pr-4 font-medium text-white">${salePrice.toFixed(2)}</td>
                       <td className={`py-3 pr-4 font-semibold ${profit > 0 ? 'text-[#06D6A0]' : 'text-red-400'}`}>
                         {profit > 0 ? '+' : ''}${profit.toFixed(2)}

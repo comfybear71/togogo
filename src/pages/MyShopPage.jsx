@@ -63,15 +63,14 @@ export default function MyShopPage() {
 
   async function fetchStoreInfo() {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/stores`, {
+      const res = await fetch(`${API_BASE}/api/my-shop/store`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (res.ok) {
         const data = await res.json()
-        const myStore = (data.stores || []).find(s => s.user_id === user?.id)
-        if (myStore) {
-          setStoreName(myStore.store_name || 'My Store')
-          setStoreSubdomain(myStore.subdomain)
+        if (data.store) {
+          setStoreName(data.store.store_name || 'My Store')
+          setStoreSubdomain(data.store.subdomain)
         }
       }
     } catch { /* ignore */ }
