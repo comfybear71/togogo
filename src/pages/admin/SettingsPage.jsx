@@ -124,7 +124,10 @@ export default function SettingsPage() {
 
   // Load settings from API
   useEffect(() => {
-    if (!user) return
+    if (!user) {
+      setLoading(false)
+      return
+    }
     const loadSettings = async () => {
       try {
         const res = await fetch(`${API_BASE}/api/admin/settings`, {
