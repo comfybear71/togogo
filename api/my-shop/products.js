@@ -1,18 +1,9 @@
 // User's own products API — CRUD for store owner's products
 import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
+import { getCommissionRate } from '../_lib/commission.js'
 
-const DEFAULT_COMMISSION_PERCENT = 5
 const DEFAULT_SALE_MARKUP = 1.40 // 40% above cost by default (ensures profit after commission)
-
-async function getCommissionRate() {
-  try {
-    const result = await sql`SELECT value FROM admin_settings WHERE key = 'platform_fee_percent'`
-    return result.rows.length > 0 ? (parseFloat(result.rows[0].value) || DEFAULT_COMMISSION_PERCENT) / 100 : DEFAULT_COMMISSION_PERCENT / 100
-  } catch {
-    return DEFAULT_COMMISSION_PERCENT / 100
-  }
-}
 
 function autoSalePrice(supplierCost, commissionRate) {
   // Cost to user = supplier_cost + commission

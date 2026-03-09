@@ -1,6 +1,7 @@
 // Storefront order API — handles customer purchases on ToGoGo-hosted stores
 // Creates an order record and triggers supplier fulfillment
 import { sql, ensureSchema } from '../_lib/db.js'
+import { getCommissionRate } from '../_lib/commission.js'
 
 export default async function handler(req, res) {
   const origin = req.headers.origin || ''
@@ -50,6 +51,7 @@ export default async function handler(req, res) {
 
     const orders = []
     const failedItems = []
+    const commissionRate = await getCommissionRate()
 
     // Create an order for each item
     for (const item of items) {
@@ -68,7 +70,6 @@ export default async function handler(req, res) {
       const qty = item.quantity || 1
       const salePrice = parseFloat(product.sale_price) * qty
       const supplierCost = parseFloat(product.supplier_cost) * qty
-      const commissionRate = 0.05 // 5% ToGoGo commission
       const commission = Math.round(salePrice * commissionRate * 100) / 100
       const profit = Math.round((salePrice - supplierCost - commission) * 100) / 100
 

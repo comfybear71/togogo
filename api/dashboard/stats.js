@@ -34,7 +34,7 @@ export default async function handler(req, res) {
           COALESCE(SUM(quantity), COUNT(*))::int AS total_items_sold,
           COALESCE(SUM(sale_price), 0)::float AS total_revenue,
           COALESCE(SUM(supplier_cost), 0)::float AS total_supplier_cost,
-          COALESCE(SUM(CASE WHEN commission > 0 THEN commission ELSE sale_price * 0.05 END), 0)::float AS total_commission,
+          COALESCE(SUM(CASE WHEN commission > 0 THEN commission ELSE sale_price * COALESCE((SELECT value::numeric FROM admin_settings WHERE key = 'platform_fee_percent'), 5) / 100 END), 0)::float AS total_commission,
           COALESCE(SUM(profit), 0)::float AS total_profit,
           COUNT(CASE WHEN status = 'pending' THEN 1 END)::int AS pending_orders,
           COUNT(CASE WHEN status = 'processing' THEN 1 END)::int AS processing_orders,

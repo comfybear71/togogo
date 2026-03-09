@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { sql } from '../../_lib/db.js'
+import { getCommissionRate } from '../../_lib/commission.js'
 
 // WooCommerce sends order webhooks here when a customer places an order
 // on a user's connected WooCommerce store.
@@ -92,9 +93,8 @@ async function handleOrder(conn, order) {
     const product = matchedProducts[0]
     const supplierCost = product?.supplier_cost || 0
     const salePrice = parseFloat(item.price) || 0
-    // ToGoGo takes 5% commission on every sale that flows through the platform
-    const TOGOGO_COMMISSION_RATE = 0.05
-    const togogoCommission = salePrice * TOGOGO_COMMISSION_RATE
+    const commissionRate = await getCommissionRate()
+    const togogoCommission = salePrice * commissionRate
     const profit = salePrice - supplierCost - togogoCommission
 
     // Upsert order (idempotent — safe for retries)
@@ -126,7 +126,7 @@ async function handleOrder(conn, order) {
           country: shippingAddress.country,
         })},
         ${order.status === 'processing' || order.status === 'completed' ? 'processing' : 'pending'},
-        ${`ToGoGo commission: $${togogoCommission.toFixed(2)} (5%)`}
+        ${`ToGoGo commission: $${togogoCommission.toFixed(2)} (${(commissionRate * 100).toFixed(0)}%)`}
       )
       ON CONFLICT DO NOTHING
     `

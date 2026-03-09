@@ -24,13 +24,13 @@ export default async function handler(req, res) {
       sql`SELECT COALESCE(SUM(price_per_month), 0)::numeric AS total FROM subscriptions WHERE status = 'active'`.catch(() => ({ rows: [{ total: 0 }] })),
       // Total stores (all statuses except deleted)
       sql`SELECT COUNT(*)::int AS count FROM user_stores WHERE status != 'deleted'`.catch(() => ({ rows: [{ count: 0 }] })),
-      // ToGoGo commission earned today (5% of each sale)
-      sql`SELECT COALESCE(SUM(commission), 0)::numeric AS today, COALESCE(SUM(CASE WHEN commission = 0 THEN sale_price * 0.05 ELSE commission END), 0)::numeric AS today_with_fallback FROM user_orders WHERE created_at >= CURRENT_DATE AND status != 'cancelled'`.catch(() => ({ rows: [{ today: 0, today_with_fallback: 0 }] })),
+      // ToGoGo commission earned today
+      sql`SELECT COALESCE(SUM(commission), 0)::numeric AS today, COALESCE(SUM(CASE WHEN commission = 0 THEN sale_price * COALESCE((SELECT value::numeric FROM admin_settings WHERE key = 'platform_fee_percent'), 5) / 100 ELSE commission END), 0)::numeric AS today_with_fallback FROM user_orders WHERE created_at >= CURRENT_DATE AND status != 'cancelled'`.catch(() => ({ rows: [{ today: 0, today_with_fallback: 0 }] })),
       // All-time totals for ToGoGo
       sql`
         SELECT
           COALESCE(SUM(sale_price), 0)::numeric AS total_sales,
-          COALESCE(SUM(CASE WHEN commission > 0 THEN commission ELSE sale_price * 0.05 END), 0)::numeric AS total_commission,
+          COALESCE(SUM(CASE WHEN commission > 0 THEN commission ELSE sale_price * COALESCE((SELECT value::numeric FROM admin_settings WHERE key = 'platform_fee_percent'), 5) / 100 END), 0)::numeric AS total_commission,
           COALESCE(SUM(profit), 0)::numeric AS total_client_profit,
           COUNT(*)::int AS total_orders
         FROM user_orders WHERE status != 'cancelled'
