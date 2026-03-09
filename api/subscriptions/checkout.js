@@ -94,7 +94,8 @@ export default async function handler(req, res) {
 
     const baseUrl = process.env.FRONTEND_URL || `https://${req.headers.host}`
 
-    const session = await stripe.checkout.sessions.create({
+    // [Improvement 7] Build checkout config with optional Stripe Tax for GST
+    const checkoutConfig = {
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
@@ -116,7 +117,17 @@ export default async function handler(req, res) {
       success_url: `${baseUrl}/create-store?payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/create-store?payment=cancelled`,
       allow_promotion_codes: true,
-    })
+    }
+
+    // Enable Stripe Tax for automatic GST calculation if configured
+    // To enable: activate Stripe Tax in Dashboard → Settings → Tax
+    if (process.env.STRIPE_TAX_ENABLED === 'true') {
+      checkoutConfig.automatic_tax = { enabled: true }
+      // Collect customer address for tax calculation
+      checkoutConfig.customer_update = { address: 'auto' }
+    }
+
+    const session = await stripe.checkout.sessions.create(checkoutConfig)
 
     // Save pending store info so we can provision after payment
     try {

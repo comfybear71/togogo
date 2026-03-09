@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     }
 
     // Create Stripe checkout session for domain purchase
-    const session = await stripe.checkout.sessions.create({
+    const checkoutConfig = {
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
@@ -55,7 +55,14 @@ export default async function handler(req, res) {
         domain,
         type: 'domain_purchase',
       },
-    })
+    }
+
+    // Enable Stripe Tax for automatic GST calculation if configured
+    if (process.env.STRIPE_TAX_ENABLED === 'true') {
+      checkoutConfig.automatic_tax = { enabled: true }
+    }
+
+    const session = await stripe.checkout.sessions.create(checkoutConfig)
 
     // Record the pending purchase
     await sql`

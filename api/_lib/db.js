@@ -91,7 +91,7 @@ export async function initializeSchema() {
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
       user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
       plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'basic', 'premium')),
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled', 'expired')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'past_due', 'cancelled', 'expired')),
       stripe_subscription_id TEXT,
       price_per_month NUMERIC(10,2) DEFAULT 0,
       started_at TIMESTAMPTZ DEFAULT NOW(),
@@ -162,6 +162,10 @@ export async function initializeSchema() {
   // Migrations: add missing columns/constraints to user_stores if table already existed
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'pro'` } catch { /* already exists or not supported */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
+
+  // Migration: expand subscription status to include 'past_due'
+  try { await sql`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check` } catch { /* */ }
+  try { await sql`ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (status IN ('active', 'past_due', 'cancelled', 'expired'))` } catch { /* */ }
 
   // Admin settings (key-value config)
   await sql`

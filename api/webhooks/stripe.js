@@ -1,5 +1,5 @@
 // Stripe webhook handler — processes completed payments
-// Handles: domain purchases, subscription changes
+// Handles: domain purchases, subscription changes, invoice events
 import { sql } from '../_lib/db.js'
 import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
@@ -29,11 +29,16 @@ export default async function handler(req, res) {
   try {
     const rawBody = await getRawBody(req)
 
+    // [Improvement 5] Enforce signature verification in production
     if (endpointSecret) {
       const sig = req.headers['stripe-signature']
       event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret)
+    } else if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+      console.error('STRIPE_WEBHOOK_SECRET is not configured in production — rejecting webhook')
+      return res.status(500).json({ error: 'Webhook secret not configured' })
     } else {
-      // Dev mode — no signature verification
+      // Dev mode only — no signature verification
+      console.warn('⚠ Dev mode: Stripe webhook signature verification bypassed')
       event = JSON.parse(rawBody.toString())
     }
   } catch (err) {
@@ -51,7 +56,6 @@ export default async function handler(req, res) {
           // Store subscription payment completed — mark store as ready for provisioning
           console.log(`Store subscription paid: ${store_name} (${subdomain}.togogo.me) for user ${user_id}`)
 
-          // Update store status to provisioning (frontend will detect this and start polling)
           try {
             await sql`
               UPDATE user_stores
@@ -61,7 +65,6 @@ export default async function handler(req, res) {
               WHERE user_id = ${user_id} AND subdomain = ${subdomain}
             `
           } catch {
-            // Fallback: try without jsonb concat
             await sql`
               UPDATE user_stores
               SET status = 'paid', updated_at = NOW()
@@ -69,18 +72,15 @@ export default async function handler(req, res) {
             `
           }
         } else if (type === 'domain_purchase' && domain && user_id) {
-          // Update order status
           await sql`
             UPDATE user_orders
             SET status = 'processing', notes = ${'Payment confirmed. Registering domain...'}
             WHERE platform_order_id = ${session.id} AND user_id = ${user_id}
           `
 
-          // Get user email for domain contact info
           const { rows } = await sql`SELECT email, name FROM users WHERE id = ${user_id}`
           const user = rows[0]
 
-          // Register the domain via Namecheap
           try {
             const result = await registerDomain(domain, {
               email: user?.email,
@@ -96,7 +96,6 @@ export default async function handler(req, res) {
               WHERE platform_order_id = ${session.id} AND user_id = ${user_id}
             `
 
-            // Save domain to user profile for easy access
             await sql`
               INSERT INTO user_domains (user_id, domain, status, registered_at, expires_at)
               VALUES (${user_id}, ${domain}, 'active', NOW(), NOW() + INTERVAL '1 year')
@@ -125,7 +124,6 @@ export default async function handler(req, res) {
           const plan = subscription.metadata?.plan || 'basic'
           const priceAmount = (subscription.items?.data?.[0]?.price?.unit_amount || 0) / 100
           const expiresAt = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null
-          // Check if subscription already exists
           const { rows: existing } = await sql`
             SELECT id FROM subscriptions WHERE stripe_subscription_id = ${subscription.id}
           `
@@ -150,19 +148,36 @@ export default async function handler(req, res) {
         break
       }
 
+      // [Improvement 4] Handle proration and richer status mapping on plan changes
       case 'customer.subscription.updated': {
         const subscription = event.data.object
         const userId = subscription.metadata?.user_id
         if (userId) {
-          const status = subscription.cancel_at_period_end ? 'cancelled' : (subscription.status === 'active' ? 'active' : 'cancelled')
+          // Map Stripe subscription status to our DB status
+          let status
+          if (subscription.cancel_at_period_end) {
+            status = 'cancelled'
+          } else if (subscription.status === 'active' || subscription.status === 'trialing') {
+            status = 'active'
+          } else if (subscription.status === 'past_due') {
+            status = 'past_due'
+          } else if (subscription.status === 'canceled' || subscription.status === 'unpaid') {
+            status = 'expired'
+          } else {
+            status = 'active'
+          }
+
           const plan = subscription.metadata?.plan || 'basic'
+          const priceAmount = (subscription.items?.data?.[0]?.price?.unit_amount || 0) / 100
+          const expiresAt = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null
+
           await sql`
             UPDATE subscriptions
-            SET status = ${status}, plan = ${plan},
-                expires_at = ${subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null}
+            SET status = ${status}, plan = ${plan}, price_per_month = ${priceAmount},
+                expires_at = ${expiresAt}
             WHERE stripe_subscription_id = ${subscription.id}
           `
-          console.log(`Subscription updated: ${subscription.id} status=${status}`)
+          console.log(`Subscription updated: ${subscription.id} status=${status} plan=${plan} price=${priceAmount}`)
         }
         break
       }
@@ -174,7 +189,6 @@ export default async function handler(req, res) {
           UPDATE subscriptions SET status = 'expired' WHERE stripe_subscription_id = ${subscription.id}
         `
         if (userId) {
-          // Check if user has any other active subscriptions
           const { rows } = await sql`
             SELECT COUNT(*) as count FROM subscriptions WHERE user_id = ${userId} AND status = 'active'
           `
@@ -192,7 +206,7 @@ export default async function handler(req, res) {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object
         if (invoice.subscription) {
-          // Renew subscription period
+          // Renew subscription period — also clears any past_due status
           await sql`
             UPDATE subscriptions
             SET status = 'active',
@@ -204,13 +218,25 @@ export default async function handler(req, res) {
         break
       }
 
+      // [Improvement 1] Use 'past_due' instead of immediate cancellation on first failure
       case 'invoice.payment_failed': {
         const invoice = event.data.object
         if (invoice.subscription) {
-          await sql`
-            UPDATE subscriptions SET status = 'cancelled' WHERE stripe_subscription_id = ${invoice.subscription}
-          `
-          console.log(`Invoice payment failed for subscription: ${invoice.subscription}`)
+          const attemptCount = invoice.attempt_count || 1
+
+          if (attemptCount >= 4) {
+            // All retries exhausted — cancel the subscription
+            await sql`
+              UPDATE subscriptions SET status = 'cancelled' WHERE stripe_subscription_id = ${invoice.subscription}
+            `
+            console.log(`Invoice payment failed (final attempt ${attemptCount}) — subscription cancelled: ${invoice.subscription}`)
+          } else {
+            // Mark as past_due — Stripe will retry automatically
+            await sql`
+              UPDATE subscriptions SET status = 'past_due' WHERE stripe_subscription_id = ${invoice.subscription}
+            `
+            console.log(`Invoice payment failed (attempt ${attemptCount}/4) — subscription past_due: ${invoice.subscription}`)
+          }
         }
         break
       }

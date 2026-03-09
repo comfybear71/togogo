@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
     const result = await sql`
       SELECT * FROM subscriptions
-      WHERE user_id = ${user.id} AND status = 'active'
+      WHERE user_id = ${user.id} AND status IN ('active', 'past_due')
       ORDER BY created_at DESC
       LIMIT 1
     `
