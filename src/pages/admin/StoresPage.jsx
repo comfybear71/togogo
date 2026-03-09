@@ -31,6 +31,14 @@ const domainStatusConfig = {
   transferred: 'bg-blue-500/10 text-blue-400',
 };
 
+// Build auth headers: prefer JWT token, fall back to setup secret
+function getAdminHeaders(token) {
+  if (token) return { Authorization: `Bearer ${token}` };
+  const secret = sessionStorage.getItem('togogo-setup-secret');
+  if (secret) return { 'x-setup-secret': secret };
+  return {};
+}
+
 export default function StoresPage() {
   const { token } = useAuthStore();
   const [tab, setTab] = useState('stores');
@@ -60,7 +68,7 @@ export default function StoresPage() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
 
       const res = await fetch(`${apiBase}/api/admin/stores?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: getAdminHeaders(token),
       });
 
       if (!res.ok) throw new Error('Failed to fetch');
@@ -89,7 +97,7 @@ export default function StoresPage() {
     try {
       const res = await fetch(`${apiBase}/api/store-provision/delete-subdomain?storeId=${store.id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: getAdminHeaders(token),
       });
 
       if (!res.ok) {
@@ -113,7 +121,7 @@ export default function StoresPage() {
     setUsersError(null);
     try {
       const res = await fetch(`${apiBase}/api/admin/users?limit=200`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: getAdminHeaders(token),
       });
       if (res.ok) {
         const data = await res.json();
@@ -139,7 +147,7 @@ export default function StoresPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          ...getAdminHeaders(token),
         },
         body: JSON.stringify({
           userId: provisionForm.userId || undefined,
