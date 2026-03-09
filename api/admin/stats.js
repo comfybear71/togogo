@@ -14,19 +14,28 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [usersResult, productsResult, ordersResult, revenueResult, disputesResult] = await Promise.all([
+    const [usersResult, productsResult, ordersResult, revenueResult, disputesResult, subRevenueResult, storesResult] = await Promise.all([
       sql`SELECT COUNT(*)::int AS count FROM users`.catch(() => ({ rows: [{ count: 0 }] })),
       sql`SELECT COUNT(*)::int AS count FROM user_products WHERE is_active = true`.catch(() => ({ rows: [{ count: 0 }] })),
       sql`SELECT COUNT(*)::int AS count FROM user_orders WHERE created_at >= CURRENT_DATE`.catch(() => ({ rows: [{ count: 0 }] })),
       sql`SELECT COALESCE(SUM(sale_price), 0)::numeric AS total FROM user_orders WHERE created_at >= CURRENT_DATE`.catch(() => ({ rows: [{ total: 0 }] })),
       sql`SELECT COUNT(*)::int AS count FROM user_orders WHERE status = 'pending'`.catch(() => ({ rows: [{ count: 0 }] })),
+      // Total active subscription revenue (monthly recurring)
+      sql`SELECT COALESCE(SUM(price_per_month), 0)::numeric AS total FROM subscriptions WHERE status = 'active'`.catch(() => ({ rows: [{ total: 0 }] })),
+      // Total stores (all statuses except deleted)
+      sql`SELECT COUNT(*)::int AS count FROM user_stores WHERE status != 'deleted'`.catch(() => ({ rows: [{ count: 0 }] })),
     ])
+
+    const orderRevenue = parseFloat(revenueResult.rows[0]?.total) || 0
+    const subscriptionRevenue = parseFloat(subRevenueResult.rows[0]?.total) || 0
 
     return res.json({
       totalUsers: usersResult.rows[0]?.count || 0,
       activeListings: productsResult.rows[0]?.count || 0,
       ordersToday: ordersResult.rows[0]?.count || 0,
-      revenueToday: parseFloat(revenueResult.rows[0]?.total) || 0,
+      revenueToday: orderRevenue + subscriptionRevenue,
+      subscriptionRevenue,
+      activeStores: storesResult.rows[0]?.count || 0,
       openDisputes: disputesResult.rows[0]?.count || 0,
     })
   } catch (err) {

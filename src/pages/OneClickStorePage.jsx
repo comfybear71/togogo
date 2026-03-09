@@ -233,7 +233,23 @@ export default function OneClickStorePage() {
   }, [storeName, subdomain, paymentComplete])
 
   // Called when entire deploy sequence completes
-  const handleDeployComplete = useCallback(() => {
+  const handleDeployComplete = useCallback(async () => {
+    // Activate the store on the server to ensure status is 'active'
+    try {
+      const token = localStorage.getItem('togogo-token')
+      if (token) {
+        await fetch(`${API_BASE}/api/store-provision/activate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        })
+      }
+    } catch {
+      // Best effort — webhook should also handle activation
+    }
+
     // Save store info
     localStorage.setItem('togogo-store-name', storeName)
     localStorage.setItem('togogo-store-url', storeUrl || `https://${subdomain}.togogo.me`)
@@ -466,12 +482,21 @@ export default function OneClickStorePage() {
       {/* ============================================ */}
       {phase === 'done' && (
         <div className="max-w-lg mx-auto">
-          <DeployProgress
-            storeName={storeName}
-            storeUrl={storeUrl || `https://${subdomain}.togogo.me`}
-            paymentComplete={true}
-            onOpenPanel={handleOpenPanel}
-          />
+          {/* Static completion banner — no re-running DeployProgress */}
+          <div className="rounded-2xl border border-white/[0.08] bg-[#0c0c0c] overflow-hidden shadow-2xl">
+            <div className="px-5 py-6 text-center">
+              <div className="text-4xl mb-3">{'\u{1F389}\u{1F680}\u{1F389}'}</div>
+              <h3 className="text-lg font-heading font-bold text-emerald-400 mb-2">
+                {storeName || 'Your Store'} is LIVE!
+              </h3>
+              <p className="text-xs text-zinc-400 mb-1">
+                {'\u{1F517}'} {storeUrl || `https://${subdomain}.togogo.me`}
+              </p>
+              <p className="text-[10px] text-zinc-500">
+                Your store is fully wired up and accepting orders.
+              </p>
+            </div>
+          </div>
 
           {/* Action buttons */}
           <div className="mt-8 space-y-3">

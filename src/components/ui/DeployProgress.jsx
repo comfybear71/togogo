@@ -230,6 +230,51 @@ export default function DeployProgress({
   useEffect(() => {
     if (cancelled) return
 
+    // If payment is already complete (returning from Stripe), skip pre-payment steps
+    if (paymentComplete) {
+      const paymentIdx = DEPLOY_STEPS.findIndex((s) => s.id === 'payment')
+      // Mark all pre-payment steps + payment as completed immediately
+      setSteps((prev) =>
+        prev.map((s, i) => {
+          if (i <= paymentIdx) return { ...s, status: 'completed' }
+          return s
+        })
+      )
+      simIndexRef.current = paymentIdx + 1
+      // Start from post-payment steps after a brief delay
+      const postPaymentDelays = [900, 1300, 1500, 1800, 2400, 1700, 2100, 1900, 0, 1400, 1600, 1800, 1200, 1500, 2000]
+      const advancePostPayment = () => {
+        const idx = simIndexRef.current
+        if (idx >= DEPLOY_STEPS.length) {
+          setTimeout(() => {
+            setIsComplete(true)
+            setShowConfetti(true)
+            if (onComplete) onComplete()
+          }, 600)
+          return
+        }
+        setSteps((prev) =>
+          prev.map((s, i) => {
+            if (i < idx) return { ...s, status: 'completed' }
+            if (i === idx) return { ...s, status: 'in_progress' }
+            return s
+          })
+        )
+        simTimeoutRef.current = setTimeout(() => {
+          setSteps((prev) =>
+            prev.map((s, i) => {
+              if (i <= idx) return { ...s, status: 'completed' }
+              return s
+            })
+          )
+          simIndexRef.current = idx + 1
+          simTimeoutRef.current = setTimeout(advancePostPayment, 350)
+        }, postPaymentDelays[idx] || 1500)
+      }
+      simTimeoutRef.current = setTimeout(advancePostPayment, 800)
+      return () => { if (simTimeoutRef.current) clearTimeout(simTimeoutRef.current) }
+    }
+
     const delays = [900, 1300, 1500, 1800, 2400, 1700, 2100, 1900, 0, 1400, 1600, 1800, 1200, 1500, 2000]
 
     const advanceStep = () => {

@@ -53,13 +53,13 @@ export default async function handler(req, res) {
         const { user_id, domain, type, store_name, subdomain } = session.metadata || {}
 
         if (type === 'store_subscription' && user_id && subdomain) {
-          // Store subscription payment completed — mark store as ready for provisioning
+          // Store subscription payment completed — activate the store
           console.log(`Store subscription paid: ${store_name} (${subdomain}.togogo.me) for user ${user_id}`)
 
           try {
             await sql`
               UPDATE user_stores
-              SET status = 'paid',
+              SET status = 'active',
                   provision_data = provision_data::jsonb || ${JSON.stringify({ payment_confirmed: true, paid_at: new Date().toISOString() })}::jsonb,
                   updated_at = NOW()
               WHERE user_id = ${user_id} AND subdomain = ${subdomain}
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
           } catch {
             await sql`
               UPDATE user_stores
-              SET status = 'paid', updated_at = NOW()
+              SET status = 'active', updated_at = NOW()
               WHERE user_id = ${user_id} AND subdomain = ${subdomain}
             `
           }

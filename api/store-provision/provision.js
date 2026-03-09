@@ -218,7 +218,42 @@ async function executeStep(stepId, userId, subdomain, fullDomain, storeName) {
   }
 }
 
-// Product import — no-op, users add products manually via the Suppliers page
-async function importStarterProducts() {
-  // Users choose their own products from real supplier APIs
+// Product import — auto-populate store with curated trending products from all suppliers
+async function importStarterProducts(userId) {
+  try {
+    // Dynamically import the curated trending catalog
+    const { getCuratedTrending } = await import('../_lib/suppliers.js')
+    const products = getCuratedTrending() // returns all curated products when no filter
+
+    if (!products || products.length === 0) {
+      console.log('No curated products to import')
+      return
+    }
+
+    let imported = 0
+    for (const p of products) {
+      try {
+        await sql`
+          INSERT INTO user_products (
+            user_id, title, description, image, supplier,
+            supplier_product_id, supplier_cost, sale_price,
+            category, is_active
+          ) VALUES (
+            ${userId}, ${p.title}, ${p.description || ''}, ${p.image || ''},
+            ${p.supplier || 'CJ Dropshipping'}, ${p.id || ''},
+            ${p.cost || 0}, ${p.suggestedPrice || p.price || 0},
+            ${p.category || 'General'}, true
+          )
+          ON CONFLICT DO NOTHING
+        `
+        imported++
+      } catch (err) {
+        // Skip individual product failures
+        console.log(`Product import skipped: ${p.title} — ${err.message}`)
+      }
+    }
+    console.log(`Imported ${imported} products for user ${userId}`)
+  } catch (err) {
+    console.error('Product import failed:', err.message)
+  }
 }

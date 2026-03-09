@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [recentOrdersResult, topProductsResult, topSellersResult, revenueByDayResult, signupsByDayResult] = await Promise.all([
+    const [recentOrdersResult, topProductsResult, topSellersResult, revenueByDayResult, signupsByDayResult, subRevenueByDayResult] = await Promise.all([
       // Recent orders (last 20)
       sql`
         SELECT o.id, o.order_ref, o.product_title, o.sale_price, o.status, o.created_at,
@@ -64,6 +64,15 @@ export default async function handler(req, res) {
         GROUP BY DATE(created_at)
         ORDER BY date ASC
       `.catch(() => ({ rows: [] })),
+
+      // Subscription revenue by day (last 30 days)
+      sql`
+        SELECT DATE(started_at) AS date, COALESCE(SUM(price_per_month), 0)::numeric AS revenue
+        FROM subscriptions
+        WHERE started_at >= CURRENT_DATE - INTERVAL '30 days' AND status = 'active'
+        GROUP BY DATE(started_at)
+        ORDER BY date ASC
+      `.catch(() => ({ rows: [] })),
     ])
 
     // Format time-ago for recent orders
@@ -92,7 +101,13 @@ export default async function handler(req, res) {
       last30Days.push(d.toISOString().split('T')[0])
     }
 
-    const revenueMap = Object.fromEntries(revenueByDayResult.rows.map((r) => [r.date?.toISOString?.()?.split('T')[0] || r.date, parseFloat(r.revenue)]))
+    const orderRevenueMap = Object.fromEntries(revenueByDayResult.rows.map((r) => [r.date?.toISOString?.()?.split('T')[0] || r.date, parseFloat(r.revenue)]))
+    const subRevenueMap = Object.fromEntries(subRevenueByDayResult.rows.map((r) => [r.date?.toISOString?.()?.split('T')[0] || r.date, parseFloat(r.revenue)]))
+    // Combine order + subscription revenue per day
+    const revenueMap = {}
+    for (const date of last30Days) {
+      revenueMap[date] = (orderRevenueMap[date] || 0) + (subRevenueMap[date] || 0)
+    }
     const signupsMap = Object.fromEntries(signupsByDayResult.rows.map((r) => [r.date?.toISOString?.()?.split('T')[0] || r.date, r.signups]))
 
     const revenueByDay = last30Days.map((date) => ({

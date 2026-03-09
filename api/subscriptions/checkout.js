@@ -129,20 +129,25 @@ export default async function handler(req, res) {
 
     const session = await stripe.checkout.sessions.create(checkoutConfig)
 
-    // Save pending store info so we can provision after payment
+    // Save checkout session ID to existing store record (don't overwrite status if already provisioning/active)
     try {
-      await sql`
-        INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
-        VALUES (
-          ${user.id}, ${subdomain}, ${subdomain + '.togogo.me'}, ${storeName}, 'pending',
-          ${JSON.stringify({ checkout_session_id: session.id, awaiting_payment: true })}
-        )
-        ON CONFLICT (user_id) DO UPDATE
-        SET subdomain = ${subdomain}, full_domain = ${subdomain + '.togogo.me'},
-            store_name = ${storeName}, status = 'pending',
-            provision_data = ${JSON.stringify({ checkout_session_id: session.id, awaiting_payment: true })},
-            updated_at = NOW()
+      const checkoutData = JSON.stringify({ checkout_session_id: session.id, awaiting_payment: true })
+      // Only update provision_data, don't reset status — provision API already set it
+      const { rowCount } = await sql`
+        UPDATE user_stores
+        SET provision_data = provision_data::jsonb || ${checkoutData}::jsonb, updated_at = NOW()
+        WHERE user_id = ${user.id}
       `
+      if (!rowCount) {
+        // No existing store record — create one
+        await sql`
+          INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
+          VALUES (
+            ${user.id}, ${subdomain}, ${subdomain + '.togogo.me'}, ${storeName}, 'pending',
+            ${checkoutData}
+          )
+        `
+      }
     } catch {
       // Silent — store record creation is best-effort at this stage
     }
