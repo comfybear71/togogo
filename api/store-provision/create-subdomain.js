@@ -1,4 +1,4 @@
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 
 // Creates a subdomain like storename.togogo.me using Vercel's API
@@ -42,6 +42,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    await ensureSchema()
     const user = await requireAuth(req)
     const { subdomain } = req.body
 

@@ -30,7 +30,22 @@ export default async function handler(req, res) {
 
     const store = stores[0]
     const orderRef = `TG-${Date.now().toString(36).toUpperCase()}`
+
+    // Check for duplicate order (same customer + same items within 60 seconds)
+    const { rows: recentOrders } = await sql`
+      SELECT id FROM user_orders
+      WHERE user_id = ${store.user_id}
+        AND customer_email = ${customer.email}
+        AND platform = 'togogo-store'
+        AND created_at > NOW() - INTERVAL '60 seconds'
+      LIMIT 1
+    `
+    if (recentOrders.length > 0) {
+      return res.status(409).json({ error: 'Duplicate order detected. Please wait before placing another order.' })
+    }
+
     const orders = []
+    const failedItems = []
 
     // Create an order for each item
     for (const item of items) {
@@ -40,7 +55,10 @@ export default async function handler(req, res) {
         FROM user_products
         WHERE id = ${item.productId} AND user_id = ${store.user_id} AND is_active = true
       `
-      if (!products[0]) continue
+      if (!products[0]) {
+        failedItems.push({ productId: item.productId, reason: 'Product not found or unavailable' })
+        continue
+      }
 
       const product = products[0]
       const qty = item.quantity || 1
@@ -64,14 +82,18 @@ export default async function handler(req, res) {
         ) RETURNING id
       `
 
-      // Update product sold count
-      await sql`
-        UPDATE user_products
-        SET total_sold = total_sold + ${qty},
-            total_revenue = total_revenue + ${salePrice},
-            updated_at = NOW()
-        WHERE id = ${product.id}
-      `.catch(() => {})
+      // Update product sold count — log errors instead of swallowing them
+      try {
+        await sql`
+          UPDATE user_products
+          SET total_sold = total_sold + ${qty},
+              total_revenue = total_revenue + ${salePrice},
+              updated_at = NOW()
+          WHERE id = ${product.id}
+        `
+      } catch (updateErr) {
+        console.error(`Failed to update product stats for ${product.id}:`, updateErr.message)
+      }
 
       orders.push({
         id: orderRows[0]?.id,
@@ -82,16 +104,24 @@ export default async function handler(req, res) {
     }
 
     if (orders.length === 0) {
-      return res.status(400).json({ error: 'No valid products found' })
+      return res.status(400).json({ error: 'No valid products found', failedItems })
     }
 
-    return res.json({
+    const response = {
       success: true,
       orderRef,
       orders,
       total: orders.reduce((sum, o) => sum + o.total, 0),
       message: 'Order placed successfully! The store owner will process your order shortly.',
-    })
+    }
+
+    // Warn if some items failed
+    if (failedItems.length > 0) {
+      response.warnings = failedItems
+      response.message = `Order placed for ${orders.length} item(s). ${failedItems.length} item(s) were unavailable.`
+    }
+
+    return res.json(response)
   } catch (err) {
     console.error('Storefront order error:', err)
     return res.status(500).json({ error: 'Failed to place order' })
