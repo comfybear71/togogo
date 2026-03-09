@@ -52,6 +52,10 @@ function PageLoader() {
 
 // Detect if we're on a customer store subdomain (e.g. mystore.togogo.me)
 function getStoreSubdomain() {
+  // Check for ?store=mystore query param first (works on any host)
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('store')) return params.get('store')
+
   const host = window.location.hostname
   // Main domains — NOT a storefront
   const mainHosts = ['togogo.me', 'www.togogo.me', 'localhost', '127.0.0.1']
@@ -61,9 +65,6 @@ function getStoreSubdomain() {
     const sub = host.replace('.togogo.me', '')
     if (sub && sub !== 'www' && sub !== 'api' && sub !== 'admin') return sub
   }
-  // Dev: check for ?store=mystore query param for local testing
-  const params = new URLSearchParams(window.location.search)
-  if (params.get('store')) return params.get('store')
   return null
 }
 
