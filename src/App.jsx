@@ -36,7 +36,6 @@ const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
 const OneClickStorePage = lazy(() => import('./pages/OneClickStorePage'))
-const TestPaymentPage = lazy(() => import('./pages/TestPaymentPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
@@ -106,7 +105,6 @@ export default function App() {
           <Route path="/create-store" element={<ProtectedRoute><OneClickStorePage /></ProtectedRoute>} />
           <Route path="/my-shop" element={<ProtectedRoute><MyShopPage /></ProtectedRoute>} />
           <Route path="/promotions" element={<PromotionsPage />} />
-          <Route path="/test-payment" element={<TestPaymentPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/product/:id" element={<ProductDetailPage />} />
