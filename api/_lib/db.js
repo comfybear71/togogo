@@ -146,17 +146,22 @@ export async function initializeSchema() {
   await sql`
     CREATE TABLE IF NOT EXISTS user_stores (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL UNIQUE,
       subdomain TEXT NOT NULL UNIQUE,
       full_domain TEXT NOT NULL UNIQUE,
-      store_name TEXT,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'provisioning', 'active', 'inactive', 'deleted')),
+      store_name TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'provisioning', 'active', 'suspended', 'deleted')),
+      tier TEXT DEFAULT 'pro',
       vercel_domain_id TEXT,
       provision_data JSONB DEFAULT '{}',
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `
+
+  // Migrations: add missing columns/constraints to user_stores if table already existed
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'pro'` } catch { /* already exists or not supported */ }
+  try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
   // Admin settings (key-value config)
   await sql`

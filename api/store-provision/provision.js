@@ -43,6 +43,8 @@ export default async function handler(req, res) {
     const provisionId = crypto.randomUUID()
 
     // Create provision job record
+    const provisionData = JSON.stringify({ provisionId, steps: PROVISION_STEPS.map(s => ({ ...s, status: 'pending' })), currentStep: 0 })
+
     try {
       await sql`
         INSERT INTO store_provisions (
@@ -54,20 +56,32 @@ export default async function handler(req, res) {
           ${JSON.stringify(PROVISION_STEPS.map(s => ({ ...s, status: 'pending' })))}
         )
       `
-    } catch {
-      // Table might not exist — store in memory via user_stores instead
+    } catch (e) {
+      console.log('store_provisions insert skipped:', e.message)
+    }
+
+    // Upsert into user_stores — try ON CONFLICT first, fall back to delete+insert
+    try {
       await sql`
         INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
-        VALUES (
-          ${user.id}, ${clean}, ${fullDomain}, ${storeName}, 'provisioning',
-          ${JSON.stringify({ provisionId, steps: PROVISION_STEPS.map(s => ({ ...s, status: 'pending' })), currentStep: 0 })}
-        )
+        VALUES (${user.id}, ${clean}, ${fullDomain}, ${storeName}, 'provisioning', ${provisionData})
         ON CONFLICT (user_id) DO UPDATE
         SET subdomain = ${clean}, full_domain = ${fullDomain}, store_name = ${storeName},
-            status = 'provisioning',
-            provision_data = ${JSON.stringify({ provisionId, steps: PROVISION_STEPS.map(s => ({ ...s, status: 'pending' })), currentStep: 0 })},
-            updated_at = NOW()
+            status = 'provisioning', provision_data = ${provisionData}, updated_at = NOW()
       `
+    } catch {
+      // Fallback: unique constraint on user_id might not exist — delete and re-insert
+      try {
+        await sql`DELETE FROM user_stores WHERE user_id = ${user.id}`
+      } catch { /* ignore */ }
+      try {
+        await sql`
+          INSERT INTO user_stores (user_id, subdomain, full_domain, store_name, status, provision_data)
+          VALUES (${user.id}, ${clean}, ${fullDomain}, ${storeName}, 'provisioning', ${provisionData})
+        `
+      } catch (e2) {
+        console.error('user_stores insert failed:', e2.message)
+      }
     }
 
     // Start background provisioning (non-blocking)
