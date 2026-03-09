@@ -66,7 +66,7 @@ router.get('/search', async (req, res, next) => {
       page: Number(page),
       suppliers: activeSuppliers,
       live: hasLiveData,
-      message: hasLiveData ? null : 'Showing sample data. Live supplier APIs will be connected soon.',
+      message: hasLiveData ? null : 'Supplier APIs not configured.',
     })
   } catch (err) {
     next(err)
@@ -88,14 +88,7 @@ const TRENDING_TERMS = {
   custom: ['t-shirt', 'mug', 'phone case', 'hoodie', 'poster'],
 }
 
-// Sample data fallback functions by supplier name
-const SUPPLIER_SAMPLE_MAP = {
-  'CJ Dropshipping': getSampleCJProducts,
-  'AliExpress': getSampleAliExpressProducts,
-  'Printful': getSamplePrintfulProducts,
-  'Printify': getSamplePrintifyProducts,
-  'Gooten': getSampleGootenProducts,
-}
+// Sample data functions are intentionally empty — no fake data returned
 
 router.get('/trending', async (req, res, next) => {
   try {
@@ -120,12 +113,7 @@ router.get('/trending', async (req, res, next) => {
 
     const hasLiveData = products.some(p => p._live)
 
-    // If live APIs returned nothing, use sample data from selected suppliers
-    if (products.length === 0) {
-      products = activeSuppliers.flatMap(s =>
-        SUPPLIER_SAMPLE_MAP[s] ? SUPPLIER_SAMPLE_MAP[s](searchTerms[0]) : []
-      )
-    }
+    // No fallback to sample data — return empty if APIs returned nothing
 
     // Deduplicate by id, shuffle, and limit
     const seen = new Set()
@@ -194,8 +182,8 @@ router.get('/cj/search', requireAuth, async (req, res, next) => {
 
     res.json({
       products,
-      source: hasLiveData ? 'cj_api' : 'sample_data',
-      message: hasLiveData ? null : 'CJ Dropshipping API key not configured. Showing sample data.',
+      source: hasLiveData ? 'cj_api' : 'none',
+      message: hasLiveData ? null : 'CJ Dropshipping API not configured.',
     })
   } catch (err) {
     next(err)
@@ -211,8 +199,8 @@ router.get('/aliexpress/search', async (req, res, next) => {
 
     res.json({
       products,
-      source: hasLiveData ? 'aliexpress_api' : 'sample_data',
-      message: hasLiveData ? null : 'AliExpress API keys not configured. Showing sample data.',
+      source: hasLiveData ? 'aliexpress_api' : 'none',
+      message: hasLiveData ? null : 'AliExpress API not configured.',
     })
   } catch (err) {
     next(err)
@@ -287,8 +275,8 @@ router.get('/aliexpress/hot', async (req, res, next) => {
       live: products.length > 0 && products[0]?._live,
     })
   } catch (err) {
-    // Fallback to sample data
-    res.json({ products: getSampleAliExpressProducts('trending'), live: false })
+    // API not configured or failed
+    res.json({ products: [], live: false })
   }
 })
 
@@ -301,8 +289,8 @@ router.get('/printful/search', async (req, res, next) => {
 
     res.json({
       products,
-      source: hasLiveData ? 'printful_api' : 'sample_data',
-      message: hasLiveData ? null : 'Printful API key not configured. Showing sample data.',
+      source: hasLiveData ? 'printful_api' : 'none',
+      message: hasLiveData ? null : 'Printful API not configured.',
     })
   } catch (err) {
     next(err)
@@ -397,12 +385,12 @@ async function getCJAccessToken() {
 async function searchCJ(query, page = 1) {
   const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
   if (!apiKey) {
-    return getSampleCJProducts(query)
+    return []
   }
 
   try {
     const token = await getCJAccessToken()
-    if (!token) return getSampleCJProducts(query)
+    if (!token) return []
 
     const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/product/list', {
       method: 'POST',
@@ -422,14 +410,9 @@ async function searchCJ(query, page = 1) {
     const data = await response.json()
     const products = (data.data?.list || []).map(p => normaliseCJProduct(p))
 
-    // If API returned 0 results for this query, fall back to samples
-    if (products.length === 0) {
-      return getSampleCJProducts(query)
-    }
-
     return products
   } catch {
-    return getSampleCJProducts(query)
+    return []
   }
 }
 
@@ -565,7 +548,7 @@ async function fetchPrintfulProductPrice(apiKey, productId) {
 async function searchPrintful(query) {
   const apiKey = process.env.PRINTFUL_API_KEY
   if (!apiKey) {
-    return getSamplePrintfulProducts(query)
+    return []
   }
 
   try {
@@ -615,7 +598,7 @@ async function searchPrintful(query) {
       return normalisePrintfulProduct(p, realPrice)
     })
   } catch {
-    return getSamplePrintfulProducts(query)
+    return []
   }
 }
 
@@ -706,7 +689,7 @@ async function fetchPrintifyCatalog(apiKey) {
 
 async function searchPrintify(query) {
   const apiKey = process.env.PRINTIFY_API_KEY
-  if (!apiKey) return getSamplePrintifyProducts(query)
+  if (!apiKey) return []
 
   try {
     const catalog = await fetchPrintifyCatalog(apiKey)
@@ -724,10 +707,10 @@ async function searchPrintify(query) {
       })
       .slice(0, 15)
 
-    if (filtered.length === 0) return getSamplePrintifyProducts(query)
+    if (filtered.length === 0) return []
     return filtered.map(p => normalisePrintifyProduct(p))
   } catch {
-    return getSamplePrintifyProducts(query)
+    return []
   }
 }
 
@@ -776,7 +759,7 @@ let gootenCacheTime = 0
 
 async function searchGooten(query) {
   const recipeId = process.env.GOOTEN_RECIPE_ID
-  if (!recipeId) return getSampleGootenProducts(query)
+  if (!recipeId) return []
 
   try {
     const now = Date.now()
@@ -810,10 +793,10 @@ async function searchGooten(query) {
       })
       .slice(0, 15)
 
-    if (filtered.length === 0) return getSampleGootenProducts(query)
+    if (filtered.length === 0) return []
     return filtered.map(p => normaliseGootenProduct(p))
   } catch {
-    return getSampleGootenProducts(query)
+    return []
   }
 }
 
@@ -937,7 +920,7 @@ async function getAliExpressFeedNames() {
 
 async function searchAliExpress(query, page = 1) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
-  if (!appKey) return getSampleAliExpressProducts(query)
+  if (!appKey) return []
 
   try {
     // AliExpress DS API has no product.search — use recommend.feed.get instead
@@ -960,7 +943,7 @@ async function searchAliExpress(query, page = 1) {
       if (/^\d{8,}$/.test(query)) {
         return searchAliExpressByProductId(query)
       }
-      return getSampleAliExpressProducts(query)
+      return []
     }
 
     let products = resp.products.product.map(p => normaliseAliExpressProduct(p))
@@ -977,7 +960,7 @@ async function searchAliExpress(query, page = 1) {
 
     return products
   } catch {
-    return getSampleAliExpressProducts(query)
+    return []
   }
 }
 
@@ -1168,7 +1151,7 @@ async function searchManualSuppliers(query) {
 }
 
 // ============================================
-// SAMPLE DATA (shown when API keys not configured)
+// STUB FUNCTIONS (return empty — no fake data)
 // ============================================
 function getSampleCJProducts() {
   return []

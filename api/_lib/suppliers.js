@@ -125,11 +125,17 @@ async function getCJAccessToken() {
 
 export async function searchCJ(query, page = 1) {
   const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
-  if (!apiKey) return getSampleCJProducts(query)
+  if (!apiKey) {
+    console.warn('CJ Dropshipping: No API key configured')
+    return []
+  }
 
   try {
     const token = await getCJAccessToken()
-    if (!token) return getSampleCJProducts(query)
+    if (!token) {
+      console.warn('CJ Dropshipping: Failed to obtain access token')
+      return []
+    }
 
     const params = new URLSearchParams({
       productNameEn: query,
@@ -149,11 +155,10 @@ export async function searchCJ(query, page = 1) {
     const list = data.data?.list || data.data?.pageList || []
     const products = list.map(p => normaliseCJProduct(p))
 
-    if (products.length === 0) return getSampleCJProducts(query)
     return products
   } catch (err) {
     console.error('CJ search error:', err.message || err)
-    return getSampleCJProducts(query)
+    return []
   }
 }
 
@@ -209,7 +214,10 @@ async function fetchPrintfulCatalog(apiKey) {
 
 export async function searchPrintful(query) {
   const apiKey = process.env.PRINTFUL_API_KEY
-  if (!apiKey) return getSamplePrintfulProducts(query)
+  if (!apiKey) {
+    console.warn('Printful: No API key configured')
+    return []
+  }
 
   try {
     const catalog = await fetchPrintfulCatalog(apiKey)
@@ -243,8 +251,9 @@ export async function searchPrintful(query) {
     }
 
     return filtered.map(p => normalisePrintfulProduct(p))
-  } catch {
-    return getSamplePrintfulProducts(query)
+  } catch (err) {
+    console.error('Printful search error:', err.message || err)
+    return []
   }
 }
 
@@ -317,7 +326,10 @@ async function fetchPrintifyCatalog(apiKey) {
 
 export async function searchPrintify(query) {
   const apiKey = process.env.PRINTIFY_API_KEY
-  if (!apiKey) return getSamplePrintifyProducts(query)
+  if (!apiKey) {
+    console.warn('Printify: No API key configured')
+    return []
+  }
 
   try {
     const catalog = await fetchPrintifyCatalog(apiKey)
@@ -336,10 +348,11 @@ export async function searchPrintify(query) {
       })
       .slice(0, 40)
 
-    if (filtered.length === 0) return getSamplePrintifyProducts(query)
+    if (filtered.length === 0) return []
     return filtered.map(p => normalisePrintifyProduct(p))
-  } catch {
-    return getSamplePrintifyProducts(query)
+  } catch (err) {
+    console.error('Printify search error:', err.message || err)
+    return []
   }
 }
 
@@ -390,7 +403,10 @@ let gootenCacheTime = 0
 
 export async function searchGooten(query) {
   const recipeId = process.env.GOOTEN_RECIPE_ID
-  if (!recipeId) return getSampleGootenProducts(query)
+  if (!recipeId) {
+    console.warn('Gooten: No API key configured')
+    return []
+  }
 
   try {
     const now = Date.now()
@@ -424,10 +440,11 @@ export async function searchGooten(query) {
       })
       .slice(0, 40)
 
-    if (filtered.length === 0) return getSampleGootenProducts(query)
+    if (filtered.length === 0) return []
     return filtered.map(p => normaliseGootenProduct(p))
-  } catch {
-    return getSampleGootenProducts(query)
+  } catch (err) {
+    console.error('Gooten search error:', err.message || err)
+    return []
   }
 }
 
@@ -690,14 +707,17 @@ function filterByAliExpressCategory(products, ourCategory) {
 
 export async function searchAliExpress(query, page = 1) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
-  if (!appKey) return getSampleAliExpressProducts(query)
+  if (!appKey) {
+    console.warn('AliExpress: No API key configured')
+    return []
+  }
 
   try {
     // Get the large product pool from multiple feeds (cached 10 min)
     const pool = await getAliExpressProductPool()
 
     if (pool.length === 0) {
-      return getSampleAliExpressProducts(query)
+      return []
     }
 
     let products = pool.map(p => normaliseAliExpressProduct(p))
@@ -729,9 +749,8 @@ export async function searchAliExpress(query, page = 1) {
           }
           return catFiltered
         }
-        // Category is known but no products in pool — use sample data
-        // (e.g., AliExpress feeds don't carry pet products)
-        return getSampleAliExpressProducts(query)
+        // Category is known but no products in pool — no products found
+        return []
       }
 
       // No known category — do general keyword search
@@ -743,13 +762,13 @@ export async function searchAliExpress(query, page = 1) {
       })
       if (filtered.length >= 3) return filtered
 
-      return getSampleAliExpressProducts(query)
+      return []
     }
 
     return products
   } catch (err) {
     console.error('AliExpress search error:', err.message || err)
-    return getSampleAliExpressProducts(query)
+    return []
   }
 }
 
@@ -1095,23 +1114,13 @@ const SUPPLIER_SEARCH_MAP = {
   'Gooten': (q) => searchGooten(q),
 }
 
-const SUPPLIER_SAMPLE_MAP = {
-  'CJ Dropshipping': getSampleCJProducts,
-  'AliExpress': getSampleAliExpressProducts,
-  'Printful': getSamplePrintfulProducts,
-  'Printify': getSamplePrintifyProducts,
-  'Gooten': getSampleGootenProducts,
-}
-
 export function parseSuppliers(suppliersParam) {
   if (!suppliersParam) return Object.keys(SUPPLIER_SEARCH_MAP)
   return suppliersParam.split(',').filter(s => SUPPLIER_SEARCH_MAP[s])
 }
 
-export function getSampleForSuppliers(activeSuppliers, query) {
-  return activeSuppliers.flatMap(s =>
-    SUPPLIER_SAMPLE_MAP[s] ? SUPPLIER_SAMPLE_MAP[s](query) : []
-  )
+export function getSampleForSuppliers() {
+  return []
 }
 
 // ============================================
