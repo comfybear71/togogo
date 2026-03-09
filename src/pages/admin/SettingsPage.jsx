@@ -75,7 +75,7 @@ const SECTIONS = [
       { key: 'stripe_secret_key', label: 'Stripe Secret Key', placeholder: 'sk_live_...', secret: true },
       { key: 'stripe_publishable_key', label: 'Stripe Publishable Key', placeholder: 'pk_live_...' },
       { key: 'stripe_webhook_secret', label: 'Stripe Webhook Secret', placeholder: 'whsec_...', secret: true },
-      { key: 'platform_fee_percent', label: 'Platform Fee (%)', placeholder: '8' },
+      { key: 'platform_fee_percent', label: 'ToGoGo Commission (%)', placeholder: '5' },
     ],
   },
   {

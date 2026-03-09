@@ -1,10 +1,31 @@
-import { useState, useMemo } from 'react'
-import { PLATFORM_FEE_PERCENT, SHIPPING_TYPES } from '../../lib/constants'
+import { useState, useEffect, useMemo } from 'react'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+const SHIPPING_TYPES = [
+  { id: 'free', label: 'Free Shipping', cost: 0 },
+  { id: 'standard', label: 'Standard ($4.99)', cost: 4.99 },
+  { id: 'express', label: 'Express ($9.99)', cost: 9.99 },
+]
 
 export default function ProfitCalculator() {
   const [supplierCost, setSupplierCost] = useState('')
   const [shippingType, setShippingType] = useState('free')
   const [yourPrice, setYourPrice] = useState('')
+  const [commissionPercent, setCommissionPercent] = useState(5)
+
+  useEffect(() => {
+    async function loadCommission() {
+      try {
+        const res = await fetch(`${API_BASE}/api/config/commission`)
+        if (res.ok) {
+          const data = await res.json()
+          setCommissionPercent(data.commissionPercent || 5)
+        }
+      } catch { /* use default */ }
+    }
+    loadCommission()
+  }, [])
 
   const shippingCost = useMemo(
     () => SHIPPING_TYPES.find((s) => s.id === shippingType)?.cost ?? 0,
@@ -14,13 +35,13 @@ export default function ProfitCalculator() {
   const calculations = useMemo(() => {
     const cost = parseFloat(supplierCost) || 0
     const price = parseFloat(yourPrice) || 0
-    const platformFee = +(price * (PLATFORM_FEE_PERCENT / 100)).toFixed(2)
-    const totalCost = +(cost + shippingCost + platformFee).toFixed(2)
+    // Cost = supplier cost + commission (displayed as one number)
+    const totalCost = +(cost + (cost * commissionPercent / 100) + shippingCost).toFixed(2)
     const profit = +(price - totalCost).toFixed(2)
     const margin = price > 0 ? +((profit / price) * 100).toFixed(1) : 0
 
-    return { platformFee, totalCost, profit, margin }
-  }, [supplierCost, shippingCost, yourPrice])
+    return { totalCost, profit, margin }
+  }, [supplierCost, shippingCost, yourPrice, commissionPercent])
 
   return (
     <div className="rounded-[16px] bg-white shadow-card p-5 space-y-4">
@@ -68,19 +89,9 @@ export default function ProfitCalculator() {
         </span>
       </div>
 
-      {/* Platform Fee */}
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-500">
-          Platform Fee ({PLATFORM_FEE_PERCENT}%)
-        </span>
-        <span className="font-medium text-gray-900">
-          ${calculations.platformFee.toFixed(2)}
-        </span>
-      </div>
-
-      {/* Total Cost */}
+      {/* Total Cost (supplier + commission, shown as one number) */}
       <div className="flex items-center justify-between text-sm border-t border-gray-200 pt-3">
-        <span className="font-medium text-gray-700">Total Cost</span>
+        <span className="font-medium text-gray-700">Your Cost</span>
         <span className="font-bold text-gray-900">
           ${calculations.totalCost.toFixed(2)}
         </span>
@@ -89,7 +100,7 @@ export default function ProfitCalculator() {
       {/* Your Price */}
       <label className="block">
         <span className="text-sm font-medium text-gray-700">
-          Your Price ($)
+          Sale Price ($)
         </span>
         <input
           type="number"

@@ -27,8 +27,22 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [sellerFilter, setSellerFilter] = useState('');
   const [actionMenuProduct, setActionMenuProduct] = useState(null);
+  const [commissionRate, setCommissionRate] = useState(0.05);
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => {
+    fetchProducts();
+    fetchCommission();
+  }, []);
+
+  async function fetchCommission() {
+    try {
+      const res = await fetch(`${API_BASE}/api/config/commission`);
+      if (res.ok) {
+        const data = await res.json();
+        setCommissionRate((data.commissionPercent || 5) / 100);
+      }
+    } catch { /* use default */ }
+  }
 
   async function fetchProducts() {
     try {
@@ -140,7 +154,9 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                   <th className="pb-3 pr-4">Product</th>
-                  <th className="pb-3 pr-4">Price</th>
+                  <th className="pb-3 pr-4">Cost</th>
+                  <th className="pb-3 pr-4">Sale Price</th>
+                  <th className="pb-3 pr-4">Profit</th>
                   <th className="pb-3 pr-4">Category</th>
                   <th className="pb-3 pr-4">Seller</th>
                   <th className="pb-3 pr-4">Status</th>
@@ -151,6 +167,10 @@ export default function ProductsPage() {
               <tbody>
                 {filteredProducts.map((p) => {
                   const status = p.is_active ? 'active' : 'inactive';
+                  const supplierCost = parseFloat(p.supplier_cost || 0);
+                  const userCost = supplierCost + (supplierCost * commissionRate);
+                  const salePrice = parseFloat(p.sale_price || 0);
+                  const profit = salePrice - userCost;
                   return (
                     <tr key={p.id} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]">
                       <td className="py-3 pr-4">
@@ -165,7 +185,11 @@ export default function ProductsPage() {
                           <p className="font-medium text-white max-w-[200px] truncate">{p.title}</p>
                         </div>
                       </td>
-                      <td className="py-3 pr-4 font-medium text-white">${parseFloat(p.sale_price || 0).toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-zinc-400">${userCost.toFixed(2)}</td>
+                      <td className="py-3 pr-4 font-medium text-white">${salePrice.toFixed(2)}</td>
+                      <td className={`py-3 pr-4 font-semibold ${profit > 0 ? 'text-[#06D6A0]' : 'text-red-400'}`}>
+                        {profit > 0 ? '+' : ''}${profit.toFixed(2)}
+                      </td>
                       <td className="py-3 pr-4 text-zinc-400">{p.category || 'General'}</td>
                       <td className="py-3 pr-4 text-zinc-400">{p.seller_name || p.seller_email}</td>
                       <td className="py-3 pr-4">

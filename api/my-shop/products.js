@@ -2,6 +2,26 @@
 import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 
+const DEFAULT_COMMISSION_PERCENT = 5
+const DEFAULT_SALE_MARKUP = 1.40 // 40% above cost by default (ensures profit after commission)
+
+async function getCommissionRate() {
+  try {
+    const result = await sql`SELECT value FROM admin_settings WHERE key = 'platform_fee_percent'`
+    return result.rows.length > 0 ? (parseFloat(result.rows[0].value) || DEFAULT_COMMISSION_PERCENT) / 100 : DEFAULT_COMMISSION_PERCENT / 100
+  } catch {
+    return DEFAULT_COMMISSION_PERCENT / 100
+  }
+}
+
+function autoSalePrice(supplierCost, commissionRate) {
+  // Cost to user = supplier_cost + commission
+  const userCost = supplierCost * (1 + commissionRate)
+  // Default sale price = cost * markup, rounded to .99
+  const raw = userCost * DEFAULT_SALE_MARKUP
+  return Math.ceil(raw) - 0.01
+}
+
 export default async function handler(req, res) {
   let user
   try {
@@ -39,9 +59,18 @@ export default async function handler(req, res) {
     }
 
     try {
+      const cost = parseFloat(supplierCost) || 0
+      let price = parseFloat(salePrice) || 0
+
+      // Auto-set sale price if not provided — ensures user makes profit by default
+      if (price <= 0 && cost > 0) {
+        const commissionRate = await getCommissionRate()
+        price = autoSalePrice(cost, commissionRate)
+      }
+
       const { rows } = await sql`
         INSERT INTO user_products (user_id, title, description, image, images, supplier, supplier_product_id, supplier_url, supplier_cost, sale_price, category, is_active)
-        VALUES (${user.id}, ${title}, ${description || ''}, ${image || null}, ${images || []}, ${supplier}, ${supplierProductId || null}, ${supplierUrl || null}, ${parseFloat(supplierCost) || 0}, ${parseFloat(salePrice) || 0}, ${category || 'General'}, true)
+        VALUES (${user.id}, ${title}, ${description || ''}, ${image || null}, ${images || []}, ${supplier}, ${supplierProductId || null}, ${supplierUrl || null}, ${cost}, ${price}, ${category || 'General'}, true)
         RETURNING *
       `
       return res.json({ product: rows[0] })

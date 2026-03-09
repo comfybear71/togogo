@@ -12,9 +12,6 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 
 function safe$(val) { return (Number(val) || 0).toFixed(2) }
 
-// ToGoGo commission rate — baked into supplier_cost so user never sees it
-const COMMISSION_RATE = 0.05
-
 export default function MyShopPage() {
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
@@ -28,13 +25,25 @@ export default function MyShopPage() {
   const [showThemePicker, setShowThemePicker] = useState(false)
   const [storeName, setStoreName] = useState('My Store')
   const [storeSubdomain, setStoreSubdomain] = useState(null)
+  const [commissionRate, setCommissionRate] = useState(0.05)
 
   useEffect(() => {
     if (user && token) {
       fetchProducts()
       fetchStoreInfo()
+      fetchCommission()
     }
   }, [user, token])
+
+  async function fetchCommission() {
+    try {
+      const res = await fetch(`${API_BASE}/api/config/commission`)
+      if (res.ok) {
+        const data = await res.json()
+        setCommissionRate((data.commissionPercent || 5) / 100)
+      }
+    } catch { /* use default */ }
+  }
 
   async function fetchProducts() {
     try {
@@ -80,12 +89,10 @@ export default function MyShopPage() {
     }
   }
 
-  // The "cost" the user sees = supplier_cost (which already includes ToGoGo commission)
-  // Profit = sale_price - supplier_cost (commission is invisible to them)
+  // Cost displayed to user = supplier_cost + ToGoGo commission (shown as one number)
   function getUserCost(product) {
     const supplierCost = parseFloat(product.supplier_cost) || 0
-    // Add commission to the displayed cost so user's profit is naturally reduced
-    return supplierCost + (supplierCost * COMMISSION_RATE)
+    return supplierCost + (supplierCost * commissionRate)
   }
 
   // Stats
