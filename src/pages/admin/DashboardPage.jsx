@@ -23,8 +23,9 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const revenueDataDaily = Array.from({ length: 30 }, (_, i) => ({
   date: new Date(Date.now() - (29 - i) * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -97,12 +98,13 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const [{ count: usersCount }, { count: listingsCount }] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          supabase.from('products').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        ]);
-        if (usersCount != null) setStats((s) => ({ ...s, totalUsers: usersCount }));
-        if (listingsCount != null) setStats((s) => ({ ...s, activeListings: listingsCount }));
+        const token = localStorage.getItem('togogo-token')
+        const headers = token ? { Authorization: `Bearer ${token}` } : {}
+        const res = await fetch(`${API_BASE}/api/admin/stats`, { headers })
+        if (res.ok) {
+          const data = await res.json()
+          setStats(data)
+        }
       } catch {
         // keep placeholder data
       }

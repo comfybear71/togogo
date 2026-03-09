@@ -113,6 +113,7 @@ const SECTIONS = [
 
 export default function SettingsPage() {
   const user = useAuthStore((s) => s.user)
+  const authLoading = useAuthStore((s) => s.loading)
   const [settings, setSettings] = useState({})
   const [activeSection, setActiveSection] = useState('referral_links')
   const [loading, setLoading] = useState(true)
@@ -122,7 +123,7 @@ export default function SettingsPage() {
   const [visibleSecrets, setVisibleSecrets] = useState({})
   const [customFields, setCustomFields] = useState([])
   const [setupSecret, setSetupSecret] = useState(sessionStorage.getItem('togogo-setup-secret') || '')
-  const [hasAccess, setHasAccess] = useState(!!user || !!sessionStorage.getItem('togogo-setup-secret'))
+  const [hasAccess, setHasAccess] = useState(!!localStorage.getItem('togogo-token') || !!sessionStorage.getItem('togogo-setup-secret'))
 
   // If no user and no setup secret, show secret prompt
   const handleSetupLogin = () => {
@@ -130,6 +131,7 @@ export default function SettingsPage() {
       sessionStorage.setItem('togogo-setup-secret', setupSecret)
       setHasAccess(true)
       setLoading(true)
+      setError(null)
     }
   }
 
@@ -145,11 +147,28 @@ export default function SettingsPage() {
 
   // Load settings from API
   useEffect(() => {
+    if (!hasAccess) {
+      setLoading(false)
+      return
+    }
+    // Wait for auth to finish loading before fetching
+    if (authLoading && !sessionStorage.getItem('togogo-setup-secret')) return
+
     const loadSettings = async () => {
+      setLoading(true)
+      setError(null)
       try {
         const res = await fetch(`${API_BASE}/api/admin/settings`, {
           headers: getAuthHeaders(),
         })
+        if (res.status === 401 || res.status === 403) {
+          // Invalid token or not admin — clear setup secret if used
+          if (!localStorage.getItem('togogo-token')) {
+            sessionStorage.removeItem('togogo-setup-secret')
+            setHasAccess(false)
+          }
+          throw new Error('Access denied — check your credentials or JWT secret')
+        }
         if (!res.ok) throw new Error('Failed to load settings')
         const data = await res.json()
 
@@ -165,7 +184,7 @@ export default function SettingsPage() {
       }
     }
     loadSettings()
-  }, [user])
+  }, [hasAccess, authLoading])
 
   const handleChange = (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }))
