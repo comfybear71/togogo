@@ -6,8 +6,8 @@ async function ensureTable() {
   await sql`
     CREATE TABLE IF NOT EXISTS admin_settings (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      key TEXT UNIQUE NOT NULL,
-      value TEXT NOT NULL DEFAULT '',
+      "key" TEXT UNIQUE NOT NULL,
+      "value" TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL,
       label TEXT,
       is_secret BOOLEAN DEFAULT false,
@@ -40,10 +40,10 @@ export default async function handler(req, res) {
     for (const row of settings) {
       if (!row.key || !row.category) continue
       await sql`
-        INSERT INTO admin_settings (key, value, category, label, is_secret)
+        INSERT INTO admin_settings ("key", "value", category, label, is_secret)
         VALUES (${row.key}, ${row.value || ''}, ${row.category}, ${row.label || row.key}, ${row.is_secret || false})
-        ON CONFLICT (key) DO UPDATE SET
-          value = EXCLUDED.value,
+        ON CONFLICT ("key") DO UPDATE SET
+          "value" = EXCLUDED."value",
           category = EXCLUDED.category,
           label = EXCLUDED.label,
           is_secret = EXCLUDED.is_secret,

@@ -6,8 +6,8 @@ async function ensureTable() {
   await sql`
     CREATE TABLE IF NOT EXISTS admin_settings (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-      key TEXT UNIQUE NOT NULL,
-      value TEXT NOT NULL DEFAULT '',
+      "key" TEXT UNIQUE NOT NULL,
+      "value" TEXT NOT NULL DEFAULT '',
       category TEXT NOT NULL,
       label TEXT,
       is_secret BOOLEAN DEFAULT false,
@@ -31,16 +31,16 @@ export default async function handler(req, res) {
       let result
       if (category) {
         result = await sql`
-          SELECT key, value, category, label, is_secret
+          SELECT "key", "value", category, label, is_secret
           FROM admin_settings
           WHERE category = ${category}
-          ORDER BY category, key
+          ORDER BY category, "key"
         `
       } else {
         result = await sql`
-          SELECT key, value, category, label, is_secret
+          SELECT "key", "value", category, label, is_secret
           FROM admin_settings
-          ORDER BY category, key
+          ORDER BY category, "key"
         `
       }
       return res.json(result.rows)
@@ -59,10 +59,10 @@ export default async function handler(req, res) {
       }
 
       await sql`
-        INSERT INTO admin_settings (key, value, category, label, is_secret)
+        INSERT INTO admin_settings ("key", "value", category, label, is_secret)
         VALUES (${key}, ${value || ''}, ${category}, ${label || key}, ${is_secret || false})
-        ON CONFLICT (key) DO UPDATE SET
-          value = EXCLUDED.value,
+        ON CONFLICT ("key") DO UPDATE SET
+          "value" = EXCLUDED."value",
           category = EXCLUDED.category,
           label = EXCLUDED.label,
           is_secret = EXCLUDED.is_secret,
