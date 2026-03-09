@@ -211,3 +211,79 @@ input:-webkit-autofill:focus {
   transform: scale(0.96);
   transition: transform 0.1s ease;
 }
+
+/* ===== Deploy Progress Animations ===== */
+
+/* Step entry — bang in effect */
+@keyframes deploy-step-enter {
+  0% { transform: translateX(-20px) scale(0.95); opacity: 0; }
+  50% { transform: translateX(4px) scale(1.02); opacity: 1; }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+
+/* Progress bar animated gradient */
+.deploy-progress-bar {
+  background: linear-gradient(90deg, #06D6A0, #06D6A0 60%, #2EEDB8 80%, #06D6A0 100%);
+  background-size: 200% 100%;
+  animation: deploy-bar-flow 2s linear infinite;
+}
+
+@keyframes deploy-bar-flow {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Shine sweep on progress bar */
+.deploy-progress-shine {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.25) 50%,
+    transparent 100%
+  );
+  animation: deploy-shine-sweep 1.5s ease-in-out infinite;
+}
+
+@keyframes deploy-shine-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* Pulsing step number badge */
+.deploy-step-number-pulse {
+  animation: deploy-number-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes deploy-number-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(6, 214, 160, 0.3); }
+  50% { transform: scale(1.1); box-shadow: 0 0 12px 4px rgba(6, 214, 160, 0.15); }
+}
+
+/* Confetti fall */
+.deploy-confetti {
+  animation: deploy-confetti-fall linear forwards;
+}
+
+@keyframes deploy-confetti-fall {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(600px) rotate(720deg) scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* Container glow on completion */
+.deploy-complete-glow {
+  animation: deploy-glow 2s ease-in-out infinite;
+}
+
+@keyframes deploy-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(6, 214, 160, 0); }
+  50% { box-shadow: 0 0 40px rgba(6, 214, 160, 0.15); }
+}
