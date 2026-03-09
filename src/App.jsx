@@ -31,6 +31,7 @@ const AdminSettings = lazy(() => import('./pages/admin/SettingsPage'))
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
+const OneClickStorePage = lazy(() => import('./pages/OneClickStorePage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'))
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/guide/:platform" element={<PlatformGuidePage />} />
           <Route path="/launch-store" element={<LaunchStorePage />} />
+          <Route path="/create-store" element={<OneClickStorePage />} />
           <Route path="/my-shop" element={<MyShopPage />} />
           <Route path="/promotions" element={<PromotionsPage />} />
           <Route path="/terms" element={<TermsPage />} />

@@ -4,8 +4,8 @@ import Button from '../components/ui/Button';
 import { useAuthStore } from '../stores/authStore';
 
 const FEATURES = [
-  'Your own website & custom URL',
-  'Hosting fully included',
+  'Your own store at yourname.togogo.me (one-click setup)',
+  'Hosting, SSL & WooCommerce fully included',
   'Automated marketing across all social channels',
   'Auto-list products on eBay, Etsy, Amazon & more',
   'Dashboard with earnings, trends & stats',

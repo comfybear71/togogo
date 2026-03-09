@@ -321,7 +321,41 @@ export default function LaunchStorePage() {
                 </div>
               </button>
 
-              {/* PATH B: OWN STORE */}
+              {/* PATH B+: ONE-CLICK STORE (AUTOMATED) */}
+              <button
+                onClick={() => navigate('/create-store')}
+                className="w-full text-left rounded-2xl border-2 border-[#FFD23F]/30 hover:border-[#FFD23F]/60 bg-gradient-to-r from-[#111] to-[#1a1400] p-5 transition-all group relative overflow-hidden"
+              >
+                <div className="absolute top-2 right-2">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-[#FFD23F]/15 text-[#FFD23F] animate-pulse">
+                    NEW
+                  </span>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#FFD23F]/15 flex-shrink-0">
+                    <Zap className="h-6 w-6 text-[#FFD23F]" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-base font-semibold text-white">One-Click Store</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#06D6A0]/15 text-[#06D6A0]">
+                        INCLUDED
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mb-3">
+                      Your own store at yourname.togogo.me — fully set up in 30 seconds. WordPress + WooCommerce, hosting, SSL — all automated.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] text-zinc-400">Included in $19.99/mo</span>
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] text-zinc-400">30-second setup</span>
+                      <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] text-zinc-400">Live progress monitor</span>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-zinc-600 group-hover:text-[#FFD23F] transition-colors flex-shrink-0 mt-1" />
+                </div>
+              </button>
+
+              {/* PATH B: OWN STORE (MANUAL — CUSTOM DOMAIN) */}
               <button
                 onClick={() => { setPath('ownstore'); setStep(1) }}
                 className="w-full text-left rounded-2xl border-2 border-white/[0.06] hover:border-[#FF6B35]/40 bg-[#111] p-5 transition-all group"
@@ -332,13 +366,13 @@ export default function LaunchStorePage() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-semibold text-white">Your Own Online Store</h3>
+                      <h3 className="text-base font-semibold text-white">Custom Domain Store</h3>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FF6B35]/15 text-[#FF6B35]">
-                        ~$3.50/mo
+                        ~$3.50/mo extra
                       </span>
                     </div>
                     <p className="text-xs text-zinc-400 mb-3">
-                      Your own branded website with your own domain. Full control. We set it all up for you.
+                      Your own branded website with your own domain (e.g. yourstore.com). Full control with external hosting.
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <span className="text-[10px] px-2 py-1 rounded-full bg-white/[0.04] text-zinc-400">Domain ~$5-19/yr</span>
