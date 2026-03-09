@@ -1,7 +1,8 @@
 import { Router } from 'express'
 import Stripe from 'stripe'
 import express from 'express'
-import { requireAuth, supabase } from '../middleware/auth.js'
+import { sql } from '@vercel/postgres'
+import { requireAuth } from '../middleware/auth.js'
 
 const router = Router()
 

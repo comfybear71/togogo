@@ -1,19 +1,10 @@
 // Admin settings API — GET all settings, PUT single setting
 import { sql } from '../../_lib/db.js'
-import { requireAdmin } from '../../_lib/auth.js'
-
-async function checkAdmin(req) {
-  // Allow setup secret for initial configuration (before admin user exists)
-  const setupSecret = req.headers['x-setup-secret']
-  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
-    return { id: 'setup', role: 'admin' }
-  }
-  return requireAdmin(req)
-}
+import { requireAdminOrSetup } from '../../_lib/auth.js'
 
 export default async function handler(req, res) {
   try {
-    await checkAdmin(req)
+    await requireAdminOrSetup(req)
   } catch (err) {
     return res.status(err?.status || 401).json({ error: err?.message || 'Authentication failed' })
   }

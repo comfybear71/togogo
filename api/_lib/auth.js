@@ -83,6 +83,15 @@ export async function requireAdmin(req) {
   return user
 }
 
+// Admin check that also allows setup secret for initial configuration
+export async function requireAdminOrSetup(req) {
+  const setupSecret = req.headers['x-setup-secret']
+  if (setupSecret && setupSecret === JWT_SECRET) {
+    return { id: 'setup', role: 'admin' }
+  }
+  return requireAdmin(req)
+}
+
 // Find or create user from Google OAuth profile
 export async function findOrCreateGoogleUser({ googleId, email, name, avatarUrl }) {
   // Check if user exists by google_id

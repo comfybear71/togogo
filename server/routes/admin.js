@@ -1,5 +1,6 @@
 import { Router } from 'express'
-import { requireAdmin, supabase } from '../middleware/auth.js'
+import { sql } from '@vercel/postgres'
+import { requireAdmin } from '../middleware/auth.js'
 
 const router = Router()
 

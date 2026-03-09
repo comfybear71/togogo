@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../lib/supabase'
-import { useAuthStore } from '../stores/authStore'
+import { authFetch, useAuthStore } from '../stores/authStore'
 
 // Get user's watchlist from database
 export function useWatchlist() {
@@ -8,13 +7,11 @@ export function useWatchlist() {
   return useQuery({
     queryKey: ['watchlist', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('watchlist')
-        .select('*, product:products(*)')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data || []
+      try {
+        return await authFetch('/api/watchlist')
+      } catch {
+        return []
+      }
     },
     enabled: !!user,
   })
@@ -23,16 +20,12 @@ export function useWatchlist() {
 // Add product to watchlist
 export function useAddToWatchlist() {
   const queryClient = useQueryClient()
-  const user = useAuthStore((s) => s.user)
   return useMutation({
     mutationFn: async ({ productId, targetPrice }) => {
-      const { data, error } = await supabase
-        .from('watchlist')
-        .insert({ user_id: user.id, product_id: productId, target_price: targetPrice })
-        .select()
-        .single()
-      if (error) throw error
-      return data
+      return await authFetch('/api/watchlist', {
+        method: 'POST',
+        body: JSON.stringify({ product_id: productId, target_price: targetPrice }),
+      })
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   })
@@ -43,11 +36,7 @@ export function useRemoveFromWatchlist() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (watchlistId) => {
-      const { error } = await supabase
-        .from('watchlist')
-        .delete()
-        .eq('id', watchlistId)
-      if (error) throw error
+      return await authFetch(`/api/watchlist/${watchlistId}`, { method: 'DELETE' })
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   })
@@ -59,14 +48,11 @@ export function usePriceAlerts() {
   return useQuery({
     queryKey: ['price-alerts', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('price_alerts')
-        .select('*, deal:deals(*, product:products(*), retailer:retailers(*))')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-      if (error) throw error
-      return data || []
+      try {
+        return await authFetch('/api/watchlist/alerts')
+      } catch {
+        return []
+      }
     },
     enabled: !!user,
   })

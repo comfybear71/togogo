@@ -12,7 +12,6 @@ import {
   AlertCircle,
   Ban,
 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 
 const sampleUsers = [
