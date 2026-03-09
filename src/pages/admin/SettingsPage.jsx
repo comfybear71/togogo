@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  ArrowLeft, Settings, Save, Link2, Key, Shield, Gift,
+  ArrowLeft, Settings, Save, Key, Shield, Gift,
   Eye, EyeOff, Check, AlertCircle, Loader2, Plus, Trash2,
-  Globe, Store, ShoppingBag, Megaphone, CreditCard, Database
+  Megaphone, CreditCard, Database
 } from 'lucide-react'
-import { useAuthStore } from '../../stores/authStore'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -112,8 +111,6 @@ const SECTIONS = [
 ]
 
 export default function SettingsPage() {
-  const user = useAuthStore((s) => s.user)
-  const authLoading = useAuthStore((s) => s.loading)
   const [settings, setSettings] = useState({})
   const [activeSection, setActiveSection] = useState('referral_links')
   const [loading, setLoading] = useState(true)
@@ -122,24 +119,11 @@ export default function SettingsPage() {
   const [error, setError] = useState(null)
   const [visibleSecrets, setVisibleSecrets] = useState({})
   const [customFields, setCustomFields] = useState([])
-  const [setupSecret, setSetupSecret] = useState(sessionStorage.getItem('togogo-setup-secret') || '')
-  const [hasAccess, setHasAccess] = useState(!!localStorage.getItem('togogo-token') || !!sessionStorage.getItem('togogo-setup-secret'))
-
-  // If no user and no setup secret, show secret prompt
-  const handleSetupLogin = () => {
-    if (setupSecret) {
-      sessionStorage.setItem('togogo-setup-secret', setupSecret)
-      setHasAccess(true)
-      setLoading(true)
-      setError(null)
-    }
-  }
 
   // Build auth headers — use token if logged in, otherwise try setup secret
   const getAuthHeaders = () => {
     const token = localStorage.getItem('togogo-token')
     if (token) return { Authorization: `Bearer ${token}` }
-    // Fallback: use setup secret stored in sessionStorage (for initial setup)
     const secret = sessionStorage.getItem('togogo-setup-secret')
     if (secret) return { 'x-setup-secret': secret }
     return {}
@@ -147,13 +131,6 @@ export default function SettingsPage() {
 
   // Load settings from API
   useEffect(() => {
-    if (!hasAccess) {
-      setLoading(false)
-      return
-    }
-    // Wait for auth to finish loading before fetching
-    if (authLoading && !sessionStorage.getItem('togogo-setup-secret')) return
-
     const loadSettings = async () => {
       setLoading(true)
       setError(null)
@@ -161,14 +138,6 @@ export default function SettingsPage() {
         const res = await fetch(`${API_BASE}/api/admin/settings`, {
           headers: getAuthHeaders(),
         })
-        if (res.status === 401 || res.status === 403) {
-          // Invalid token or not admin — clear setup secret if used
-          if (!localStorage.getItem('togogo-token')) {
-            sessionStorage.removeItem('togogo-setup-secret')
-            setHasAccess(false)
-          }
-          throw new Error('Access denied — check your credentials or JWT secret')
-        }
         if (!res.ok) throw new Error('Failed to load settings')
         const data = await res.json()
 
@@ -184,7 +153,7 @@ export default function SettingsPage() {
       }
     }
     loadSettings()
-  }, [hasAccess, authLoading])
+  }, [])
 
   const handleChange = (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }))
@@ -258,37 +227,6 @@ export default function SettingsPage() {
 
   const currentSection = SECTIONS.find((s) => s.id === activeSection)
   const sectionCustomFields = customFields.filter((f) => f.category === activeSection)
-
-  // Show setup secret prompt if not logged in
-  if (!hasAccess) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow p-8 max-w-md w-full">
-          <div className="flex items-center gap-3 mb-4">
-            <Shield className="h-6 w-6 text-[#FF6B35]" />
-            <h2 className="text-xl font-bold text-gray-900">Admin Setup</h2>
-          </div>
-          <p className="text-sm text-gray-500 mb-4">
-            Enter your JWT secret to access admin settings. This is for initial setup before admin login is configured.
-          </p>
-          <input
-            type="password"
-            value={setupSecret}
-            onChange={(e) => setSetupSecret(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSetupLogin()}
-            placeholder="JWT_SECRET from your environment"
-            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20 mb-4"
-          />
-          <button
-            onClick={handleSetupLogin}
-            className="w-full rounded-xl bg-[#FF6B35] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#FF6B35]/90 transition-colors"
-          >
-            Access Settings
-          </button>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6">

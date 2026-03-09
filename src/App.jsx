@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
+import AdminRoute from './components/admin/AdminRoute'
 
 // Core pages loaded eagerly for instant navigation
 import HomePage from './pages/HomePage'
@@ -85,14 +86,14 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         </Route>
 
-        {/* Admin routes — no AppLayout (admin has its own) */}
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/users" element={<AdminUsers />} />
-        <Route path="/admin/products" element={<AdminProducts />} />
-        <Route path="/admin/orders" element={<AdminOrders />} />
-        <Route path="/admin/stores" element={<AdminStores />} />
-        <Route path="/admin/marketing" element={<AdminMarketing />} />
-        <Route path="/admin/settings" element={<AdminSettings />} />
+        {/* Admin routes — protected by JWT / setup secret */}
+        <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+        <Route path="/admin/users" element={<AdminRoute><AdminUsers /></AdminRoute>} />
+        <Route path="/admin/products" element={<AdminRoute><AdminProducts /></AdminRoute>} />
+        <Route path="/admin/orders" element={<AdminRoute><AdminOrders /></AdminRoute>} />
+        <Route path="/admin/stores" element={<AdminRoute><AdminStores /></AdminRoute>} />
+        <Route path="/admin/marketing" element={<AdminRoute><AdminMarketing /></AdminRoute>} />
+        <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
 
         <Route element={<AppLayout />}>
           <Route path="*" element={<NotFoundPage />} />
