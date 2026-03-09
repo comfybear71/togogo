@@ -27,6 +27,7 @@ const AdminUsers = lazy(() => import('./pages/admin/UsersPage'))
 const AdminProducts = lazy(() => import('./pages/admin/ProductsPage'))
 const AdminOrders = lazy(() => import('./pages/admin/OrdersPage'))
 const AdminMarketing = lazy(() => import('./pages/admin/MarketingPage'))
+const AdminStores = lazy(() => import('./pages/admin/StoresPage'))
 const AdminSettings = lazy(() => import('./pages/admin/SettingsPage'))
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
@@ -89,6 +90,7 @@ export default function App() {
         <Route path="/admin/users" element={<AdminUsers />} />
         <Route path="/admin/products" element={<AdminProducts />} />
         <Route path="/admin/orders" element={<AdminOrders />} />
+        <Route path="/admin/stores" element={<AdminStores />} />
         <Route path="/admin/marketing" element={<AdminMarketing />} />
         <Route path="/admin/settings" element={<AdminSettings />} />
 

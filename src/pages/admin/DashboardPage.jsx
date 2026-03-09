@@ -141,6 +141,7 @@ export default function DashboardPage() {
             { to: '/admin/users', label: 'Users' },
             { to: '/admin/products', label: 'Products' },
             { to: '/admin/orders', label: 'Orders' },
+            { to: '/admin/stores', label: 'Stores' },
             { to: '/admin/marketing', label: 'Marketing' },
             { to: '/admin/settings', label: 'Settings' },
           ].map((item) => (

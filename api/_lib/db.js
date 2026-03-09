@@ -138,6 +138,22 @@ export async function initializeSchema() {
     )
   `
 
+  // User stores — one-click stores with subdomains
+  await sql`
+    CREATE TABLE IF NOT EXISTS user_stores (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+      subdomain TEXT NOT NULL UNIQUE,
+      full_domain TEXT NOT NULL UNIQUE,
+      store_name TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'provisioning', 'active', 'inactive', 'deleted')),
+      vercel_domain_id TEXT,
+      provision_data JSONB DEFAULT '{}',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+
   // Admin settings (key-value config)
   await sql`
     CREATE TABLE IF NOT EXISTS admin_settings (
@@ -164,4 +180,6 @@ export async function initializeSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_platform_connections_user ON platform_connections(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_admin_settings_key ON admin_settings(key)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_domains_user ON user_domains(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_stores_user ON user_stores(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_stores_subdomain ON user_stores(subdomain)`
 }
