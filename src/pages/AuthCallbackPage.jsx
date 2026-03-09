@@ -21,13 +21,13 @@ export default function AuthCallbackPage() {
 
     if (token) {
       handleAuthCallback(token)
-        .then(() => navigate('/dashboard'))
+        .then(() => navigate('/', { replace: true }))
         .catch(() => {
           setError('Authentication failed')
-          setTimeout(() => navigate('/auth'), 3000)
+          setTimeout(() => navigate('/auth', { replace: true }), 3000)
         })
     } else {
-      navigate('/auth')
+      navigate('/auth', { replace: true })
     }
   }, [searchParams, handleAuthCallback, navigate])
 

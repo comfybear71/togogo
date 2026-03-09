@@ -21,8 +21,14 @@ export default async function handler(req, res) {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
+
+    if (!clientId || !clientSecret) {
+      console.error('Google OAuth not configured: missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET')
+      return res.redirect(`${frontendUrl}/auth?error=${encodeURIComponent('Google sign-in is not configured. Please contact support.')}`)
+    }
+
     // Must match the redirect URI used in /api/auth/google.js
-    const baseUrl = process.env.FRONTEND_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    const baseUrl = process.env.FRONTEND_URL || 'https://togogo.me'
     const redirectUri = `${baseUrl}/api/auth/google/callback`
 
     const client = new OAuth2Client(clientId, clientSecret, redirectUri)
@@ -51,7 +57,10 @@ export default async function handler(req, res) {
     // Redirect to frontend with token
     return res.redirect(`${frontendUrl}/auth/callback?token=${token}`)
   } catch (err) {
-    console.error('Google OAuth callback error:', err)
-    return res.redirect(`${frontendUrl}/auth?error=${encodeURIComponent('Google sign-in failed')}`)
+    console.error('Google OAuth callback error:', err?.message || err)
+    const msg = err?.message?.includes('redirect_uri_mismatch')
+      ? 'OAuth redirect URI mismatch. Check Google Cloud Console configuration.'
+      : 'Google sign-in failed. Please try again.'
+    return res.redirect(`${frontendUrl}/auth?error=${encodeURIComponent(msg)}`)
   }
 }
