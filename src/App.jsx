@@ -100,9 +100,9 @@ export default function App() {
           <Route path="/platforms" element={<PlatformsPage />} />
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/guide/:platform" element={<PlatformGuidePage />} />
-          <Route path="/launch-store" element={<LaunchStorePage />} />
-          <Route path="/create-store" element={<OneClickStorePage />} />
-          <Route path="/my-shop" element={<MyShopPage />} />
+          <Route path="/launch-store" element={<ProtectedRoute><LaunchStorePage /></ProtectedRoute>} />
+          <Route path="/create-store" element={<ProtectedRoute><OneClickStorePage /></ProtectedRoute>} />
+          <Route path="/my-shop" element={<ProtectedRoute><MyShopPage /></ProtectedRoute>} />
           <Route path="/promotions" element={<PromotionsPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
