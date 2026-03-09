@@ -18,12 +18,11 @@ const STEP_CONFIG = {
   subdomain:   { emoji: '\u{1F310}', doneEmoji: '\u{2705}', doneText: null },
   dns:         { emoji: '\u{1F4E1}', doneEmoji: '\u{2705}', doneText: 'DNS records configured' },
   ssl:         { emoji: '\u{1F512}', doneEmoji: '\u{2705}', doneText: 'SSL certificate active' },
-  wordpress:   { emoji: '\u{1F4E6}', doneEmoji: '\u{2705}', doneText: 'WordPress installed' },
-  woocommerce: { emoji: '\u{1F6D2}', doneEmoji: '\u{2705}', doneText: 'WooCommerce ready' },
-  theme:       { emoji: '\u{1F3A8}', doneEmoji: '\u{2705}', doneText: 'Store theme applied' },
-  products:    { emoji: '\u{1F4CB}', doneEmoji: '\u{2705}', doneText: 'Product sync configured' },
-  payments:    { emoji: '\u{1F4B3}', doneEmoji: '\u{2705}', doneText: 'Payment gateway active' },
-  connect:     { emoji: '\u{1F517}', doneEmoji: '\u{2705}', doneText: 'Connected to ToGoGo' },
+  storefront:  { emoji: '\u{1F3E0}', doneEmoji: '\u{2705}', doneText: 'Storefront built' },
+  theme:       { emoji: '\u{1F3A8}', doneEmoji: '\u{2705}', doneText: 'Theme & branding applied' },
+  products:    { emoji: '\u{1F4CB}', doneEmoji: '\u{2705}', doneText: 'Products imported from suppliers' },
+  payments:    { emoji: '\u{1F4B3}', doneEmoji: '\u{2705}', doneText: 'Payment processing active' },
+  suppliers:   { emoji: '\u{1F517}', doneEmoji: '\u{2705}', doneText: 'All suppliers linked' },
   finalize:    { emoji: '\u{2728}', doneEmoji: '\u{1F389}', doneText: null },
 }
 
@@ -327,7 +326,7 @@ export default function OneClickStorePage() {
             localStorage.setItem('togogo-store-name', storeName)
             localStorage.setItem('togogo-store-url', data.store?.url || `https://${subdomain}.togogo.me`)
             localStorage.setItem('togogo-store-connection', JSON.stringify({
-              platform: 'woocommerce',
+              platform: 'togogo-store',
               shop_url: data.store?.url || `https://${subdomain}.togogo.me`,
               shop_name: storeName,
               status: 'active',
@@ -428,12 +427,11 @@ export default function OneClickStorePage() {
         { id: 'subdomain', label: 'Creating your subdomain', status: 'pending' },
         { id: 'dns', label: 'Configuring DNS records', status: 'pending' },
         { id: 'ssl', label: 'Provisioning SSL certificate', status: 'pending' },
-        { id: 'wordpress', label: 'Installing WordPress', status: 'pending' },
-        { id: 'woocommerce', label: 'Installing WooCommerce', status: 'pending' },
-        { id: 'theme', label: 'Setting up your store theme', status: 'pending' },
-        { id: 'products', label: 'Configuring product sync', status: 'pending' },
-        { id: 'payments', label: 'Setting up payment gateway', status: 'pending' },
-        { id: 'connect', label: 'Connecting to ToGoGo', status: 'pending' },
+        { id: 'storefront', label: 'Building your storefront', status: 'pending' },
+        { id: 'theme', label: 'Applying store theme & branding', status: 'pending' },
+        { id: 'products', label: 'Importing products from suppliers', status: 'pending' },
+        { id: 'payments', label: 'Setting up payment processing', status: 'pending' },
+        { id: 'suppliers', label: 'Linking to all suppliers', status: 'pending' },
         { id: 'finalize', label: 'Finalizing your store', status: 'pending' },
       ]
       setProvisionSteps(initialSteps)
@@ -484,7 +482,7 @@ export default function OneClickStorePage() {
             <div className="grid grid-cols-2 gap-2">
               {[
                 { icon: Globe, text: 'Your own .togogo.me URL' },
-                { icon: Store, text: 'Full WooCommerce store' },
+                { icon: Store, text: 'Full in-house storefront' },
                 { icon: Shield, text: 'Free SSL certificate' },
                 { icon: Server, text: 'Hosting included' },
                 { icon: Zap, text: 'Auto product sync' },

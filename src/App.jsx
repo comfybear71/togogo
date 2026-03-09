@@ -1,10 +1,11 @@
-import { useEffect, lazy, Suspense } from 'react'
+import { useEffect, lazy, Suspense, useMemo } from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/admin/AdminRoute'
+import StorefrontPage from './pages/StorefrontPage'
 
 // Core pages loaded eagerly for instant navigation
 import HomePage from './pages/HomePage'
@@ -49,14 +50,39 @@ function PageLoader() {
   )
 }
 
+// Detect if we're on a customer store subdomain (e.g. mystore.togogo.me)
+function getStoreSubdomain() {
+  const host = window.location.hostname
+  // Main domains — NOT a storefront
+  const mainHosts = ['togogo.me', 'www.togogo.me', 'localhost', '127.0.0.1']
+  if (mainHosts.includes(host)) return null
+  // Check for subdomain of togogo.me (e.g. mystore.togogo.me)
+  if (host.endsWith('.togogo.me')) {
+    const sub = host.replace('.togogo.me', '')
+    if (sub && sub !== 'www' && sub !== 'api' && sub !== 'admin') return sub
+  }
+  // Dev: check for ?store=mystore query param for local testing
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('store')) return params.get('store')
+  return null
+}
+
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize)
   const initTheme = useThemeStore((s) => s.initTheme)
+  const storeSubdomain = useMemo(() => getStoreSubdomain(), [])
 
   useEffect(() => {
-    initialize()
-    initTheme()
-  }, [initialize, initTheme])
+    if (!storeSubdomain) {
+      initialize()
+      initTheme()
+    }
+  }, [initialize, initTheme, storeSubdomain])
+
+  // If on a customer subdomain, render their storefront (no main app chrome)
+  if (storeSubdomain) {
+    return <StorefrontPage subdomain={storeSubdomain} />
+  }
 
   return (
     <Suspense fallback={<PageLoader />}>
