@@ -77,7 +77,7 @@ export default function HomePage() {
   const showcaseProducts = useMemo(() => getRandomProductPerSupplier(), [])
 
   const handleGetStarted = () => {
-    navigate(user ? '/profile' : '/auth')
+    navigate('/setup')
   }
 
   const letters = [

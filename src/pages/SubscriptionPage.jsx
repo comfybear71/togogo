@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Check, ArrowLeft } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useAuthStore } from '../stores/authStore';
@@ -15,11 +15,12 @@ const FEATURES = [
 ];
 
 export default function SubscriptionPage() {
+  const navigate = useNavigate();
   const { profile } = useAuthStore();
   const isSubscribed = profile?.subscription_plan?.toLowerCase() === 'togogo';
 
   const handleSubscribe = () => {
-    alert('Coming soon! Payment integration is on the way.');
+    navigate('/setup');
   };
 
   return (

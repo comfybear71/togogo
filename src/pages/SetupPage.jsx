@@ -105,11 +105,6 @@ export default function SetupPage() {
   }
 
   const handleConnect = async (platform) => {
-    if (!user) {
-      navigate('/auth?redirect=/setup')
-      return
-    }
-
     setError(null)
     const platformData = ALL_PLATFORMS.find((p) => p.id === platform)
 
@@ -291,9 +286,7 @@ export default function SetupPage() {
         )}
         {currentStep === 2 && (
           <p className="text-xs text-zinc-500 max-w-[300px] mx-auto">
-            {user
-              ? "Click 'Connect' and we'll handle the rest. No need to leave ToGoGo."
-              : 'Sign in to connect your selling platforms.'}
+            Click 'Connect' and we'll handle the rest. No need to leave ToGoGo.
           </p>
         )}
       </div>
@@ -391,15 +384,6 @@ export default function SetupPage() {
         {/* Step 3: Connect platforms */}
         {currentStep === 2 && (
           <div className="space-y-3">
-            {!user && (
-              <button
-                onClick={() => navigate('/auth?redirect=/setup')}
-                className="w-full flex items-center justify-center gap-2 p-4 rounded-xl bg-[#FF6B35] text-white text-sm font-semibold hover:bg-[#FF6B35]/90 transition-colors mb-4"
-              >
-                Sign in to connect platforms
-              </button>
-            )}
-
             {selectedPlatformData.map((p) => {
               const connected = isConnected(p.id)
               const isConnecting = connectingPlatform === p.id
@@ -447,7 +431,7 @@ export default function SetupPage() {
                     ) : (
                       <button
                         onClick={() => handleConnect(p.id)}
-                        disabled={isConnecting || !user}
+                        disabled={isConnecting}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors disabled:opacity-50"
                       >
                         {isConnecting ? (
