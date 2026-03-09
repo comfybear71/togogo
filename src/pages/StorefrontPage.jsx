@@ -6,6 +6,28 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
+// ─── Demo data for preview storefronts ───────────────────────────────────
+const DEMO_STORE = {
+  store: {
+    id: 'demo',
+    name: 'My Store',
+    subdomain: 'mystore',
+    owner: 'Store Owner',
+    createdAt: new Date().toISOString(),
+  },
+  products: [
+    { id: 'd1', title: 'Wireless Bluetooth Earbuds', description: 'Premium sound quality with active noise cancellation. 30-hour battery life with charging case.', image: 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop', price: 49.99, category: 'Electronics', totalSold: 128 },
+    { id: 'd2', title: 'Minimalist Leather Wallet', description: 'Slim genuine leather wallet with RFID blocking. Holds up to 8 cards plus cash.', image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=400&h=400&fit=crop', price: 34.99, category: 'Accessories', totalSold: 85 },
+    { id: 'd3', title: 'Stainless Steel Water Bottle', description: 'Double-wall vacuum insulated. Keeps drinks cold 24hrs or hot 12hrs. 750ml capacity.', image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop', price: 29.99, category: 'Home & Kitchen', totalSold: 203 },
+    { id: 'd4', title: 'LED Desk Lamp with Wireless Charger', description: 'Adjustable brightness and colour temperature. Built-in 10W Qi wireless charging pad.', image: 'https://images.unsplash.com/photo-1507473885765-e6ed057ab6fe?w=400&h=400&fit=crop', price: 59.99, category: 'Electronics', totalSold: 67 },
+    { id: 'd5', title: 'Organic Cotton T-Shirt', description: '100% organic cotton, pre-shrunk. Available in multiple colours. Relaxed fit.', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop', price: 24.99, category: 'Clothing', totalSold: 312 },
+    { id: 'd6', title: 'Portable Bluetooth Speaker', description: 'Waterproof IPX7 rating. 20W output with deep bass. 16-hour playtime.', image: 'https://images.unsplash.com/photo-1608043152269-423dbba4e7e1?w=400&h=400&fit=crop', price: 39.99, category: 'Electronics', totalSold: 156 },
+    { id: 'd7', title: 'Bamboo Sunglasses', description: 'Handcrafted bamboo frames with polarised UV400 lenses. Eco-friendly and lightweight.', image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop', price: 44.99, category: 'Accessories', totalSold: 91 },
+    { id: 'd8', title: 'Scented Soy Candle Set', description: 'Set of 3 hand-poured soy candles. Lavender, vanilla, and eucalyptus. 45-hour burn time each.', image: 'https://images.unsplash.com/photo-1602607423591-78b1c89f4428?w=400&h=400&fit=crop', price: 32.99, category: 'Home & Kitchen', totalSold: 178 },
+  ],
+  categories: ['Electronics', 'Accessories', 'Home & Kitchen', 'Clothing'],
+}
+
 // ─── Cart state (in-memory, persisted to sessionStorage per store) ────────
 function useCart(subdomain) {
   const key = `tg-cart-${subdomain}`
@@ -37,6 +59,7 @@ export default function StorefrontPage({ subdomain }) {
   const [storeData, setStoreData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [isDemo, setIsDemo] = useState(false)
   const [view, setView] = useState('grid') // grid | product | cart | checkout | success
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -47,7 +70,14 @@ export default function StorefrontPage({ subdomain }) {
     fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}`)
       .then((r) => r.ok ? r.json() : Promise.reject('Store not found'))
       .then((data) => setStoreData(data))
-      .catch((err) => setError(typeof err === 'string' ? err : 'Failed to load store'))
+      .catch(() => {
+        // Fall back to demo preview data so store owners can preview the experience
+        const demo = structuredClone(DEMO_STORE)
+        demo.store.subdomain = subdomain
+        demo.store.name = subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Store'
+        setStoreData(demo)
+        setIsDemo(true)
+      })
       .finally(() => setLoading(false))
   }, [subdomain])
 
@@ -243,6 +273,11 @@ export default function StorefrontPage({ subdomain }) {
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50">
+      {isDemo && (
+        <div className="bg-amber-500 px-4 py-2 text-center text-xs font-medium text-white">
+          Preview Mode — This is a demo storefront with sample products
+        </div>
+      )}
       <StoreHeader store={store} cart={cart} onCartClick={() => setView('cart')} />
 
       {/* Hero */}
