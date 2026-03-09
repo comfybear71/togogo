@@ -77,6 +77,10 @@ export default function AuthPage() {
   const handleGoogleSignIn = async () => {
     setError('');
     try {
+      // Save redirect destination before navigating away to Google OAuth
+      if (redirectTo && redirectTo !== '/') {
+        sessionStorage.setItem('togogo-auth-redirect', redirectTo);
+      }
       await signInWithGoogle();
     } catch (err) {
       setError(err.message || 'Google sign in failed.');

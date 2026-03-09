@@ -21,7 +21,12 @@ export default function AuthCallbackPage() {
 
     if (token) {
       handleAuthCallback(token)
-        .then(() => navigate('/', { replace: true }))
+        .then(() => {
+          // Check for a pending redirect (e.g. from create-store → auth → Google → callback)
+          const pendingRedirect = sessionStorage.getItem('togogo-auth-redirect')
+          sessionStorage.removeItem('togogo-auth-redirect')
+          navigate(pendingRedirect || '/', { replace: true })
+        })
         .catch(() => {
           setError('Authentication failed')
           setTimeout(() => navigate('/auth', { replace: true }), 3000)
