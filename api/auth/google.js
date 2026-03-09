@@ -11,7 +11,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Google OAuth not configured' })
   }
 
-  const redirectUri = `${process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/auth/google/callback`
+  // Use FRONTEND_URL (custom domain) for redirect URI to match Google OAuth console config
+  const baseUrl = process.env.FRONTEND_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  const redirectUri = `${baseUrl}/api/auth/google/callback`
 
   const state = crypto.randomBytes(16).toString('hex')
 

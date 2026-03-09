@@ -21,7 +21,9 @@ export default async function handler(req, res) {
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-    const redirectUri = `${process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/auth/google/callback`
+    // Must match the redirect URI used in /api/auth/google.js
+    const baseUrl = process.env.FRONTEND_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    const redirectUri = `${baseUrl}/api/auth/google/callback`
 
     const client = new OAuth2Client(clientId, clientSecret, redirectUri)
 
