@@ -77,7 +77,7 @@ export default function HomePage() {
   const showcaseProducts = useMemo(() => getRandomProductPerSupplier(), [])
 
   const handleGetStarted = () => {
-    navigate('/setup')
+    navigate('/create-store')
   }
 
   const letters = [
@@ -182,9 +182,15 @@ export default function HomePage() {
               onClick={handleGetStarted}
               className="w-full rounded-2xl bg-[#FF6B35] py-4 text-base font-bold text-white transition-all hover:bg-[#e55a2b] active:scale-[0.98]"
             >
-              Get Started
+              Create My Store
             </button>
-            <p className="text-[10px] text-zinc-600 mt-2 text-center">Cancel anytime. No commitment.</p>
+            <p className="text-[10px] text-zinc-600 mt-2 text-center">30-second setup. Cancel anytime.</p>
+            <button
+              onClick={() => navigate('/setup')}
+              className="w-full mt-2 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              Already have platforms? Connect them instead →
+            </button>
           </div>
         </div>
 
