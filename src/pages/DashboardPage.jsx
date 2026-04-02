@@ -5,6 +5,7 @@ import {
   Store, ExternalLink, Plus, ArrowUpRight, ArrowDownRight,
   Settings, Globe, Link2, Unlink, Rocket, CheckCircle2,
   AlertCircle, Loader2, BarChart3, ChevronRight, Zap,
+  RefreshCw, Truck, Send,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -46,6 +47,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [fulfilling, setFulfilling] = useState(false)
+  const [actionMessage, setActionMessage] = useState(null)
 
   useEffect(() => {
     async function fetchStats() {
@@ -60,6 +64,59 @@ export default function DashboardPage() {
     }
     fetchStats()
   }, [])
+
+  async function refreshStats() {
+    try {
+      const data = await authFetch('/api/dashboard/stats')
+      setStats(data)
+    } catch { /* ignore */ }
+  }
+
+  async function handleSyncTracking() {
+    setSyncing(true)
+    setActionMessage(null)
+    try {
+      const result = await authFetch('/api/orders/sync-tracking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      setActionMessage(
+        result.updated > 0
+          ? `Updated ${result.updated} order(s) with new tracking info`
+          : 'All orders are up to date — no new tracking info from suppliers'
+      )
+      await refreshStats()
+    } catch (err) {
+      setActionMessage(`Sync failed: ${err.message}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  async function handleFulfillOrders() {
+    setFulfilling(true)
+    setActionMessage(null)
+    try {
+      const result = await authFetch('/api/orders/fulfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      if (result.fulfilled > 0) {
+        setActionMessage(`Sent ${result.fulfilled} order(s) to suppliers`)
+      } else if (result.results?.length === 0) {
+        setActionMessage('No unfulfilled orders to send')
+      } else {
+        setActionMessage(`${result.failed} order(s) failed — check supplier API keys in admin settings`)
+      }
+      await refreshStats()
+    } catch (err) {
+      setActionMessage(`Fulfillment failed: ${err.message}`)
+    } finally {
+      setFulfilling(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -369,6 +426,15 @@ export default function DashboardPage() {
                         {order.customer_name && <span className="text-[10px] text-zinc-600">· {order.customer_name}</span>}
                         <span className="text-[10px] text-zinc-700">{new Date(order.created_at).toLocaleDateString()}</span>
                       </div>
+                      {order.tracking_number && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Truck className="h-2.5 w-2.5 text-purple-400" />
+                          <span className="text-[9px] text-purple-400 font-mono">{order.tracking_number}</span>
+                        </div>
+                      )}
+                      {!order.supplier_order_id && ['pending', 'processing'].includes(order.status) && (
+                        <span className="text-[9px] text-yellow-400/70 mt-0.5 block">Not sent to supplier</span>
+                      )}
                     </div>
                     <div className="text-right flex-shrink-0 ml-3">
                       <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full capitalize ${statusColors[order.status] || statusColors.pending}`}>
@@ -392,6 +458,37 @@ export default function DashboardPage() {
       {/* Orders tab */}
       {tab === 'orders' && (
         <div className="space-y-2">
+          {/* Action buttons */}
+          {recentOrders.length > 0 && (
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={handleSyncTracking}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#111] border border-white/[0.06] text-[10px] font-semibold text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3 w-3 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Checking suppliers...' : 'Sync Tracking'}
+              </button>
+              {recentOrders.some(o => !o.supplier_order_id && ['pending', 'processing'].includes(o.status)) && (
+                <button
+                  onClick={handleFulfillOrders}
+                  disabled={fulfilling}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#FF6B35]/10 border border-[#FF6B35]/20 text-[10px] font-semibold text-[#FF6B35] hover:bg-[#FF6B35]/15 transition-colors disabled:opacity-50"
+                >
+                  <Send className={`h-3 w-3 ${fulfilling ? 'animate-pulse' : ''}`} />
+                  {fulfilling ? 'Sending to suppliers...' : 'Send to Suppliers'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Action feedback message */}
+          {actionMessage && (
+            <div className="rounded-xl bg-[#111] border border-white/[0.06] p-3 mb-2">
+              <p className="text-[11px] text-zinc-300">{actionMessage}</p>
+            </div>
+          )}
+
           {recentOrders.length > 0 ? (
             recentOrders.map((order) => (
               <div key={order.id} className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
@@ -413,8 +510,53 @@ export default function DashboardPage() {
                   <span className="text-zinc-500">Cost: <span className="text-zinc-300">${Number(order.supplier_cost).toFixed(2)}</span></span>
                   <span className="text-[#06D6A0] font-semibold">+${Number(order.profit).toFixed(2)} profit</span>
                 </div>
-                {order.tracking_number && (
-                  <p className="text-[10px] text-zinc-500 mt-1">Tracking: {order.tracking_number}</p>
+
+                {/* Supplier fulfillment status */}
+                <div className="mt-2 pt-2 border-t border-white/[0.04]">
+                  {order.supplier_order_id ? (
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                      <span className="text-[10px] text-zinc-400">
+                        Sent to {order.supplier} — Ref: <span className="text-zinc-300 font-mono">{order.supplier_order_id}</span>
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="h-3 w-3 text-yellow-400 flex-shrink-0" />
+                      <span className="text-[10px] text-yellow-400/80">
+                        Not yet sent to supplier — use "Send to Suppliers" above
+                      </span>
+                    </div>
+                  )}
+
+                  {order.tracking_number && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Truck className="h-3 w-3 text-purple-400 flex-shrink-0" />
+                      <span className="text-[10px] text-zinc-400">
+                        Tracking:{' '}
+                        {order.tracking_url ? (
+                          <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline font-mono">
+                            {order.tracking_number}
+                          </a>
+                        ) : (
+                          <span className="text-zinc-300 font-mono">{order.tracking_number}</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+
+                  {!order.tracking_number && order.supplier_order_id && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Clock className="h-3 w-3 text-zinc-600 flex-shrink-0" />
+                      <span className="text-[10px] text-zinc-600">
+                        Tracking not yet available — tap Sync Tracking to check
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {order.notes && (
+                  <p className="text-[9px] text-zinc-600 mt-1.5 italic">{order.notes}</p>
                 )}
               </div>
             ))

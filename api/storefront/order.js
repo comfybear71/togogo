@@ -2,6 +2,7 @@
 // Creates an order record and triggers supplier fulfillment
 import { sql, ensureSchema } from '../_lib/db.js'
 import { getCommissionRate } from '../_lib/commission.js'
+import { placeSupplierOrder } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   const origin = req.headers.origin || ''
@@ -103,8 +104,42 @@ export default async function handler(req, res) {
         console.error(`Failed to update product stats for ${product.id}:`, updateErr.message)
       }
 
+      const createdOrderId = orderRows[0]?.id
+
+      // Auto-forward to supplier (non-blocking — don't fail the customer order if supplier call fails)
+      if (createdOrderId && product.supplier) {
+        const shippingAddr = customer.address || {}
+        shippingAddr.name = customer.name
+        shippingAddr.email = customer.email
+        placeSupplierOrder(product.supplier, {
+          productId: product.supplier_product_id || product.id,
+          quantity: qty,
+          shippingAddress: shippingAddr,
+        }).then(async (result) => {
+          if (result.success) {
+            await sql`
+              UPDATE user_orders
+              SET status = 'processing',
+                  supplier_order_id = ${result.supplier_order_id},
+                  notes = ${`Auto-forwarded to ${product.supplier} — supplier order: ${result.supplier_order_id}`},
+                  updated_at = NOW()
+              WHERE id = ${createdOrderId}
+            `
+          } else {
+            await sql`
+              UPDATE user_orders
+              SET notes = ${`Auto-fulfillment attempted but failed: ${result.error}. Seller should retry from dashboard.`},
+                  updated_at = NOW()
+              WHERE id = ${createdOrderId}
+            `
+          }
+        }).catch(err => {
+          console.error(`Auto-fulfillment failed for order ${createdOrderId}:`, err.message)
+        })
+      }
+
       orders.push({
-        id: orderRows[0]?.id,
+        id: createdOrderId,
         product: product.title,
         quantity: qty,
         total: salePrice,

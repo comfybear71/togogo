@@ -62,10 +62,10 @@ export default async function handler(req, res) {
       `.catch(() => ({ rows: [] })),
       // Recent orders (last 10)
       sql`
-        SELECT id, supplier, product_title, product_image,
+        SELECT id, supplier, supplier_order_id, product_title, product_image,
                supplier_cost, sale_price, profit, commission, commission_rate, quantity,
                platform, platform_order_id, customer_name, customer_email, status,
-               tracking_number, notes, created_at
+               tracking_number, tracking_url, notes, created_at, updated_at
         FROM user_orders
         WHERE user_id = ${user.id}
         ORDER BY created_at DESC
