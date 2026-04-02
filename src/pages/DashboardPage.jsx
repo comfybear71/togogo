@@ -50,6 +50,9 @@ export default function DashboardPage() {
   const [syncing, setSyncing] = useState(false)
   const [fulfilling, setFulfilling] = useState(false)
   const [actionMessage, setActionMessage] = useState(null)
+  const [editingOrder, setEditingOrder] = useState(null)
+  const [editForm, setEditForm] = useState({ status: '', tracking_number: '', tracking_url: '' })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     async function fetchStats() {
@@ -118,6 +121,38 @@ export default function DashboardPage() {
       setActionMessage(`Fulfillment failed: ${err.message}`)
     } finally {
       setFulfilling(false)
+    }
+  }
+
+  function openEditOrder(order) {
+    setEditingOrder(order)
+    setEditForm({
+      status: order.status || '',
+      tracking_number: order.tracking_number || '',
+      tracking_url: order.tracking_url || '',
+    })
+  }
+
+  async function handleSaveOrder() {
+    if (!editingOrder) return
+    setSaving(true)
+    try {
+      await authFetch('/api/orders/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: editingOrder.id,
+          status: editForm.status || undefined,
+          tracking_number: editForm.tracking_number || undefined,
+          tracking_url: editForm.tracking_url || undefined,
+        }),
+      })
+      setEditingOrder(null)
+      await refreshStats()
+    } catch (err) {
+      setActionMessage(`Save failed: ${err.message}`)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -561,6 +596,14 @@ export default function DashboardPage() {
                 {order.notes && (
                   <p className="text-[9px] text-zinc-600 mt-1.5 italic">{order.notes}</p>
                 )}
+
+                {/* Edit button */}
+                <button
+                  onClick={() => openEditOrder(order)}
+                  className="mt-2 w-full py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] font-medium text-zinc-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+                >
+                  Update Status / Add Tracking
+                </button>
               </div>
             ))
           ) : (
@@ -677,6 +720,68 @@ export default function DashboardPage() {
               ))}
             </>
           )}
+        </div>
+      )}
+      {/* Order edit modal */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setEditingOrder(null)}>
+          <div className="bg-[#111] border border-white/[0.08] rounded-t-2xl sm:rounded-2xl w-full max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-bold text-white mb-1">Update Order</h3>
+            <p className="text-[10px] text-zinc-500 mb-4 truncate">{editingOrder.product_title}</p>
+
+            <label className="block mb-3">
+              <span className="text-[10px] text-zinc-400 font-medium">Status</span>
+              <select
+                value={editForm.status}
+                onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-black border border-white/[0.08] text-xs text-white focus:outline-none focus:border-[#FF6B35]/50"
+              >
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="shipped">Shipped</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </label>
+
+            <label className="block mb-3">
+              <span className="text-[10px] text-zinc-400 font-medium">Tracking Number</span>
+              <input
+                type="text"
+                value={editForm.tracking_number}
+                onChange={e => setEditForm(f => ({ ...f, tracking_number: e.target.value }))}
+                placeholder="e.g. AU1234567890"
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-black border border-white/[0.08] text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#FF6B35]/50"
+              />
+            </label>
+
+            <label className="block mb-4">
+              <span className="text-[10px] text-zinc-400 font-medium">Tracking URL <span className="text-zinc-600">(optional)</span></span>
+              <input
+                type="url"
+                value={editForm.tracking_url}
+                onChange={e => setEditForm(f => ({ ...f, tracking_url: e.target.value }))}
+                placeholder="e.g. https://auspost.com.au/track/..."
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-black border border-white/[0.08] text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#FF6B35]/50"
+              />
+            </label>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingOrder(null)}
+                className="flex-1 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-xs font-medium text-zinc-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveOrder}
+                disabled={saving}
+                className="flex-1 py-2.5 rounded-lg bg-[#FF6B35] text-white text-xs font-semibold hover:bg-[#FF6B35]/90 transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
