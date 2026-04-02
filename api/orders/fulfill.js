@@ -5,6 +5,80 @@ import { sql, ensureSchema } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 import { placeSupplierOrder } from '../_lib/suppliers.js'
 
+/**
+ * Resolve a real supplier product ID from the stored product info.
+ * Products imported from the curated catalog have IDs like "cur_1" or "cj_xxx"
+ * which aren't valid for the supplier's order API. We need to search the
+ * supplier for the actual product to get a usable ID.
+ */
+async function resolveSupplierProductId(order) {
+  const storedId = order.supplier_product_id || ''
+  const supplier = (order.supplier || '').toLowerCase()
+
+  // If it's a real supplier ID (not curated), use it directly
+  if (storedId && !storedId.startsWith('cur_')) {
+    // Strip supplier prefix (cj_, pf_, py_, gt_) — the placement functions do this too
+    return storedId
+  }
+
+  // For curated products, search the supplier by product title to find the real ID
+  if (supplier.includes('cj')) {
+    try {
+      const { searchCJ } = await import('../_lib/suppliers.js')
+      // Use first few words of title for search
+      const searchTerms = order.product_title.split(' ').slice(0, 4).join(' ')
+      const results = await searchCJ(searchTerms, 1)
+      if (results.length > 0) {
+        return results[0].id // Returns "cj_xxx" format
+      }
+    } catch (err) {
+      console.error('CJ product lookup failed:', err.message)
+    }
+  }
+
+  if (supplier.includes('printful')) {
+    try {
+      const { searchPrintful } = await import('../_lib/suppliers.js')
+      const searchTerms = order.product_title.split(' ').slice(0, 3).join(' ')
+      const results = await searchPrintful(searchTerms)
+      if (results.length > 0) {
+        return results[0].id
+      }
+    } catch (err) {
+      console.error('Printful product lookup failed:', err.message)
+    }
+  }
+
+  if (supplier.includes('printify')) {
+    try {
+      const { searchPrintify } = await import('../_lib/suppliers.js')
+      const searchTerms = order.product_title.split(' ').slice(0, 3).join(' ')
+      const results = await searchPrintify(searchTerms)
+      if (results.length > 0) {
+        return results[0].id
+      }
+    } catch (err) {
+      console.error('Printify product lookup failed:', err.message)
+    }
+  }
+
+  if (supplier.includes('gooten')) {
+    try {
+      const { searchGooten } = await import('../_lib/suppliers.js')
+      const searchTerms = order.product_title.split(' ').slice(0, 3).join(' ')
+      const results = await searchGooten(searchTerms)
+      if (results.length > 0) {
+        return results[0].id
+      }
+    } catch (err) {
+      console.error('Gooten product lookup failed:', err.message)
+    }
+  }
+
+  // Fallback: return what we have
+  return storedId || order.id
+}
+
 async function fulfillOrder(order) {
   const shippingAddress = typeof order.shipping_address === 'string'
     ? JSON.parse(order.shipping_address || '{}')
@@ -14,8 +88,11 @@ async function fulfillOrder(order) {
   shippingAddress.name = shippingAddress.name || order.customer_name || ''
   shippingAddress.email = shippingAddress.email || order.customer_email || ''
 
+  // Resolve real supplier product ID (curated IDs won't work with supplier APIs)
+  const productId = await resolveSupplierProductId(order)
+
   const result = await placeSupplierOrder(order.supplier, {
-    productId: order.supplier_product_id || order.id,
+    productId,
     quantity: order.quantity || 1,
     shippingAddress,
   })
@@ -31,14 +108,13 @@ async function fulfillOrder(order) {
     `
     return { orderId: order.id, success: true, supplier_order_id: result.supplier_order_id }
   } else {
-    // Still mark as processing but note the failure so it can be retried
     await sql`
       UPDATE user_orders
-      SET notes = ${`Supplier fulfillment failed: ${result.error}. Manual action required.`},
+      SET notes = ${`Supplier fulfillment failed: ${result.error}`},
           updated_at = NOW()
       WHERE id = ${order.id}
     `
-    return { orderId: order.id, success: false, error: result.error }
+    return { orderId: order.id, success: false, error: result.error, product_title: order.product_title }
   }
 }
 

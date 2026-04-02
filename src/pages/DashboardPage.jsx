@@ -103,12 +103,15 @@ export default function DashboardPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      if (result.fulfilled > 0) {
+      if (result.fulfilled > 0 && result.failed === 0) {
         setActionMessage(`Sent ${result.fulfilled} order(s) to suppliers`)
+      } else if (result.fulfilled > 0 && result.failed > 0) {
+        setActionMessage(`Sent ${result.fulfilled} order(s), ${result.failed} failed`)
       } else if (result.results?.length === 0) {
         setActionMessage('No unfulfilled orders to send')
       } else {
-        setActionMessage(`${result.failed} order(s) failed — check supplier API keys in admin settings`)
+        const errors = (result.results || []).filter(r => !r.success).map(r => `${r.product_title || 'Order'}: ${r.error}`).join('; ')
+        setActionMessage(`${result.failed} order(s) failed — ${errors || 'check supplier API keys'}`)
       }
       await refreshStats()
     } catch (err) {
