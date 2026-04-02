@@ -6,6 +6,37 @@ import { requireAuth } from '../_lib/auth.js'
 import { placeSupplierOrder } from '../_lib/suppliers.js'
 
 /**
+ * Check if the required environment variable for a supplier is set
+ */
+function checkSupplierEnvVars(supplierName) {
+  if (supplierName.includes('cj')) {
+    return {
+      configured: !!process.env.CJ_DROPSHIPPING_API_KEY,
+      needed: 'CJ_DROPSHIPPING_API_KEY',
+    }
+  }
+  if (supplierName.includes('printful')) {
+    return {
+      configured: !!process.env.PRINTFUL_API_KEY,
+      needed: 'PRINTFUL_API_KEY',
+    }
+  }
+  if (supplierName.includes('printify')) {
+    return {
+      configured: !!process.env.PRINTIFY_API_KEY,
+      needed: 'PRINTIFY_API_KEY',
+    }
+  }
+  if (supplierName.includes('gooten')) {
+    return {
+      configured: !!(process.env.GOOTEN_RECIPE_ID && process.env.GOOTEN_PARTNER_BILLING_KEY),
+      needed: 'GOOTEN_RECIPE_ID and GOOTEN_PARTNER_BILLING_KEY',
+    }
+  }
+  return { configured: false, needed: `API key for ${supplierName}` }
+}
+
+/**
  * Resolve a real supplier product ID from the stored product info.
  * Products imported from the curated catalog have IDs like "cur_1" or "cj_xxx"
  * which aren't valid for the supplier's order API. We need to search the
@@ -87,6 +118,19 @@ async function fulfillOrder(order) {
   // Add customer info to shipping address for supplier
   shippingAddress.name = shippingAddress.name || order.customer_name || ''
   shippingAddress.email = shippingAddress.email || order.customer_email || ''
+
+  // Check if the required supplier env var exists before even trying
+  const supplierName = (order.supplier || '').toLowerCase()
+  const envCheck = checkSupplierEnvVars(supplierName)
+  if (!envCheck.configured) {
+    const msg = `${order.supplier} API key not configured. Add ${envCheck.needed} to your Vercel Environment Variables.`
+    await sql`
+      UPDATE user_orders
+      SET notes = ${msg}, updated_at = NOW()
+      WHERE id = ${order.id}
+    `
+    return { orderId: order.id, success: false, error: msg, product_title: order.product_title }
+  }
 
   // Resolve real supplier product ID (curated IDs won't work with supplier APIs)
   const productId = await resolveSupplierProductId(order)
