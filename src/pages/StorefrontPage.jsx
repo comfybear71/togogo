@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle,
