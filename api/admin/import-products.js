@@ -2,21 +2,23 @@
 // GET  /api/admin/import-products — check status
 // POST /api/admin/import-products — trigger import
 import { sql, ensureSchema } from '../_lib/db.js'
-import { requireAdminOrSetup } from '../_lib/auth.js'
+import { getCurrentUser } from '../_lib/auth.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
-  // Auth: JWT Bearer token, x-setup-secret header, or ?secret= query param
-  try {
-    // Allow query param secret for iPad (can't set headers in browser)
-    const querySecret = req.query.secret
-    if (querySecret && querySecret === process.env.JWT_SECRET) {
-      // Authenticated via query param
-    } else {
-      await requireAdminOrSetup(req)
+  // Auth: check JWT then verify role from DATABASE (handles role changes without re-login)
+  const setupSecret = req.headers['x-setup-secret'] || req.query.secret
+  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
+    // Authenticated via setup secret
+  } else {
+    const tokenUser = await getCurrentUser(req)
+    if (!tokenUser) {
+      return res.status(401).json({ error: 'Authentication required' })
     }
-  } catch (err) {
-    return res.status(err?.status || 401).json({ error: err?.message || 'Auth failed' })
+    const { rows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
+    if (!rows[0] || rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' })
+    }
   }
 
   await ensureSchema()

@@ -1,12 +1,23 @@
 // Admin products API — fetches real products from database
 import { sql, ensureSchema } from '../_lib/db.js'
-import { requireAdminOrSetup } from '../_lib/auth.js'
+import { getCurrentUser } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
-  try {
-    await requireAdminOrSetup(req)
-  } catch (err) {
-    return res.status(err?.status || 401).json({ error: err?.message || 'Authentication failed' })
+  // Auth: check JWT token, then verify role from DATABASE (not token payload)
+  // This handles the case where role was updated but token hasn't been refreshed
+  const setupSecret = req.headers['x-setup-secret'] || req.query.secret
+  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
+    // Authenticated via setup secret
+  } else {
+    const tokenUser = await getCurrentUser(req)
+    if (!tokenUser) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+    // Check role from database, not from JWT
+    const { rows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
+    if (!rows[0] || rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' })
+    }
   }
 
   await ensureSchema()
