@@ -7,10 +7,7 @@ import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
-// ─── Read saved theme from localStorage (set in MyShopPage) ──────────────
-function getSavedThemeId() {
-  try { return localStorage.getItem('togogo-store-theme') || DEFAULT_THEME_ID } catch { return DEFAULT_THEME_ID }
-}
+// Theme is now loaded from the store's database record (via API)
 
 // ─── Cart state (in-memory, persisted to sessionStorage per store) ────────
 function useCart(subdomain) {
@@ -48,7 +45,11 @@ export default function StorefrontPage({ subdomain }) {
   const [selectedCategory, setSelectedCategory] = useState('')
   const cart = useCart(subdomain)
 
-  const theme = useMemo(() => getThemeById(getSavedThemeId()), [])
+  // Theme comes from the store's database record, default to midnight (dark)
+  const theme = useMemo(
+    () => getThemeById(storeData?.store?.themeId || 'midnight'),
+    [storeData?.store?.themeId]
+  )
 
   useEffect(() => {
     fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}`)
@@ -71,10 +72,10 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
-    <div className="flex min-h-screen items-center justify-center bg-white">
+    <div className="flex min-h-screen items-center justify-center bg-[#0f172a]">
       <div className="text-center">
-        <Loader2 className="mx-auto h-10 w-10 animate-spin" style={{ color: theme.accent }} />
-        <p className="mt-3 text-sm text-gray-500">Loading store...</p>
+        <Loader2 className="mx-auto h-10 w-10 animate-spin text-[#FF6B35]" />
+        <p className="mt-3 text-sm text-slate-400">Loading store...</p>
       </div>
     </div>
   )

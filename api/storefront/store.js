@@ -29,6 +29,7 @@ export default async function handler(req, res) {
     // Get store info
     const { rows: stores } = await sql`
       SELECT s.id, s.subdomain, s.full_domain, s.store_name, s.status, s.created_at,
+             s.theme_id,
              u.id AS owner_id, u.name AS owner_name, u.avatar_url AS owner_avatar, u.email AS owner_email
       FROM user_stores s
       JOIN users u ON u.id = s.user_id
@@ -104,6 +105,7 @@ export default async function handler(req, res) {
         domain: store.full_domain,
         owner: store.owner_name || store.owner_email?.split('@')[0],
         ownerAvatar: store.owner_avatar,
+        themeId: store.theme_id || 'midnight',
         createdAt: store.created_at,
       },
       products,
