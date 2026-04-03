@@ -44,7 +44,19 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
 
-    const data = await response.json()
+    const rawText = await response.text()
+    console.log('[AliExpress OAuth] Raw response:', rawText.slice(0, 1000))
+
+    let data
+    try {
+      data = JSON.parse(rawText)
+    } catch {
+      return res.json({
+        error: 'AliExpress returned non-JSON response',
+        httpStatus: response.status,
+        raw: rawText.slice(0, 500),
+      })
+    }
     console.log('[AliExpress OAuth] Token response:', JSON.stringify(data).slice(0, 500))
 
     // Check for errors
