@@ -1,70 +1,84 @@
-// Test endpoint — hit this URL to verify AliExpress API is working
+// Debug endpoint — shows RAW AliExpress API response
 // Visit: https://togogo.me/api/test-aliexpress
-// Returns raw product data so you can see images, prices, titles in Vercel logs
-import { queryProducts, queryHotProducts, getProductDetails } from './_lib/suppliers.js'
+import crypto from 'crypto'
+
+function signRequest(params, appSecret) {
+  const sorted = Object.keys(params)
+    .filter(k => k !== 'sign')
+    .sort()
+    .map(k => `${k}${params[k]}`)
+    .join('')
+  return crypto.createHmac('sha256', appSecret).update(sorted).digest('hex').toUpperCase()
+}
 
 export default async function handler(req, res) {
-  const { mode = 'hot', keywords, page = '1' } = req.query
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  const appSecret = process.env.ALIEXPRESS_APP_SECRET
 
-  console.log(`[TEST] AliExpress test — mode=${mode}, keywords=${keywords || '(none)'}, page=${page}`)
-  console.log(`[TEST] ALIEXPRESS_APP_KEY set: ${!!process.env.ALIEXPRESS_APP_KEY}`)
-  console.log(`[TEST] ALIEXPRESS_APP_SECRET set: ${!!process.env.ALIEXPRESS_APP_SECRET}`)
-
-  try {
-    let result
-
-    if (mode === 'hot') {
-      result = await queryHotProducts({ page: parseInt(page), pageSize: 10 })
-    } else if (mode === 'search') {
-      result = await queryProducts({ keywords: keywords || 'phone case', page: parseInt(page), pageSize: 10 })
-    } else if (mode === 'details' && keywords) {
-      // keywords = comma-separated product IDs
-      const details = await getProductDetails(keywords.split(','))
-      result = { products: details, total: details.length }
-    } else {
-      return res.json({ error: 'Use ?mode=hot or ?mode=search&keywords=phone+case or ?mode=details&keywords=PRODUCT_ID' })
-    }
-
-    // Log first product fully for debugging
-    if (result.products.length > 0) {
-      const first = result.products[0]
-      console.log(`[TEST] First product:`)
-      console.log(`  Title: ${first.title}`)
-      console.log(`  Image: ${first.image}`)
-      console.log(`  Images count: ${first.images?.length || 0}`)
-      console.log(`  Cost: $${first.cost}`)
-      console.log(`  Suggested price: $${first.suggestedPrice}`)
-      console.log(`  Category: ${first.category}`)
-      console.log(`  Orders: ${first.orders}`)
-      console.log(`  Affiliate URL: ${first.affiliateUrl?.slice(0, 80)}...`)
-    }
-
-    return res.json({
-      success: true,
-      count: result.products.length,
-      total: result.total,
-      products: result.products.map(p => ({
-        id: p.id,
-        title: p.title,
-        image: p.image,
-        images: p.images,
-        cost: p.cost,
-        originalPrice: p.originalPrice,
-        suggestedPrice: p.suggestedPrice,
-        category: p.category,
-        orders: p.orders,
-        rating: p.rating,
-        discount: p.discount,
-        affiliateUrl: p.affiliateUrl,
-        sourceUrl: p.sourceUrl,
-      })),
-    })
-  } catch (err) {
-    console.error(`[TEST] AliExpress test failed:`, err)
-    return res.status(500).json({
-      success: false,
-      error: err.message,
-      stack: err.stack?.split('\n').slice(0, 5),
-    })
+  if (!appKey || !appSecret) {
+    return res.json({ error: 'Missing API keys', hasKey: !!appKey, hasSecret: !!appSecret })
   }
+
+  const { method: apiMethod } = req.query
+
+  // Try 3 different API methods to see which ones work
+  const methods = apiMethod ? [apiMethod] : [
+    'aliexpress.affiliate.hotproduct.query',
+    'aliexpress.affiliate.product.query',
+    'aliexpress.affiliate.category.get',
+  ]
+
+  const results = {}
+
+  for (const method of methods) {
+    try {
+      const params = {
+        app_key: appKey,
+        method,
+        sign_method: 'hmac-sha256',
+        timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        format: 'json',
+        v: '2.0',
+      }
+
+      // Add method-specific params
+      if (method.includes('hotproduct') || method.includes('product.query')) {
+        params.target_currency = 'AUD'
+        params.target_language = 'EN'
+        params.page_no = '1'
+        params.page_size = '5'
+        params.tracking_id = appKey
+      }
+      if (method.includes('product.query')) {
+        params.keywords = 'phone case'
+      }
+
+      params.sign = signRequest(params, appSecret)
+
+      const qs = new URLSearchParams(params).toString()
+      const url = `https://api-sg.aliexpress.com/sync?${qs}`
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      })
+
+      const text = await response.text()
+      let parsed
+      try { parsed = JSON.parse(text) } catch { parsed = text }
+
+      results[method] = {
+        httpStatus: response.status,
+        response: parsed,
+      }
+    } catch (err) {
+      results[method] = { error: err.message }
+    }
+  }
+
+  return res.json({
+    appKeyPrefix: appKey.slice(0, 4) + '...',
+    timestamp: new Date().toISOString(),
+    results,
+  })
 }
