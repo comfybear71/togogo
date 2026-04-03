@@ -90,7 +90,19 @@ export default async function handler(req, res) {
     const orderStats = ordersResult.rows[0] || {}
     const productStats = productsResult.rows[0] || {}
 
+    // Get Stripe Connect status
+    let stripeConnectStatus = 'not_connected'
+    try {
+      const { rows: storeRows } = await sql`
+        SELECT stripe_connect_status FROM user_stores WHERE user_id = ${user.id}
+      `
+      if (storeRows[0]?.stripe_connect_status) {
+        stripeConnectStatus = storeRows[0].stripe_connect_status
+      }
+    } catch { /* */ }
+
     res.json({
+      stripeConnectStatus,
       user: {
         id: user.id,
         name: user.name,

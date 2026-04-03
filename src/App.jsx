@@ -11,6 +11,7 @@ import StorefrontPage from './pages/StorefrontPage'
 // Core pages loaded eagerly for instant navigation
 import HomePage from './pages/HomePage'
 import SetupPage from './pages/SetupPage'
+import SetupPaymentsPage from './pages/SetupPaymentsPage'
 import MyShopPage from './pages/MyShopPage'
 import SuppliersPage from './pages/SuppliersPage'
 import PromotionsPage from './pages/PromotionsPage'
@@ -109,6 +110,7 @@ export default function App() {
           <Route path="/suppliers" element={<SuppliersPage />} />
           <Route path="/platforms" element={<PlatformsPage />} />
           <Route path="/setup" element={<SetupPage />} />
+          <Route path="/setup-payments" element={<ProtectedRoute><SetupPaymentsPage /></ProtectedRoute>} />
           <Route path="/guide/:platform" element={<PlatformGuidePage />} />
           <Route path="/launch-store" element={<ProtectedRoute><LaunchStorePage /></ProtectedRoute>} />
           <Route path="/create-store" element={<ProtectedRoute><OneClickStorePage /></ProtectedRoute>} />

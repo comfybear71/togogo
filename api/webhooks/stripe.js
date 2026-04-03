@@ -356,6 +356,28 @@ export default async function handler(req, res) {
         break
       }
 
+      // Stripe Connect — account status changed
+      case 'account.updated': {
+        const account = event.data.object
+        const status = account.charges_enabled && account.payouts_enabled
+          ? 'active'
+          : account.details_submitted
+            ? 'pending_verification'
+            : 'onboarding_incomplete'
+
+        try {
+          await sql`
+            UPDATE user_stores
+            SET stripe_connect_status = ${status}, updated_at = NOW()
+            WHERE stripe_connect_id = ${account.id}
+          `
+          console.log(`Connect account ${account.id} status updated to: ${status}`)
+        } catch (err) {
+          console.error('Failed to update connect status:', err.message)
+        }
+        break
+      }
+
       default:
         console.log(`Unhandled event type: ${event.type}`)
         break
