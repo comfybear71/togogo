@@ -1,12 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Search,
-  MoreVertical,
-  AlertTriangle,
-  Trash2,
-  Package,
-  Image,
-  Loader2,
+  Search, MoreVertical, AlertTriangle, Trash2, Package, Image, Loader2,
+  ChevronLeft, ChevronRight, RefreshCw,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -23,36 +18,43 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [sellerFilter, setSellerFilter] = useState('');
   const [actionMenuProduct, setActionMenuProduct] = useState(null);
   const [commissionRate, setCommissionRate] = useState(0.05);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ totalProducts: 0, totalPages: 0 });
+  const ITEMS_PER_PAGE = 50;
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCommission();
-  }, []);
-
-  async function handleImportFromAliExpress() {
-    setImporting(true);
-    setImportResult(null);
+  const fetchProducts = useCallback(async (pg = page, search = searchQuery, cat = categoryFilter) => {
+    setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/import-products`, {
-        method: 'POST',
+      const params = new URLSearchParams({ page: pg, limit: ITEMS_PER_PAGE });
+      if (search) params.set('search', search);
+      if (cat) params.set('category', cat);
+
+      const res = await fetch(`${API_BASE}/api/admin/products?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await res.json();
-      setImportResult(data);
-      if (data.success) fetchProducts();
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(data.products || []);
+        setCategories(data.categories || []);
+        setPagination(data.pagination || { totalProducts: 0, totalPages: 0 });
+      }
     } catch (err) {
-      setImportResult({ error: err.message });
+      console.error('Failed to fetch products:', err);
     } finally {
-      setImporting(false);
+      setLoading(false);
     }
-  }
+  }, [token, page, searchQuery, categoryFilter]);
+
+  useEffect(() => { fetchProducts(); fetchCommission(); }, []);
+
+  useEffect(() => { fetchProducts(page, searchQuery, categoryFilter); }, [page, searchQuery, categoryFilter]);
 
   async function fetchCommission() {
     try {
@@ -64,20 +66,24 @@ export default function ProductsPage() {
     } catch { /* use default */ }
   }
 
-  async function fetchProducts() {
+  async function handleImportFromAliExpress() {
+    setImporting(true);
+    setImportResult(null);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/products`, {
+      const res = await fetch(`${API_BASE}/api/admin/import-products`, {
+        method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data.products || []);
-        setCategories(data.categories || []);
+      const data = await res.json();
+      setImportResult(data);
+      if (data.success) {
+        setPage(1);
+        fetchProducts(1, '', '');
       }
     } catch (err) {
-      console.error('Failed to fetch products:', err);
+      setImportResult({ error: err.message });
     } finally {
-      setLoading(false);
+      setImporting(false);
     }
   }
 
@@ -95,48 +101,55 @@ export default function ProductsPage() {
     }
   }
 
-  const filteredProducts = products.filter((p) => {
-    if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    if (categoryFilter && p.category !== categoryFilter) return false;
-    if (statusFilter === 'active' && !p.is_active) return false;
-    if (statusFilter === 'inactive' && p.is_active) return false;
-    if (sellerFilter && !(p.seller_name || '').toLowerCase().includes(sellerFilter.toLowerCase())) return false;
-    return true;
-  });
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-[#FF6B35]" />
-      </div>
-    );
+  function handleSearch(e) {
+    e.preventDefault();
+    setPage(1);
+    setSearchQuery(searchInput);
   }
 
-  // Summary stats
-  const totalProducts = products.length;
-  const activeProducts = products.filter(p => p.is_active).length;
-  const totalSupplierCost = products.reduce((s, p) => s + (parseFloat(p.supplier_cost) || 0), 0);
-  const totalCommission = products.reduce((s, p) => s + ((parseFloat(p.supplier_cost) || 0) * commissionRate), 0);
+  // Client-side status filter (since status isn't paginated server-side)
+  const filteredProducts = statusFilter
+    ? products.filter(p => statusFilter === 'active' ? p.is_active : !p.is_active)
+    : products;
+
+  // Summary stats for current page
+  const totalSupplierCost = filteredProducts.reduce((s, p) => s + (parseFloat(p.supplier_cost) || 0), 0);
+  const totalCommission = filteredProducts.reduce((s, p) => s + ((parseFloat(p.supplier_cost) || 0) * commissionRate), 0);
   const totalWePay = totalSupplierCost + totalCommission;
-  const totalSaleValue = products.reduce((s, p) => s + (parseFloat(p.sale_price) || 0), 0);
+  const totalSaleValue = filteredProducts.reduce((s, p) => s + (parseFloat(p.sale_price) || 0), 0);
   const totalProfit = totalSaleValue - totalWePay;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-bold text-white">Product Management</h1>
-          <p className="text-zinc-500">All products across all sellers — costs, commission, and profit at a glance.</p>
+          <p className="text-zinc-500">
+            {pagination.totalProducts > 0
+              ? `${pagination.totalProducts.toLocaleString()} products across all stores`
+              : 'Import products from AliExpress to get started'}
+          </p>
         </div>
-        <button
-          onClick={handleImportFromAliExpress}
-          disabled={importing}
-          className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#e85d2c] transition-colors disabled:opacity-50"
-        >
-          {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-          {importing ? 'Importing...' : 'Import from AliExpress'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchProducts()}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2.5 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+          <button
+            onClick={handleImportFromAliExpress}
+            disabled={importing}
+            className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#e85d2c] transition-colors disabled:opacity-50"
+          >
+            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+            {importing ? 'Importing...' : 'Import from AliExpress'}
+          </button>
+        </div>
       </div>
+
+      {/* Import Result */}
       {importResult && (
         <div className={`rounded-xl p-3 text-sm ${importResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
           {importResult.success
@@ -149,13 +162,13 @@ export default function ProductsPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="rounded-[16px] bg-[#111] p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total Products</p>
-          <p className="text-xl font-bold text-white">{totalProducts}</p>
-          <p className="text-[10px] text-zinc-600">{activeProducts} active</p>
+          <p className="text-xl font-bold text-white">{pagination.totalProducts.toLocaleString()}</p>
+          <p className="text-[10px] text-zinc-600">page {page} of {pagination.totalPages}</p>
         </div>
         <div className="rounded-[16px] bg-[#111] p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Supplier Cost</p>
           <p className="text-xl font-bold text-zinc-300">${totalSupplierCost.toFixed(2)}</p>
-          <p className="text-[10px] text-zinc-600">Raw cost total</p>
+          <p className="text-[10px] text-zinc-600">This page</p>
         </div>
         <div className="rounded-[16px] bg-[#111] p-4">
           <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Commission</p>
@@ -183,20 +196,23 @@ export default function ProductsPage() {
 
       {/* Search & Filters */}
       <div className="rounded-[16px] bg-[#111] p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
             <input
               type="text"
               placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
             />
           </div>
+          <button type="submit" className="rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#e85d2c]">
+            Search
+          </button>
           <select
             value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
             className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
           >
             <option value="">All Categories</option>
@@ -207,28 +223,26 @@ export default function ProductsPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm capitalize text-white focus:border-[#FF6B35] focus:outline-none"
+            className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
           >
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-          <input
-            type="text"
-            placeholder="Filter by seller..."
-            value={sellerFilter}
-            onChange={(e) => setSellerFilter(e.target.value)}
-            className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
-          />
-        </div>
+        </form>
       </div>
 
       {/* Products Table */}
       <div className="rounded-[16px] bg-[#111] p-6">
-        {filteredProducts.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-[#FF6B35]" />
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className="py-12 text-center">
             <Package className="mx-auto h-12 w-12 text-zinc-700 mb-3" />
             <p className="text-sm text-zinc-500">No products found</p>
+            <p className="text-xs text-zinc-600 mt-1">Click "Import from AliExpress" to load products</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -244,7 +258,6 @@ export default function ProductsPage() {
                   <th className="pb-3 pr-4">Category</th>
                   <th className="pb-3 pr-4">Seller</th>
                   <th className="pb-3 pr-4">Status</th>
-                  <th className="pb-3 pr-4">Sold</th>
                   <th className="pb-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -260,34 +273,32 @@ export default function ProductsPage() {
                     <tr key={p.id} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]">
                       <td className="py-3 pr-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] overflow-hidden">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/[0.06] overflow-hidden flex-shrink-0">
                             {p.image ? (
                               <img src={p.image} alt="" className="h-full w-full object-cover" />
                             ) : (
                               <Image className="h-5 w-5 text-zinc-600" />
                             )}
                           </div>
-                          <p className="font-medium text-white max-w-[200px] truncate">{p.title}</p>
+                          <p className="font-medium text-white max-w-[200px] truncate" title={p.title}>{p.title}</p>
                         </div>
                       </td>
                       <td className="py-3 pr-4 text-zinc-400">${supplierCost.toFixed(2)}</td>
                       <td className="py-3 pr-4">
                         <span className="text-[#FFD23F]">${commissionAmt.toFixed(2)}</span>
-                        <span className="text-zinc-600 text-[10px] ml-1">({(commissionRate * 100).toFixed(0)}%)</span>
                       </td>
                       <td className="py-3 pr-4 font-medium text-zinc-300">${userCost.toFixed(2)}</td>
                       <td className="py-3 pr-4 font-medium text-white">${salePrice.toFixed(2)}</td>
                       <td className={`py-3 pr-4 font-semibold ${profit > 0 ? 'text-[#06D6A0]' : 'text-red-400'}`}>
                         {profit > 0 ? '+' : ''}${profit.toFixed(2)}
                       </td>
-                      <td className="py-3 pr-4 text-zinc-400">{p.category || 'General'}</td>
-                      <td className="py-3 pr-4 text-zinc-400">{p.seller_name || p.seller_email}</td>
+                      <td className="py-3 pr-4 text-zinc-400 max-w-[120px] truncate">{p.category || 'General'}</td>
+                      <td className="py-3 pr-4 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>
                       <td className="py-3 pr-4">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColors[status]}`}>
                           {status}
                         </span>
                       </td>
-                      <td className="py-3 pr-4 text-zinc-400">{p.total_sold || 0}</td>
                       <td className="relative py-3 text-right">
                         <button
                           onClick={() => setActionMenuProduct(actionMenuProduct === p.id ? null : p.id)}
@@ -318,6 +329,32 @@ export default function ProductsPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/[0.06]">
+            <p className="text-xs text-zinc-500">
+              Showing {((page - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(page * ITEMS_PER_PAGE, pagination.totalProducts)} of {pagination.totalProducts.toLocaleString()}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="flex items-center gap-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-zinc-400 hover:text-white disabled:opacity-30"
+              >
+                <ChevronLeft className="h-3 w-3" /> Prev
+              </button>
+              <span className="text-xs text-zinc-500">Page {page} of {pagination.totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                disabled={page >= pagination.totalPages}
+                className="flex items-center gap-1 rounded-lg border border-white/[0.08] px-3 py-1.5 text-xs text-zinc-400 hover:text-white disabled:opacity-30"
+              >
+                Next <ChevronRight className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         )}
       </div>
