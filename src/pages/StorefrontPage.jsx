@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle,
@@ -45,11 +45,8 @@ export default function StorefrontPage({ subdomain }) {
   const [selectedCategory, setSelectedCategory] = useState('')
   const cart = useCart(subdomain)
 
-  // Theme comes from the store's database record, default to midnight (dark)
-  const theme = useMemo(
-    () => getThemeById(storeData?.store?.themeId || 'midnight'),
-    [storeData?.store?.themeId]
-  )
+  // Always use midnight (dark) theme — stored in database, never localStorage
+  const theme = getThemeById(storeData?.store?.themeId || 'midnight')
 
   useEffect(() => {
     fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}`)
@@ -81,14 +78,14 @@ export default function StorefrontPage({ subdomain }) {
   )
 
   if (!storeData) return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
+    <div className="flex min-h-screen items-center justify-center bg-[#0f172a]">
       <div className="text-center max-w-md px-6">
-        <Store className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Store Not Found</h1>
-        <p className="text-gray-500 mb-6">
-          The store at <strong>{subdomain}.togogo.me</strong> doesn't exist or hasn't been set up yet.
+        <Store className="mx-auto h-16 w-16 text-slate-600 mb-4" />
+        <h1 className="text-2xl font-bold text-white mb-2">Store Not Found</h1>
+        <p className="text-slate-400 mb-6">
+          The store at <strong className="text-white">{subdomain}.togogo.me</strong> doesn't exist or hasn't been set up yet.
         </p>
-        <a href="https://togogo.me" className="inline-block rounded-xl px-6 py-3 text-sm font-medium text-white" style={{ backgroundColor: theme.accent }}>
+        <a href="https://togogo.me" className="inline-block rounded-xl px-6 py-3 text-sm font-medium text-white bg-[#FF6B35] hover:bg-[#e85d2c]">
           Visit ToGoGo
         </a>
       </div>
@@ -143,32 +140,24 @@ export default function StorefrontPage({ subdomain }) {
           <ChevronLeft className="h-4 w-4" /> Back to products
         </button>
         <div className="grid gap-8 md:grid-cols-2">
-          <div className={`aspect-square overflow-hidden rounded-2xl ${theme.cardBg}`}>
-            {selectedProduct.image ? (
-              <img src={selectedProduct.image} alt={selectedProduct.title} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Package className="h-20 w-20 text-gray-300" />
-              </div>
-            )}
-          </div>
+          <ProductImageGallery product={selectedProduct} />
           <div>
             <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{selectedProduct.category}</p>
-            <h1 className={`text-2xl font-bold ${theme.textPrimary} mb-3`}>{selectedProduct.title}</h1>
-            <p className={`text-3xl font-bold ${theme.textPrimary} mb-4`}>${selectedProduct.price.toFixed(2)}</p>
-            {selectedProduct.description && (
-              <p className={`${theme.textSecondary} mb-6 leading-relaxed`}>{selectedProduct.description}</p>
+            <h1 className="text-2xl font-bold text-white mb-3">{selectedProduct.title}</h1>
+            <p className="text-3xl font-bold text-white mb-4">${selectedProduct.price.toFixed(2)}</p>
+            {selectedProduct.description && selectedProduct.description !== selectedProduct.title && (
+              <p className="text-slate-400 mb-6 leading-relaxed">{selectedProduct.description}</p>
             )}
             <div className="flex gap-3 mb-6">
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${theme.textSecondary}`} style={{ backgroundColor: theme.accentLight }}>
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Truck className="h-4 w-4" /> Free Shipping
               </div>
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${theme.textSecondary}`} style={{ backgroundColor: theme.accentLight }}>
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection
               </div>
             </div>
             {selectedProduct.totalSold > 0 && (
-              <p className={`text-xs ${theme.textMuted} mb-4`}>{selectedProduct.totalSold.toLocaleString()} sold</p>
+              <p className="text-xs text-slate-500 mb-4">{selectedProduct.totalSold.toLocaleString()} sold</p>
             )}
             <button
               onClick={() => { cart.add(selectedProduct); setView('cart') }}
@@ -260,9 +249,12 @@ export default function StorefrontPage({ subdomain }) {
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
 
       {/* Hero */}
-      <div className={`${theme.heroBg} py-12 px-4 text-center text-white`}>
-        <h1 className="text-3xl font-bold md:text-4xl">{store.name}</h1>
-        <p className="mt-2 text-white/80">Quality products, fast shipping</p>
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] py-16 px-4 text-center">
+        <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 50% 50%, ${theme.accent}40, transparent 70%)` }} />
+        <h1 className="relative text-4xl font-extrabold tracking-tight md:text-5xl bg-gradient-to-r from-white via-slate-200 to-white bg-clip-text text-transparent animate-pulse" style={{ animationDuration: '3s' }}>
+          {store.name}
+        </h1>
+        <p className="relative mt-3 text-slate-400">Quality products, fast shipping</p>
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8">
@@ -363,27 +355,35 @@ export default function StorefrontPage({ subdomain }) {
 // ─── Store Header ─────────────────────────────────────────────────────────
 function StoreHeader({ store, cart, theme, onCartClick }) {
   return (
-    <header className={`sticky top-0 z-40 border-b ${theme.headerBg} backdrop-blur`} style={{ borderColor: theme.accentLight }}>
+    <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
             <Store className="h-4 w-4 text-white" />
           </div>
-          <span className={`text-lg font-bold ${theme.headerText}`}>{store.name}</span>
+          <span className="text-lg font-bold text-white">{store.name}</span>
         </div>
-        <button
-          onClick={onCartClick}
-          className={`relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium ${theme.headerText} transition-colors`}
-          style={{ backgroundColor: theme.accentLight }}
-        >
-          <ShoppingCart className="h-4 w-4" />
-          Cart
-          {cart.count > 0 && (
-            <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: theme.accent }}>
-              {cart.count}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          <a
+            href="/auth"
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
+          >
+            Sign In
+          </a>
+          <button
+            onClick={onCartClick}
+            className="relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition-colors"
+            style={{ backgroundColor: theme.accent }}
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Cart
+            {cart.count > 0 && (
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white bg-red-500">
+                {cart.count}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
     </header>
   )
@@ -506,6 +506,51 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
           </p>
         </form>
       </div>
+    </div>
+  )
+}
+
+// ─── Product Image Gallery — shows all images with thumbnails ──────────
+function ProductImageGallery({ product }) {
+  const [selectedIdx, setSelectedIdx] = useState(0)
+  const images = (product.images && product.images.length > 0)
+    ? [...new Set(product.images)].filter(Boolean) // deduplicate
+    : product.image ? [product.image] : []
+
+  if (images.length === 0) {
+    return (
+      <div className="aspect-square rounded-2xl bg-[#1e293b] flex items-center justify-center">
+        <Package className="h-20 w-20 text-slate-600" />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Main image */}
+      <div className="aspect-square overflow-hidden rounded-2xl bg-[#1e293b] mb-3">
+        <img
+          src={images[selectedIdx] || images[0]}
+          alt={product.title}
+          className="h-full w-full object-contain"
+        />
+      </div>
+      {/* Thumbnails */}
+      {images.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {images.map((img, i) => (
+            <button
+              key={i}
+              onClick={() => setSelectedIdx(i)}
+              className={`flex-shrink-0 h-16 w-16 rounded-lg overflow-hidden border-2 transition-all ${
+                i === selectedIdx ? 'border-[#FF6B35] ring-2 ring-[#FF6B35]/30' : 'border-white/[0.08] hover:border-white/[0.2]'
+              }`}
+            >
+              <img src={img} alt="" className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
