@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const params = {
       app_key: appKey,
       sign_method: 'hmac-sha256',
-      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      timestamp: String(Date.now()),
       code,
     }
     params.sign = signRequest(params, appSecret)
