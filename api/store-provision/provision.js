@@ -278,20 +278,21 @@ async function executeStep(stepId, userId, subdomain, fullDomain, storeName) {
   }
 }
 
-// Product import — auto-populate store with curated trending products from all suppliers
+// Product import — stores get products from live AliExpress API data only
+// No curated/sample products are imported — real data only
 async function importStarterProducts(userId) {
   try {
-    // Dynamically import the curated trending catalog
-    const { getCuratedTrending } = await import('../_lib/suppliers.js')
-    const products = getCuratedTrending() // returns all curated products when no filter
+    // Import live AliExpress products from the supplier cache
+    const { searchAliExpress } = await import('../_lib/suppliers.js')
+    const products = await searchAliExpress('', 1) // fetch trending products
 
     if (!products || products.length === 0) {
-      console.log('No curated products to import')
+      console.log('No AliExpress products available to import — API keys may not be configured')
       return
     }
 
     let imported = 0
-    for (const p of products) {
+    for (const p of products.slice(0, 50)) { // import up to 50 starter products
       try {
         await sql`
           INSERT INTO user_products (
@@ -312,7 +313,7 @@ async function importStarterProducts(userId) {
         console.log(`Product import skipped: ${p.title} — ${err.message}`)
       }
     }
-    console.log(`Imported ${imported} products for user ${userId}`)
+    console.log(`Imported ${imported} AliExpress products for user ${userId}`)
   } catch (err) {
     console.error('Product import failed:', err.message)
   }

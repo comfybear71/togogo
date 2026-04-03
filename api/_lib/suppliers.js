@@ -372,210 +372,6 @@ function normaliseAliExpressProduct(p) {
   }
 }
 
-export function getSampleAliExpressProducts() {
-  return []
-}
-
-// ============================================
-// CURATED TRENDING CATALOG
-// Real product data with images for the home screen
-// These are the best-selling dropshipping products
-// ============================================
-const CURATED_TRENDING = [
-  // --- Electronics & Gadgets ---
-  { id: 'cur_1', title: 'Wireless Bluetooth Earbuds Pro', description: 'TWS earbuds with noise cancellation, 30hr battery life, touch controls. Top seller worldwide.', image: 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop', cost: 6.50, shipping: 2.00, suggestedPrice: 29.99, deliveryDays: 10, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Electronics', tags: ['earbuds', 'wireless', 'bluetooth', 'electronics'] },
-  { id: 'cur_2', title: 'LED Strip Lights RGB 5M', description: 'Smart RGB LED strip with app control, music sync, 16M colours. Room decor essential.', image: 'https://images.unsplash.com/photo-1615066390971-03e4e1c36ddf?w=400&h=400&fit=crop', cost: 3.20, shipping: 1.50, suggestedPrice: 19.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Electronics', tags: ['led', 'light', 'strip', 'rgb', 'room', 'decor'] },
-  { id: 'cur_3', title: 'MagSafe Wireless Charger 15W', description: 'Fast wireless charging pad, compatible with iPhone & Android. Slim design.', image: 'https://images.unsplash.com/photo-1622957461168-202e5b43174e?w=400&h=400&fit=crop', cost: 4.80, shipping: 1.50, suggestedPrice: 24.99, deliveryDays: 10, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Electronics', tags: ['charger', 'wireless', 'phone', 'magsafe'] },
-  { id: 'cur_4', title: 'Portable Mini Projector HD', description: 'Pocket-sized 1080p projector with WiFi, HDMI. Perfect for movie nights.', image: 'https://images.unsplash.com/photo-1626379953822-baec19c3accd?w=400&h=400&fit=crop', cost: 28.00, shipping: 5.00, suggestedPrice: 89.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Electronics', tags: ['projector', 'mini', 'portable', 'hd'] },
-
-  // --- Phone Cases ---
-  { id: 'cur_5', title: 'iPhone 15 Clear MagSafe Case', description: 'Crystal clear case with MagSafe ring, shock-absorbent edges. Best seller.', image: 'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=400&h=400&fit=crop', cost: 2.20, shipping: 1.00, suggestedPrice: 14.99, deliveryDays: 10, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Electronics', tags: ['phone', 'case', 'iphone', 'clear'] },
-
-  // --- Fashion & Accessories ---
-  { id: 'cur_6', title: 'Oversized Vintage Sunglasses', description: 'Retro thick-frame sunglasses, UV400. Trending on TikTok. Multiple colours.', image: 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop', cost: 1.80, shipping: 1.00, suggestedPrice: 14.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Fashion', tags: ['sunglasses', 'fashion', 'vintage', 'accessories'] },
-  { id: 'cur_7', title: 'Minimalist Watch — Unisex', description: 'Stainless steel mesh band, Japanese movement. Elegant everyday watch.', image: 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400&h=400&fit=crop', cost: 5.50, shipping: 2.00, suggestedPrice: 34.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Fashion', tags: ['watch', 'minimalist', 'fashion', 'unisex'] },
-  { id: 'cur_8', title: 'Gold Layered Necklace Set', description: '3-piece layered necklace set, 18K gold plated. Dainty everyday jewellery.', image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop', cost: 2.50, shipping: 1.00, suggestedPrice: 19.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Fashion', tags: ['necklace', 'jewellery', 'gold', 'layered', 'fashion'] },
-
-  // --- T-Shirts & Apparel ---
-  { id: 'cur_9', title: 'Unisex Cotton T-Shirt', description: 'Premium cotton tee, comfortable fit. Multiple colours available.', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop', cost: 5.50, shipping: 2.00, suggestedPrice: 24.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Fashion', tags: ['t-shirt', 'tee', 'apparel'] },
-
-  // --- Mugs ---
-  { id: 'cur_10', title: 'Ceramic Mug 11oz', description: 'Classic white ceramic mug, dishwasher safe. Great for everyday use.', image: 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=400&h=400&fit=crop', cost: 1.80, shipping: 2.50, suggestedPrice: 12.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Home', tags: ['mug', 'ceramic'] },
-
-  // --- Home & Living ---
-  { id: 'cur_11', title: 'Smart Sunset Lamp Projector', description: 'USB sunset projection lamp, 180-degree rotation. TikTok viral product.', image: 'https://images.unsplash.com/photo-1543332164-6e82f355badc?w=400&h=400&fit=crop', cost: 4.50, shipping: 2.00, suggestedPrice: 24.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Home', tags: ['lamp', 'sunset', 'home', 'decor', 'tiktok'] },
-  { id: 'cur_12', title: 'Kitchen Organiser Spice Rack', description: 'Rotating 360-degree spice rack, holds 20+ jars. Space saver.', image: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=400&fit=crop', cost: 5.80, shipping: 3.00, suggestedPrice: 29.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Home', tags: ['kitchen', 'organiser', 'spice', 'rack', 'home'] },
-  { id: 'cur_13', title: 'Throw Pillow 18x18', description: 'Double-sided, concealed zipper. Soft polyester cover.', image: 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?w=400&h=400&fit=crop', cost: 4.00, shipping: 2.50, suggestedPrice: 19.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Home', tags: ['pillow', 'home', 'decor'] },
-
-  // --- Beauty & Health ---
-  { id: 'cur_14', title: 'LED Face Mask — Red Light Therapy', description: '7-colour LED therapy mask. Anti-ageing, acne treatment. Viral beauty product.', image: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273?w=400&h=400&fit=crop', cost: 8.50, shipping: 3.00, suggestedPrice: 39.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Beauty', tags: ['beauty', 'led', 'face', 'mask', 'skincare'] },
-  { id: 'cur_15', title: 'Ice Roller Face Massager', description: 'Stainless steel ice roller, reduces puffiness & redness. Self-care essential.', image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=400&fit=crop', cost: 1.50, shipping: 1.00, suggestedPrice: 12.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Beauty', tags: ['beauty', 'ice', 'roller', 'skincare', 'massage'] },
-  { id: 'cur_16', title: 'Professional Makeup Brush Set 12pc', description: 'Soft synthetic brushes, rose gold handles. Complete set for face & eyes.', image: 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop', cost: 4.80, shipping: 2.00, suggestedPrice: 24.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Beauty', tags: ['makeup', 'brush', 'beauty', 'cosmetics'] },
-
-  // --- Hoodies ---
-  { id: 'cur_17', title: 'Unisex Pullover Hoodie', description: 'Cotton/poly blend hoodie, warm and comfortable. Multiple sizes.', image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop', cost: 12.00, shipping: 3.00, suggestedPrice: 39.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Fashion', tags: ['hoodie', 'apparel'] },
-
-  // --- Posters & Wall Art ---
-  { id: 'cur_18', title: 'Wall Art Canvas Print', description: 'High-quality canvas print, vibrant colours. Ready to hang.', image: 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=400&h=400&fit=crop', cost: 5.00, shipping: 3.00, suggestedPrice: 24.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Home', tags: ['poster', 'wall', 'art', 'canvas'] },
-
-  // --- Sports & Fitness ---
-  { id: 'cur_19', title: 'Insulated Water Bottle 750ml', description: 'Double-wall vacuum insulated, keeps drinks cold 24hrs. Powder coated.', image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop', cost: 4.50, shipping: 2.50, suggestedPrice: 24.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Sports', tags: ['water', 'bottle', 'sports', 'fitness', 'insulated'] },
-  { id: 'cur_20', title: 'Resistance Bands Set (5 Pack)', description: 'Latex-free resistance bands with carry bag. 5 resistance levels.', image: 'https://images.unsplash.com/photo-1598289431512-b97b0917affc?w=400&h=400&fit=crop', cost: 2.80, shipping: 1.50, suggestedPrice: 16.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Sports', tags: ['resistance', 'bands', 'fitness', 'gym', 'sports'] },
-  { id: 'cur_21', title: 'Yoga Mat 6mm — Non-Slip', description: 'TPE eco-friendly yoga mat, alignment lines, carrying strap included.', image: 'https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=400&h=400&fit=crop', cost: 6.00, shipping: 3.00, suggestedPrice: 29.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Sports', tags: ['yoga', 'mat', 'fitness', 'sports'] },
-
-  // --- Pets ---
-  { id: 'cur_22', title: 'Interactive Dog Toy — Treat Ball', description: 'Slow feeder puzzle toy, durable rubber. Keeps dogs entertained for hours.', image: 'https://images.unsplash.com/photo-1535294435445-d7249b8f7b5f?w=400&h=400&fit=crop', cost: 2.50, shipping: 1.50, suggestedPrice: 14.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Pets', tags: ['dog', 'toy', 'pet', 'interactive'] },
-  { id: 'cur_23', title: 'Elevated Pet Bowl Set', description: 'Raised stainless steel bowls with bamboo stand. Better for pet digestion.', image: 'https://images.unsplash.com/photo-1583337130417-13104dec14a1?w=400&h=400&fit=crop', cost: 5.00, shipping: 2.50, suggestedPrice: 24.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Pets', tags: ['pet', 'bowl', 'dog', 'cat', 'elevated'] },
-
-  // --- Tote Bags ---
-  { id: 'cur_24', title: 'Canvas Tote Bag', description: 'Heavy-duty cotton canvas tote. Eco-friendly, reusable.', image: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&h=400&fit=crop', cost: 3.00, shipping: 2.00, suggestedPrice: 14.99, deliveryDays: 14, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Fashion', tags: ['tote', 'bag', 'canvas'] },
-
-  // --- Automotive ---
-  { id: 'cur_26', title: 'Magnetic Car Phone Mount', description: 'Strong magnet, 360-degree rotation, dashboard or vent mount.', image: 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop', cost: 2.00, shipping: 1.50, suggestedPrice: 14.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Automotive', tags: ['car', 'phone', 'mount', 'magnetic', 'automotive'] },
-  { id: 'cur_27', title: 'LED Car Interior Lights', description: 'RGB ambient lighting strip, app controlled, music sync. Easy install.', image: 'https://images.unsplash.com/photo-1615066390971-03e4e1c36ddf?w=400&h=400&fit=crop', cost: 4.00, shipping: 2.00, suggestedPrice: 19.99, deliveryDays: 12, supplier: 'AliExpress', supplierLogo: '🛒', category: 'Automotive', tags: ['car', 'led', 'light', 'interior', 'automotive'] },
-]
-
-// Normalise curated products to full format
-function normaliseCuratedProduct(p) {
-  const cost = p.cost
-  const shipping = p.shipping
-  const totalCost = Math.round((cost + shipping) * 100) / 100
-  const suggestedPrice = p.suggestedPrice
-  const suggestedMargin = Math.round((suggestedPrice - totalCost) * 100) / 100
-
-  return {
-    id: p.id,
-    title: p.title,
-    description: p.description,
-    image: p.image,
-    images: [p.image],
-    cost,
-    shipping,
-    totalCost,
-    suggestedPrice,
-    suggestedMargin,
-    deliveryDays: p.deliveryDays,
-    supplier: p.supplier,
-    supplierLogo: p.supplierLogo,
-    sourceUrl: '',
-    minOrderQty: 1,
-    category: p.category,
-    customisable: p.customisable || false,
-    tags: p.tags || [],
-    _live: false,
-    _curated: true,
-  }
-}
-
-// Get curated trending products filtered by category/search
-export function getCuratedTrending(category, query) {
-  let items = CURATED_TRENDING
-
-  if (category) {
-    const catLower = category.toLowerCase()
-    items = items.filter(p =>
-      p.category.toLowerCase() === catLower ||
-      p.tags.some(t => t === catLower)
-    )
-  }
-
-  if (query) {
-    const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2)
-    items = items.filter(p => {
-      const text = [p.title, p.description, p.category, ...p.tags].join(' ').toLowerCase()
-      return words.some(w => text.includes(w))
-    })
-  }
-
-  return items.map(normaliseCuratedProduct)
-}
-
-// ============================================
-// SAMPLE DATA (when no API keys configured)
-// Now with real Unsplash images
-// ============================================
-const SAMPLE_IMAGES = {
-  // Electronics
-  'phone case': 'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=400&h=400&fit=crop',
-  'led light': 'https://images.unsplash.com/photo-1615066390971-03e4e1c36ddf?w=400&h=400&fit=crop',
-  'led strip': 'https://images.unsplash.com/photo-1615066390971-03e4e1c36ddf?w=400&h=400&fit=crop',
-  'earbuds': 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop',
-  'wireless': 'https://images.unsplash.com/photo-1590658268037-6bf12f032f55?w=400&h=400&fit=crop',
-  'charger': 'https://images.unsplash.com/photo-1622957461168-202e5b43174e?w=400&h=400&fit=crop',
-  'portable charger': 'https://images.unsplash.com/photo-1609091839311-d5365f9ff1c5?w=400&h=400&fit=crop',
-  // Fashion
-  'sunglasses': 'https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&h=400&fit=crop',
-  'watch': 'https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=400&h=400&fit=crop',
-  'jewellery': 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop',
-  'necklace': 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop',
-  // Apparel
-  't-shirt': 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop',
-  'hoodie': 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=400&h=400&fit=crop',
-  'mug': 'https://images.unsplash.com/photo-1514228742587-6b1558fcca3d?w=400&h=400&fit=crop',
-  'poster': 'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=400&h=400&fit=crop',
-  // Home
-  'pillow': 'https://images.unsplash.com/photo-1584100936595-c0654b55a2e2?w=400&h=400&fit=crop',
-  'blanket': 'https://images.unsplash.com/photo-1580301762395-21ce4d7a4c1d?w=400&h=400&fit=crop',
-  'kitchen': 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=400&fit=crop',
-  'organiser': 'https://images.unsplash.com/photo-1506806732259-39c2d0268443?w=400&h=400&fit=crop',
-  // Beauty
-  'makeup brush': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
-  'makeup': 'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=400&h=400&fit=crop',
-  'skincare': 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=400&h=400&fit=crop',
-  'beauty': 'https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=400&h=400&fit=crop',
-  'hair': 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&h=400&fit=crop',
-  // Sports
-  'water bottle': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&h=400&fit=crop',
-  'yoga mat': 'https://images.unsplash.com/photo-1601925260368-ae2f83cf8b7f?w=400&h=400&fit=crop',
-  'resistance band': 'https://images.unsplash.com/photo-1598289431512-b97b0917affc?w=400&h=400&fit=crop',
-  'gym bag': 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&h=400&fit=crop',
-  'bag': 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=400&h=400&fit=crop',
-  // Pets
-  'dog toy': 'https://images.unsplash.com/photo-1535294435445-d7249b8f7b5f?w=400&h=400&fit=crop',
-  'pet bed': 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&h=400&fit=crop',
-  'cat toy': 'https://images.unsplash.com/photo-1574158622682-e40e69881006?w=400&h=400&fit=crop',
-  'pet bowl': 'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=400&h=400&fit=crop',
-  'pet': 'https://images.unsplash.com/photo-1535294435445-d7249b8f7b5f?w=400&h=400&fit=crop',
-  // Toys
-  'fidget toy': 'https://images.unsplash.com/photo-1622297845775-5ff3fef71d13?w=400&h=400&fit=crop',
-  'fidget': 'https://images.unsplash.com/photo-1622297845775-5ff3fef71d13?w=400&h=400&fit=crop',
-  'puzzle': 'https://images.unsplash.com/photo-1606503153255-59d8b8b82176?w=400&h=400&fit=crop',
-  'rc car': 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400&h=400&fit=crop',
-  'plush': 'https://images.unsplash.com/photo-1559715541-5daf8a0296d0?w=400&h=400&fit=crop',
-  'toy': 'https://images.unsplash.com/photo-1558060370-d644479cb6f7?w=400&h=400&fit=crop',
-  // Automotive
-  'car phone': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
-  'car light': 'https://images.unsplash.com/photo-1489824904134-891ab64532f1?w=400&h=400&fit=crop',
-  'car organiser': 'https://images.unsplash.com/photo-1502877338535-766e1452684a?w=400&h=400&fit=crop',
-  'dash cam': 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400&h=400&fit=crop',
-  'car': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
-  // Category name fallbacks (when search term is just the category name)
-  'fashion': 'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=400&h=400&fit=crop',
-  'electronics': 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=400&h=400&fit=crop',
-  'sports': 'https://images.unsplash.com/photo-1461896836934-bd45ba74d23f?w=400&h=400&fit=crop',
-  'automotive': 'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=400&h=400&fit=crop',
-  'custom': 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400&h=400&fit=crop',
-}
-
-function getImageForQuery(query) {
-  const q = (query || '').toLowerCase()
-  for (const [key, url] of Object.entries(SAMPLE_IMAGES)) {
-    if (q.includes(key)) return url
-  }
-  return ''
-}
-
-
-// Simple hash for deterministic sample IDs
-function hash(str) {
-  let h = 0
-  for (let i = 0; i < str.length; i++) {
-    h = ((h << 5) - h) + str.charCodeAt(i)
-    h |= 0
-  }
-  return Math.abs(h).toString(36)
-}
-
 // ============================================
 // PRICE COMPARISON — Group same/similar products
 // ============================================
@@ -587,7 +383,7 @@ export function groupByProduct(products) {
     .replace(/\s+/g, ' ')
     .trim()
     // Remove supplier-specific suffixes
-    .replace(/\s*-\s*(premium|budget|deluxe|value|bulk|custom|print|your design).*$/i, '')
+    .replace(/\s*-\s*(premium|budget|deluxe|value|bulk).*$/i, '')
     .replace(/\s*(from aliexpress).*$/i, '')
 
   const groups = new Map()
@@ -606,7 +402,7 @@ export function groupByProduct(products) {
   const result = []
   for (const [, group] of groups) {
     if (group.length > 1) {
-      // Multiple suppliers — sort by total cost
+      // Multiple entries — sort by total cost
       group.sort((a, b) => a.totalCost - b.totalCost)
       // Mark the cheapest as best deal
       group[0]._bestDeal = true
@@ -647,10 +443,6 @@ export function parseSuppliers(suppliersParam) {
   return suppliersParam.split(',').filter(s => SUPPLIER_SEARCH_MAP[s])
 }
 
-export function getSampleForSuppliers() {
-  return []
-}
-
 // ============================================
 // SEARCH ALL SUPPLIERS
 // ============================================
@@ -664,19 +456,6 @@ export async function searchAllSuppliers(query, page = 1, suppliersParam) {
   let products = results
     .filter(r => r.status === 'fulfilled')
     .flatMap(r => r.value)
-
-  // Also include matching curated products
-  const curated = getCuratedTrending(null, query)
-  if (curated.length > 0) {
-    const existingIds = new Set(products.map(p => p.id))
-    for (const c of curated) {
-      // Only include curated items from active suppliers
-      if (!existingIds.has(c.id) && activeSuppliers.includes(c.supplier)) {
-        products.push(c)
-        existingIds.add(c.id)
-      }
-    }
-  }
 
   const hasLiveData = results.some(r =>
     r.status === 'fulfilled' && r.value.length > 0 && r.value[0]._live
