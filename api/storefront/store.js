@@ -94,8 +94,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // Get categories for filtering
-    const categories = [...new Set(products.map((p) => p.category).filter(Boolean))]
+    // Get categories with counts for filtering
+    const catCounts = {}
+    for (const p of products) {
+      const cat = p.category || 'General'
+      catCounts[cat] = (catCounts[cat] || 0) + 1
+    }
+    const categories = Object.entries(catCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
 
     return res.json({
       store: {

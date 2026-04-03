@@ -278,9 +278,11 @@ export default function StorefrontPage({ subdomain }) {
               className={`rounded-xl border px-4 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
               style={{ borderColor: theme.accentLight }}
             >
-              <option value="">All Categories</option>
+              <option value="">All Categories ({storeData.products.length})</option>
               {storeData.categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c.name || c} value={c.name || c}>
+                  {c.name || c}{c.count ? ` (${c.count})` : ''}
+                </option>
               ))}
             </select>
           )}
