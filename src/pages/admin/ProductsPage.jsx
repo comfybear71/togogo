@@ -3,9 +3,7 @@ import {
   Search, MoreVertical, AlertTriangle, Trash2, Package, Image, Loader2,
   ChevronLeft, ChevronRight, RefreshCw,
 } from 'lucide-react';
-import { useAuthStore } from '../../stores/authStore';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import { authFetch } from '../../stores/authStore';
 
 const statusColors = {
   active: 'bg-[#06D6A0]/10 text-[#06D6A0]',
@@ -13,7 +11,6 @@ const statusColors = {
 };
 
 export default function ProductsPage() {
-  const token = useAuthStore((s) => s.token);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,21 +33,16 @@ export default function ProductsPage() {
       if (search) params.set('search', search);
       if (cat) params.set('category', cat);
 
-      const res = await fetch(`${API_BASE}/api/admin/products?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data.products || []);
-        setCategories(data.categories || []);
-        setPagination(data.pagination || { totalProducts: 0, totalPages: 0 });
-      }
+      const data = await authFetch(`/api/admin/products?${params}`);
+      setProducts(data.products || []);
+      setCategories(data.categories || []);
+      setPagination(data.pagination || { totalProducts: 0, totalPages: 0 });
     } catch (err) {
       console.error('Failed to fetch products:', err);
     } finally {
       setLoading(false);
     }
-  }, [token, page, searchQuery, categoryFilter]);
+  }, [page, searchQuery, categoryFilter]);
 
   useEffect(() => { fetchProducts(); fetchCommission(); }, []);
 
@@ -58,11 +50,8 @@ export default function ProductsPage() {
 
   async function fetchCommission() {
     try {
-      const res = await fetch(`${API_BASE}/api/config/commission`);
-      if (res.ok) {
-        const data = await res.json();
-        setCommissionRate((data.commissionPercent || 5) / 100);
-      }
+      const data = await authFetch('/api/config/commission');
+      setCommissionRate((data.commissionPercent || 5) / 100);
     } catch { /* use default */ }
   }
 
@@ -70,11 +59,7 @@ export default function ProductsPage() {
     setImporting(true);
     setImportResult(null);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/import-products`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
+      const data = await authFetch('/api/admin/import-products', { method: 'POST' });
       setImportResult(data);
       if (data.success) {
         setPage(1);
@@ -89,9 +74,8 @@ export default function ProductsPage() {
 
   async function handleAction(id, action) {
     try {
-      await fetch(`${API_BASE}/api/admin/products`, {
+      await authFetch('/api/admin/products', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ id, action }),
       });
       setActionMenuProduct(null);

@@ -6,8 +6,15 @@ import { requireAdminOrSetup } from '../_lib/auth.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
+  // Auth: JWT Bearer token, x-setup-secret header, or ?secret= query param
   try {
-    await requireAdminOrSetup(req)
+    // Allow query param secret for iPad (can't set headers in browser)
+    const querySecret = req.query.secret
+    if (querySecret && querySecret === process.env.JWT_SECRET) {
+      // Authenticated via query param
+    } else {
+      await requireAdminOrSetup(req)
+    }
   } catch (err) {
     return res.status(err?.status || 401).json({ error: err?.message || 'Auth failed' })
   }
