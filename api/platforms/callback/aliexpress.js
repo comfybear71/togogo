@@ -38,12 +38,26 @@ export default async function handler(req, res) {
     }
     params.sign = signRequest(params, appSecret)
 
-    const body = new URLSearchParams(params).toString()
-    const response = await fetch('https://api-sg.aliexpress.com/auth/token/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body,
+    // Try the /rest endpoint format per AliExpress HTTP documentation
+    const qs = new URLSearchParams(params).toString()
+    let response = await fetch(`https://api-sg.aliexpress.com/rest/auth/token/create?${qs}`, {
+      method: 'GET',
     })
+
+    // If /rest doesn't work, try /sync with method parameter
+    if (!response.ok) {
+      console.log(`[AliExpress OAuth] /rest returned ${response.status}, trying /sync`)
+      const syncParams = {
+        ...params,
+        method: '/auth/token/create',
+      }
+      syncParams.sign = signRequest(syncParams, appSecret)
+      const syncQs = new URLSearchParams(syncParams).toString()
+      response = await fetch(`https://api-sg.aliexpress.com/sync?${syncQs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      })
+    }
 
     const rawText = await response.text()
     console.log('[AliExpress OAuth] Raw response:', rawText.slice(0, 1000))
