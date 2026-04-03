@@ -28,11 +28,31 @@ export default function ProductsPage() {
   const [sellerFilter, setSellerFilter] = useState('');
   const [actionMenuProduct, setActionMenuProduct] = useState(null);
   const [commissionRate, setCommissionRate] = useState(0.05);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   useEffect(() => {
     fetchProducts();
     fetchCommission();
   }, []);
+
+  async function handleImportFromAliExpress() {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/import-products`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setImportResult(data);
+      if (data.success) fetchProducts();
+    } catch (err) {
+      setImportResult({ error: err.message });
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function fetchCommission() {
     try {
@@ -103,10 +123,27 @@ export default function ProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Product Management</h1>
-        <p className="text-zinc-500">All products across all sellers — costs, commission, and profit at a glance.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Product Management</h1>
+          <p className="text-zinc-500">All products across all sellers — costs, commission, and profit at a glance.</p>
+        </div>
+        <button
+          onClick={handleImportFromAliExpress}
+          disabled={importing}
+          className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#e85d2c] transition-colors disabled:opacity-50"
+        >
+          {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+          {importing ? 'Importing...' : 'Import from AliExpress'}
+        </button>
       </div>
+      {importResult && (
+        <div className={`rounded-xl p-3 text-sm ${importResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
+          {importResult.success
+            ? `Imported ${importResult.totalImported} products from AliExpress across ${importResult.stores} stores`
+            : `Import failed: ${importResult.error || importResult.message}`}
+        </div>
+      )}
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
