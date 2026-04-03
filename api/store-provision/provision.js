@@ -300,7 +300,7 @@ async function importStarterProducts(userId) {
             category, is_active
           ) VALUES (
             ${userId}, ${p.title}, ${p.description || ''}, ${p.image || ''},
-            ${p.supplier || 'CJ Dropshipping'}, ${p.id || ''},
+            ${p.supplier || 'AliExpress'}, ${p.id || ''},
             ${p.cost || 0}, ${p.suggestedPrice || p.price || 0},
             ${p.category || 'General'}, true
           )

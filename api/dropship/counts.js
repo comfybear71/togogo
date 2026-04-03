@@ -1,5 +1,5 @@
-// Returns approximate product catalog sizes for each supplier
-// These are cached for 1 hour since catalog sizes don't change often
+// Returns approximate product catalog sizes for AliExpress
+// Cached for 1 hour since catalog sizes don't change often
 import crypto from 'crypto'
 
 let cachedCounts = null
@@ -13,34 +13,6 @@ function signAliExpressRequest(params, appSecret) {
     .map(k => `${k}${params[k]}`)
     .join('')
   return crypto.createHmac('sha256', appSecret).update(sorted).digest('hex').toUpperCase()
-}
-
-async function getCJCount() {
-  const apiKey = process.env.CJ_DROPSHIPPING_API_KEY
-  if (!apiKey) return { count: 500000, estimated: true }
-
-  try {
-    // Get access token
-    const authRes = await fetch('https://developers.cjdropshipping.com/api2.0/v1/authentication/getAccessToken', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey }),
-    })
-    const authData = await authRes.json()
-    const token = authData.data?.accessToken
-    if (!token) return { count: 500000, estimated: true }
-
-    // Query with empty search to get total
-    const res = await fetch(`https://developers.cjdropshipping.com/api2.0/v1/product/list?${new URLSearchParams({ pageNum: '1', pageSize: '1' })}`, {
-      method: 'GET',
-      headers: { 'CJ-Access-Token': token },
-    })
-    const data = await res.json()
-    const total = data.data?.total || data.data?.pageTotal || 500000
-    return { count: total, estimated: false }
-  } catch {
-    return { count: 500000, estimated: true }
-  }
 }
 
 async function getAliExpressCount() {
@@ -74,61 +46,6 @@ async function getAliExpressCount() {
   }
 }
 
-async function getPrintfulCount() {
-  const apiKey = process.env.PRINTFUL_API_KEY
-  if (!apiKey) return { count: 400, estimated: true }
-
-  try {
-    const res = await fetch('https://api.printful.com/products', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
-    const data = await res.json()
-    const products = data.result || []
-    // Each product has many variants (sizes, colors)
-    const totalVariants = products.reduce((sum, p) => sum + (p.variant_count || 10), 0)
-    return { count: products.length, variants: totalVariants, estimated: false }
-  } catch {
-    return { count: 400, estimated: true }
-  }
-}
-
-async function getPrintifyCount() {
-  const apiKey = process.env.PRINTIFY_API_KEY
-  if (!apiKey) return { count: 800, estimated: true }
-
-  try {
-    const res = await fetch('https://api.printify.com/v1/catalog/blueprints.json', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    })
-    const data = await res.json()
-    const blueprints = Array.isArray(data) ? data : (data.data || [])
-    return { count: blueprints.length, estimated: false }
-  } catch {
-    return { count: 800, estimated: true }
-  }
-}
-
-async function getGootenCount() {
-  const recipeId = process.env.GOOTEN_RECIPE_ID
-  if (!recipeId) return { count: 300, estimated: true }
-
-  try {
-    const res = await fetch(`https://api.print.io/api/v/4/source/api/products?recipeId=${recipeId}&countryCode=US&showAllProducts=true`)
-    const data = await res.json()
-    const products = data.Products || data.products || []
-    // Flatten if grouped by category
-    let total = 0
-    if (products.length > 0 && products[0]?.items) {
-      total = products.reduce((sum, cat) => sum + (cat.items?.length || 0), 0)
-    } else {
-      total = products.length
-    }
-    return { count: total, estimated: false }
-  } catch {
-    return { count: 300, estimated: true }
-  }
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -140,20 +57,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const [cj, aliexpress, printful, printify, gooten] = await Promise.allSettled([
-      getCJCount(),
-      getAliExpressCount(),
-      getPrintfulCount(),
-      getPrintifyCount(),
-      getGootenCount(),
-    ])
+    const aliexpress = await getAliExpressCount()
 
     const counts = {
-      'CJ Dropshipping': cj.status === 'fulfilled' ? cj.value : { count: 500000, estimated: true },
-      'AliExpress': aliexpress.status === 'fulfilled' ? aliexpress.value : { count: 10000000, estimated: true },
-      'Printful': printful.status === 'fulfilled' ? printful.value : { count: 400, estimated: true },
-      'Printify': printify.status === 'fulfilled' ? printify.value : { count: 800, estimated: true },
-      'Gooten': gooten.status === 'fulfilled' ? gooten.value : { count: 300, estimated: true },
+      'AliExpress': aliexpress,
     }
 
     const result = { counts, fetchedAt: new Date().toISOString() }
@@ -163,14 +70,9 @@ export default async function handler(req, res) {
     return res.status(200).json(result)
   } catch (error) {
     console.error('Counts API error:', error)
-    // Return fallback estimates
     return res.status(200).json({
       counts: {
-        'CJ Dropshipping': { count: 500000, estimated: true },
         'AliExpress': { count: 10000000, estimated: true },
-        'Printful': { count: 400, estimated: true },
-        'Printify': { count: 800, estimated: true },
-        'Gooten': { count: 300, estimated: true },
       },
       fetchedAt: new Date().toISOString(),
     })

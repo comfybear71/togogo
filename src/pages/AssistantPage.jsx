@@ -52,7 +52,7 @@ const GUIDES = {
       },
       {
         heading: 'Print-on-demand custom items',
-        body: "Custom mugs, t-shirts, tote bags, phone cases — you design it, the supplier prints and ships it. Zero inventory. Use Printful or Printify through ToGoGo and start selling your own designs today.",
+        body: "Custom mugs, t-shirts, tote bags, phone cases — find them on AliExpress through ToGoGo at wholesale prices and start selling today.",
       },
     ],
   },
@@ -70,7 +70,7 @@ const GUIDES = {
       },
       {
         heading: 'Finding products to dropship',
-        body: "Use the Suppliers page on ToGoGo — we connect you to CJ Dropshipping, AliExpress, Printful, Printify, and Gooten. Search for any product, see the cost price, and we calculate your profit margin automatically.",
+        body: "Use the Suppliers page on ToGoGo — we connect you to AliExpress, the world's largest wholesale marketplace. Search for any product, see the cost price, and we calculate your profit margin automatically.",
       },
       {
         heading: 'Where to sell',
@@ -100,7 +100,7 @@ const GUIDES = {
       },
       {
         heading: 'Print-on-demand merch',
-        body: "Design t-shirts, mugs, hoodies, and phone cases. Suppliers like Printful print your design and ship it when someone orders. No minimum orders, no upfront cost. If you can use Canva, you can do this.",
+        body: "Find trending t-shirts, mugs, hoodies, and phone cases on AliExpress at wholesale prices. List them on your store and sell at retail. No minimum orders, no upfront stock needed.",
       },
       {
         heading: 'Offer a service locally',

@@ -87,8 +87,8 @@ export const useInboxStore = create((set, get) => ({
     {
       id: '3',
       type: 'update',
-      title: 'New supplier: Printify',
-      body: 'Print-on-demand products are now available through Printify. Browse custom t-shirts, mugs, and more.',
+      title: 'AliExpress products live',
+      body: 'Browse millions of products from AliExpress at wholesale prices. Find trending items to sell on your store.',
       read: false,
       createdAt: new Date(Date.now() - 3600000).toISOString(),
     },

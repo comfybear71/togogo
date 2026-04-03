@@ -59,10 +59,8 @@ const SECTIONS = [
     color: '#06D6A0',
     desc: 'API keys for dropshipping suppliers. These are used server-side to search and fulfil products.',
     fields: [
-      { key: 'cj_api_key', label: 'CJ Dropshipping API Key', placeholder: 'Your CJ API key', secret: true },
-      { key: 'printful_api_key', label: 'Printful API Key', placeholder: 'Your Printful API key', secret: true },
-      { key: 'printify_api_key', label: 'Printify API Key', placeholder: 'Your Printify API key', secret: true },
-      { key: 'gooten_api_key', label: 'Gooten API Key', placeholder: 'Your Gooten recipe ID', secret: true },
+      { key: 'aliexpress_app_key', label: 'AliExpress App Key', placeholder: 'Your AliExpress app key', secret: true },
+      { key: 'aliexpress_app_secret', label: 'AliExpress App Secret', placeholder: 'Your AliExpress app secret', secret: true },
     ],
   },
   {

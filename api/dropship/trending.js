@@ -1,16 +1,12 @@
 import {
-  searchCJ, searchAliExpress, searchPrintful, searchPrintify, searchGooten,
-  getSampleCJProducts, getSampleAliExpressProducts, getSamplePrintfulProducts, getSamplePrintifyProducts, getSampleGootenProducts,
+  searchAliExpress,
+  getSampleAliExpressProducts,
   getCuratedTrending, groupByProduct, TRENDING_TERMS,
   parseSuppliers, getSampleForSuppliers, filterNSFW,
 } from '../_lib/suppliers.js'
 
 const SUPPLIER_SEARCH_FNS = {
-  'CJ Dropshipping': (term) => searchCJ(term, 1),
   'AliExpress': (term) => searchAliExpress(term, 1),
-  'Printful': (term) => searchPrintful(term),
-  'Printify': (term) => searchPrintify(term),
-  'Gooten': (term) => searchGooten(term),
 }
 
 export default async function handler(req, res) {
@@ -26,7 +22,7 @@ export default async function handler(req, res) {
     // Use all terms for maximum product variety
     const searchTerms = terms
 
-    // Only search selected suppliers
+    // Only search AliExpress
     const results = await Promise.allSettled(
       activeSuppliers.flatMap(s =>
         SUPPLIER_SEARCH_FNS[s] ? searchTerms.map(term => SUPPLIER_SEARCH_FNS[s](term)) : []
