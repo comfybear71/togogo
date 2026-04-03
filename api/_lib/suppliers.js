@@ -1,6 +1,6 @@
-// AliExpress Affiliate API integration for ToGoGo
-// Uses the official AE-Affiliate APIs (not DS APIs which require OAuth)
-// Only needs ALIEXPRESS_APP_KEY + ALIEXPRESS_APP_SECRET
+// AliExpress DS (Dropshipping) API integration for ToGoGo
+// Uses aliexpress.ds.feedname.get + aliexpress.ds.recommend.feed.get
+// Only needs ALIEXPRESS_APP_KEY + ALIEXPRESS_APP_SECRET (no OAuth)
 import crypto from 'crypto'
 
 // ============================================
@@ -32,25 +32,19 @@ export function filterNSFW(products) {
 }
 
 // ============================================
-// ALIEXPRESS AFFILIATE API — Request Signing & Calling
+// API SIGNING & CALLING
 // ============================================
 
 function signRequest(params, appSecret) {
-  // Sort params alphabetically, concatenate key+value pairs, HMAC-SHA256 with appSecret
   const sorted = Object.keys(params)
     .filter(k => k !== 'sign')
     .sort()
     .map(k => `${k}${params[k]}`)
     .join('')
-
-  return crypto
-    .createHmac('sha256', appSecret)
-    .update(sorted)
-    .digest('hex')
-    .toUpperCase()
+  return crypto.createHmac('sha256', appSecret).update(sorted).digest('hex').toUpperCase()
 }
 
-async function callAliExpressAPI(method, params = {}) {
+async function callAPI(method, params = {}) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
   const appSecret = process.env.ALIEXPRESS_APP_SECRET
   if (!appKey || !appSecret) {
@@ -67,228 +61,115 @@ async function callAliExpressAPI(method, params = {}) {
     v: '2.0',
     ...params,
   }
-
   baseParams.sign = signRequest(baseParams, appSecret)
 
   const qs = new URLSearchParams(baseParams).toString()
-  const url = `https://api-sg.aliexpress.com/sync?${qs}`
-
-  console.log(`[AliExpress] Calling ${method}`)
-
-  const response = await fetch(url, {
+  const response = await fetch(`https://api-sg.aliexpress.com/sync?${qs}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   })
 
   if (!response.ok) {
     const text = await response.text()
-    console.error(`[AliExpress] HTTP ${response.status}: ${text.slice(0, 500)}`)
-    throw new Error(`AliExpress API HTTP ${response.status}`)
+    console.error(`[AliExpress] HTTP ${response.status}: ${text.slice(0, 300)}`)
+    throw new Error(`AliExpress HTTP ${response.status}`)
   }
 
   const data = await response.json()
-
-  // Check for API-level errors
   if (data.error_response) {
-    console.error(`[AliExpress] API Error:`, JSON.stringify(data.error_response))
-    throw new Error(`AliExpress API: ${data.error_response.msg || data.error_response.sub_msg || 'Unknown error'}`)
+    console.error(`[AliExpress] API Error (${method}):`, JSON.stringify(data.error_response).slice(0, 300))
+    throw new Error(`AliExpress: ${data.error_response.msg || 'API error'}`)
   }
-
   return data
 }
 
 // ============================================
-// PRODUCT QUERY — aliexpress.affiliate.product.query
-// Search/browse products with keywords, categories, pagination
-// Returns: product_id, title, images, prices, affiliate URL, etc.
+// FEED NAMES — aliexpress.ds.feedname.get
 // ============================================
 
-// In-memory cache for product queries
-let productCache = new Map()
-let productCacheTime = new Map()
-const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
+let feedNamesCache = null
+let feedNamesCacheTime = 0
+const FEED_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
-export async function queryProducts({ keywords, categoryId, page = 1, pageSize = 50, sort, minPrice, maxPrice } = {}) {
-  const cacheKey = `query:${keywords || ''}:${categoryId || ''}:${page}:${sort || ''}`
-  const cached = productCache.get(cacheKey)
-  if (cached && (Date.now() - productCacheTime.get(cacheKey)) < CACHE_TTL) {
-    return cached
+async function getFeedNames() {
+  const now = Date.now()
+  if (feedNamesCache && (now - feedNamesCacheTime) < FEED_CACHE_TTL) {
+    return feedNamesCache
   }
-
-  const params = {
-    target_currency: 'AUD',
-    target_language: 'EN',
-    page_no: String(page),
-    page_size: String(Math.min(pageSize, 50)), // API max is 50
-    tracking_id: process.env.ALIEXPRESS_TRACKING_ID || process.env.ALIEXPRESS_APP_KEY,
-  }
-
-  if (keywords) params.keywords = keywords
-  if (categoryId) params.category_ids = String(categoryId)
-  if (sort) params.sort = sort // SALE_PRICE_ASC, SALE_PRICE_DESC, LAST_VOLUME_DESC, etc.
-  if (minPrice) params.min_sale_price = String(minPrice)
-  if (maxPrice) params.max_sale_price = String(maxPrice)
 
   try {
-    const data = await callAliExpressAPI('aliexpress.affiliate.product.query', params)
-
-    const respBody = data?.aliexpress_affiliate_product_query_response?.resp_result
-    if (!respBody) {
-      console.error('[AliExpress] product.query — no resp_result in response:', JSON.stringify(data).slice(0, 500))
-      return { products: [], total: 0, page }
+    const data = await callAPI('aliexpress.ds.feedname.get', {})
+    const respResult = data?.aliexpress_ds_feedname_get_response?.resp_result?.result
+    const feeds = respResult?.promos?.promo || []
+    console.log(`[AliExpress] feedname.get returned ${feeds.length} feeds`)
+    if (feeds.length > 0) {
+      feedNamesCache = feeds
+      feedNamesCacheTime = now
     }
-
-    if (respBody.resp_code !== 200) {
-      console.error(`[AliExpress] product.query error code ${respBody.resp_code}: ${respBody.resp_msg}`)
-      return { products: [], total: 0, page }
-    }
-
-    const result = respBody.result || {}
-    const rawProducts = result.products?.product || []
-    const total = result.total_record_count || rawProducts.length
-
-    console.log(`[AliExpress] product.query returned ${rawProducts.length} products (page ${page}, total ${total})`)
-
-    const products = rawProducts.map(normaliseAffiliateProduct)
-
-    const output = { products, total, page }
-    productCache.set(cacheKey, output)
-    productCacheTime.set(cacheKey, Date.now())
-    return output
+    return feeds
   } catch (err) {
-    console.error('[AliExpress] product.query failed:', err.message)
-    return { products: [], total: 0, page }
+    console.error('[AliExpress] feedname.get failed:', err.message)
+    return feedNamesCache || []
   }
 }
 
 // ============================================
-// HOT PRODUCTS — aliexpress.affiliate.hotproduct.query
-// Returns trending/bestselling products
+// FEED PRODUCTS — aliexpress.ds.recommend.feed.get
+// This is the main product fetching method
 // ============================================
 
-export async function queryHotProducts({ keywords, categoryId, page = 1, pageSize = 50, sort } = {}) {
-  const cacheKey = `hot:${keywords || ''}:${categoryId || ''}:${page}`
-  const cached = productCache.get(cacheKey)
-  if (cached && (Date.now() - productCacheTime.get(cacheKey)) < CACHE_TTL) {
-    return cached
-  }
-
-  const params = {
-    target_currency: 'AUD',
-    target_language: 'EN',
-    page_no: String(page),
-    page_size: String(Math.min(pageSize, 50)),
-    tracking_id: process.env.ALIEXPRESS_TRACKING_ID || process.env.ALIEXPRESS_APP_KEY,
-  }
-
-  if (keywords) params.keywords = keywords
-  if (categoryId) params.category_ids = String(categoryId)
-  if (sort) params.sort = sort
-
+async function fetchFeedProducts(feedName, page = 1, pageSize = 50) {
   try {
-    const data = await callAliExpressAPI('aliexpress.affiliate.hotproduct.query', params)
+    const data = await callAPI('aliexpress.ds.recommend.feed.get', {
+      feed_name: feedName,
+      target_currency: 'AUD',
+      target_language: 'EN',
+      page_no: String(page),
+      page_size: String(Math.min(pageSize, 50)),
+      sort: 'volumeDesc',
+    })
 
-    const respBody = data?.aliexpress_affiliate_hotproduct_query_response?.resp_result
-    if (!respBody) {
-      console.error('[AliExpress] hotproduct.query — no resp_result:', JSON.stringify(data).slice(0, 500))
-      return { products: [], total: 0, page }
-    }
+    const resp = data?.aliexpress_ds_recommend_feed_get_response?.result
+    const rawProducts = resp?.products?.traffic_product_d_t_o
+      || resp?.products?.product
+      || []
+    const total = resp?.total_record_count || 0
+    const finished = resp?.is_finished || false
 
-    if (respBody.resp_code !== 200) {
-      console.error(`[AliExpress] hotproduct.query error code ${respBody.resp_code}: ${respBody.resp_msg}`)
-      return { products: [], total: 0, page }
-    }
-
-    const result = respBody.result || {}
-    const rawProducts = result.products?.product || []
-    const total = result.total_record_count || rawProducts.length
-
-    console.log(`[AliExpress] hotproduct.query returned ${rawProducts.length} products (page ${page}, total ${total})`)
-
-    const products = rawProducts.map(normaliseAffiliateProduct)
-
-    const output = { products, total, page }
-    productCache.set(cacheKey, output)
-    productCacheTime.set(cacheKey, Date.now())
-    return output
+    console.log(`[AliExpress] feed "${feedName}" page ${page}: ${rawProducts.length} products (total: ${total}, finished: ${finished})`)
+    return { products: rawProducts, total, finished }
   } catch (err) {
-    console.error('[AliExpress] hotproduct.query failed:', err.message)
-    return { products: [], total: 0, page }
+    console.error(`[AliExpress] feed "${feedName}" failed:`, err.message)
+    return { products: [], total: 0, finished: true }
   }
 }
 
 // ============================================
-// PRODUCT DETAILS — aliexpress.affiliate.productdetail.get
-// Full details: HTML description, ALL images, specs, shipping, etc.
+// NORMALISE — Convert raw API product to our format
 // ============================================
 
-export async function getProductDetails(productIds) {
-  if (!productIds || productIds.length === 0) return []
-
-  // API accepts up to 50 product IDs at once
-  const ids = Array.isArray(productIds) ? productIds : [productIds]
-  const batches = []
-  for (let i = 0; i < ids.length; i += 50) {
-    batches.push(ids.slice(i, i + 50))
-  }
-
-  const allDetails = []
-
-  for (const batch of batches) {
-    try {
-      const params = {
-        product_ids: batch.join(','),
-        target_currency: 'AUD',
-        target_language: 'EN',
-        tracking_id: process.env.ALIEXPRESS_TRACKING_ID || process.env.ALIEXPRESS_APP_KEY,
-      }
-
-      const data = await callAliExpressAPI('aliexpress.affiliate.productdetail.get', params)
-
-      const respBody = data?.aliexpress_affiliate_productdetail_get_response?.resp_result
-      if (!respBody || respBody.resp_code !== 200) {
-        console.error(`[AliExpress] productdetail.get error:`, respBody?.resp_msg || 'no response')
-        continue
-      }
-
-      const rawProducts = respBody.result?.products?.product || []
-      console.log(`[AliExpress] productdetail.get returned ${rawProducts.length} detailed products`)
-
-      for (const p of rawProducts) {
-        allDetails.push(normaliseDetailProduct(p))
-      }
-    } catch (err) {
-      console.error('[AliExpress] productdetail.get failed:', err.message)
-    }
-
-    // Small delay between batches to respect rate limits
-    if (batches.length > 1) {
-      await new Promise(r => setTimeout(r, 200))
-    }
-  }
-
-  return allDetails
-}
-
-// ============================================
-// NORMALISE — Affiliate product query response
-// ============================================
-
-function normaliseAffiliateProduct(p) {
-  const cost = parseFloat(p.target_sale_price || p.app_sale_price || '0')
+function normaliseProduct(p) {
+  const cost = parseFloat(p.target_sale_price || p.app_sale_price || p.target_original_price || '0')
   const originalPrice = parseFloat(p.target_original_price || p.original_price || '0')
   const suggestedPrice = Math.ceil(cost * 2.5 * 100) / 100
 
-  const image = p.product_main_image_url || ''
-  const smallImages = p.product_small_image_urls?.string || []
+  const title = p.product_title || ''
+  const image = p.product_main_image_url || p.product_main_image || ''
+  // All images: main + small image array
+  const smallImages = p.product_small_image_urls?.string
+    || p.product_small_image_urls?.productSmallImageUrl
+    || []
+  const allImages = [image, ...(Array.isArray(smallImages) ? smallImages : [smallImages])].filter(Boolean)
+
+  const evalRate = p.evaluate_rate || p.evaluation_rate || ''
 
   return {
     id: `ae_${p.product_id}`,
     productId: String(p.product_id),
-    title: p.product_title || '',
-    description: p.product_title || '',
+    title,
+    description: title,
     image,
-    images: [image, ...smallImages].filter(Boolean),
+    images: allImages,
     cost,
     originalPrice,
     shipping: 0,
@@ -298,126 +179,235 @@ function normaliseAffiliateProduct(p) {
     deliveryDays: p.ship_to_days || 14,
     supplier: 'AliExpress',
     supplierLogo: '🛒',
-    sourceUrl: p.product_detail_url || p.promotion_link || '',
+    sourceUrl: p.product_detail_url || p.promotion_link || `https://www.aliexpress.com/item/${p.product_id}.html`,
     affiliateUrl: p.promotion_link || '',
     minOrderQty: 1,
     category: p.first_level_category_name || p.second_level_category_name || '',
-    categoryId: p.first_level_category_id || p.category_id || '',
-    rating: p.evaluate_rate ? parseFloat(String(p.evaluate_rate).replace('%', '')) / 20 : null,
-    orders: p.lastest_volume || 0,
+    categoryId: p.first_level_category_id || '',
+    rating: evalRate ? parseFloat(String(evalRate).replace('%', '')) / (String(evalRate).includes('%') ? 100 : 1) : null,
+    orders: p.lastest_volume || p.product_volume || 0,
     discount: originalPrice > cost ? Math.round((1 - cost / originalPrice) * 100) : 0,
-    commission: p.sale_price_commission || '',
     _live: true,
   }
 }
 
 // ============================================
-// NORMALISE — Product detail response (richer data)
+// PRODUCT POOL — Cached pool from multiple feeds
 // ============================================
 
-function normaliseDetailProduct(p) {
-  const base = normaliseAffiliateProduct(p)
+let productPool = []
+let productPoolTime = 0
+const POOL_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
-  // productdetail.get returns additional fields
-  return {
-    ...base,
-    htmlDescription: p.product_video_url ? `<video src="${p.product_video_url}"></video>` : '',
-    videoUrl: p.product_video_url || '',
-    // All images: main + small images array
-    images: [
-      p.product_main_image_url,
-      ...(p.product_small_image_urls?.string || []),
-    ].filter(Boolean),
+// Best feeds for an Australian dropshipping store
+const PRIORITY_FEEDS = [
+  'DS_Global_topsellers',
+  'DS_ConsumerElectronics_bestsellers',
+  'DS_Home&Kitchen_bestsellers',
+  'DS_Beauty_bestsellers',
+  'DS_Sports&Outdoors_bestsellers',
+  'DS_Automobile&Accessories_bestsellers',
+  'DS_NewArrivals',
+  'AEB_Topseller_PriceRange0_20',
+  'AEB_AU_HomeImprovement&Furniture&Lights&Tools&Luggage',
+  'AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210',
+  'AEB_i69_FullCategory_TopSellers_20241225',
+  'AEB_CETagItems_20241017',
+  'AEB_EAN Items',
+  'DS_ElectronicComponents_bestsellers',
+  'DS_BoxingDayEssentials',
+]
+
+async function getProductPool() {
+  const now = Date.now()
+  if (productPool.length > 0 && (now - productPoolTime) < POOL_CACHE_TTL) {
+    console.log(`[AliExpress] Using cached pool: ${productPool.length} products`)
+    return productPool
   }
-}
 
-// ============================================
-// SEARCH — Main search function used by the app
-// ============================================
+  const feeds = await getFeedNames()
+  if (feeds.length === 0) return productPool
 
-export async function searchAliExpress(query, page = 1) {
-  const appKey = process.env.ALIEXPRESS_APP_KEY
-  if (!appKey) {
-    console.error('[AliExpress] searchAliExpress: No ALIEXPRESS_APP_KEY configured')
-    return []
+  // Use priority feeds first, then fill with others
+  const feedNames = feeds.map(f => f.promo_name || f.feed_name || '')
+  const selectedFeeds = []
+
+  // Add priority feeds that exist
+  for (const pf of PRIORITY_FEEDS) {
+    if (feedNames.includes(pf)) selectedFeeds.push(pf)
+    if (selectedFeeds.length >= 15) break
   }
 
-  try {
-    // If no query, get hot/trending products
-    if (!query || query.trim() === '') {
-      const result = await queryHotProducts({ page, pageSize: 50 })
-      return filterNSFW(result.products)
+  // If we don't have enough, add more from the full list (skip sex/adult feeds)
+  if (selectedFeeds.length < 15) {
+    for (const name of feedNames) {
+      if (selectedFeeds.includes(name)) continue
+      if (name.toLowerCase().includes('sex') || name.toLowerCase().includes('adult')) continue
+      selectedFeeds.push(name)
+      if (selectedFeeds.length >= 15) break
     }
-
-    // Search with keywords
-    const result = await queryProducts({ keywords: query, page, pageSize: 50, sort: 'LAST_VOLUME_DESC' })
-    return filterNSFW(result.products)
-  } catch (err) {
-    console.error('[AliExpress] searchAliExpress failed:', err.message)
-    return []
   }
-}
 
-// ============================================
-// FETCH BULK PRODUCTS — Paginated fetching across categories
-// Used by cron jobs or manual triggers to build product catalog
-// ============================================
+  console.log(`[AliExpress] Fetching from ${selectedFeeds.length} feeds: ${selectedFeeds.slice(0, 5).join(', ')}...`)
 
-export async function fetchBulkProducts({ maxProducts = 1500 } = {}) {
-  const appKey = process.env.ALIEXPRESS_APP_KEY
-  if (!appKey) {
-    console.error('[AliExpress] fetchBulkProducts: No API key')
-    return []
-  }
+  // Fetch page 1 from each feed in parallel
+  const results = await Promise.allSettled(
+    selectedFeeds.map(feedName => fetchFeedProducts(feedName, 1, 50))
+  )
 
   const allProducts = []
   const seen = new Set()
 
-  // Search terms to cover different categories
-  const searchTerms = [
-    '', // hot products (no keyword)
-    'phone case', 'wireless earbuds', 'led light', 'charger',
-    'sunglasses', 'watch', 'necklace', 'dress',
-    'kitchen', 'home decor', 'organiser',
-    'makeup', 'skincare', 'beauty',
-    'dog toy', 'pet', 'cat',
-    'fitness', 'water bottle', 'yoga',
-    'car accessories', 'dash cam',
-    'toy', 'puzzle', 'kids',
-  ]
-
-  for (const term of searchTerms) {
-    if (allProducts.length >= maxProducts) break
-
-    // Fetch up to 3 pages per term
-    for (let page = 1; page <= 3; page++) {
-      if (allProducts.length >= maxProducts) break
-
-      try {
-        const result = term === ''
-          ? await queryHotProducts({ page, pageSize: 50 })
-          : await queryProducts({ keywords: term, page, pageSize: 50, sort: 'LAST_VOLUME_DESC' })
-
-        for (const p of result.products) {
-          if (!seen.has(p.productId)) {
-            seen.add(p.productId)
-            allProducts.push(p)
-          }
-        }
-
-        // If fewer than 50 results, no more pages
-        if (result.products.length < 50) break
-
-        // Rate limit: small delay between pages
-        await new Promise(r => setTimeout(r, 300))
-      } catch (err) {
-        console.error(`[AliExpress] Bulk fetch error (term="${term}", page=${page}):`, err.message)
-        break
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue
+    for (const rawProduct of result.value.products) {
+      const id = rawProduct.product_id
+      if (!seen.has(id)) {
+        seen.add(id)
+        allProducts.push(normaliseProduct(rawProduct))
       }
     }
   }
 
-  console.log(`[AliExpress] fetchBulkProducts: collected ${allProducts.length} unique products`)
+  console.log(`[AliExpress] Product pool: ${allProducts.length} unique products from ${selectedFeeds.length} feeds`)
+
+  if (allProducts.length > 0) {
+    productPool = allProducts
+    productPoolTime = now
+  }
+
+  return allProducts
+}
+
+// ============================================
+// SEARCH — Main search function
+// ============================================
+
+// Map search queries to feed categories
+const QUERY_TO_FEEDS = {
+  electronics: ['DS_ConsumerElectronics_bestsellers', 'AEB_CETagItems_20241017'],
+  phone: ['AEB_ PhoneAccessories_EG', 'DS_ConsumerElectronics_bestsellers'],
+  computer: ['AEB_ ComputerAccessories_EG', 'DS_ConsumerElectronics_bestsellers'],
+  home: ['DS_Home&Kitchen_bestsellers', 'AEB_AU_HomeImprovement&Furniture&Lights&Tools&Luggage'],
+  kitchen: ['DS_Home&Kitchen_bestsellers'],
+  beauty: ['DS_Beauty_bestsellers', 'USA_beauty&health_topsellers'],
+  sport: ['DS_Sports&Outdoors_bestsellers', 'DS_Sports-Clothing&Shoes'],
+  fitness: ['DS_Sports&Outdoors_bestsellers'],
+  car: ['DS_Automobile&Accessories_bestsellers'],
+  auto: ['DS_Automobile&Accessories_bestsellers'],
+  pet: ['AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210', 'pets&supplies_ZA topsellers_ 20240423'],
+  dog: ['pets&supplies_ZA topsellers_ 20240423'],
+  cat: ['pets&supplies_ZA topsellers_ 20240423'],
+  toy: ['toys_ZA topsellers_ 20240423'],
+  kid: ['AEB_SHOPLAZZA_Mother&Kids_$10~30_20241115'],
+  fashion: ['AEB_SHOPLAZZA_WomenClothing_$10~30_20241115', 'AEB_SHOPLAZZA_MenClothing_$10~30_20241115'],
+  watch: ['AEB_SHOPLAZZA_ApparelAccessories_$10~30_20241115'],
+  jewel: ['AEB_SHOPLAZZA_ApparelAccessories_$10~30_20241115'],
+  bag: ['AEB_SHOPLAZZA_Luggage&Bags_$10~30_20241115'],
+  shoe: ['AEB_SHOPLAZZA_Shoes_$10~30_20241115'],
+  summer: ['AEB_ SummerProducts_EG'],
+}
+
+export async function searchAliExpress(query, page = 1) {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  if (!appKey) {
+    console.error('[AliExpress] No ALIEXPRESS_APP_KEY')
+    return []
+  }
+
+  try {
+    // If specific query, try to find matching feeds
+    if (query && query.trim()) {
+      const q = query.toLowerCase().trim()
+
+      // Check if we have category-specific feeds for this query
+      for (const [keyword, feedNames] of Object.entries(QUERY_TO_FEEDS)) {
+        if (q.includes(keyword)) {
+          console.log(`[AliExpress] Query "${q}" matched keyword "${keyword}", fetching specific feeds`)
+          const results = await Promise.allSettled(
+            feedNames.map(fn => fetchFeedProducts(fn, page, 50))
+          )
+          let products = []
+          const seen = new Set()
+          for (const r of results) {
+            if (r.status !== 'fulfilled') continue
+            for (const p of r.value.products) {
+              if (!seen.has(p.product_id)) {
+                seen.add(p.product_id)
+                products.push(normaliseProduct(p))
+              }
+            }
+          }
+
+          // Further filter by keyword in title
+          if (products.length > 10) {
+            const keywords = q.split(/\s+/).filter(w => w.length > 2)
+            const filtered = products.filter(p => {
+              const text = (p.title + ' ' + p.category).toLowerCase()
+              return keywords.some(kw => text.includes(kw))
+            })
+            if (filtered.length >= 5) products = filtered
+          }
+
+          return filterNSFW(products)
+        }
+      }
+
+      // No specific feed match — search the product pool by keyword
+      const pool = await getProductPool()
+      const keywords = q.split(/\s+/).filter(w => w.length > 2)
+      const filtered = pool.filter(p => {
+        const text = (p.title + ' ' + p.category).toLowerCase()
+        return keywords.some(kw => text.includes(kw))
+      })
+      return filterNSFW(filtered.length > 0 ? filtered : pool.slice(0, 100))
+    }
+
+    // No query — return the full product pool (trending/bestsellers)
+    const pool = await getProductPool()
+    return filterNSFW(pool)
+  } catch (err) {
+    console.error('[AliExpress] searchAliExpress error:', err.message)
+    return []
+  }
+}
+
+// ============================================
+// FETCH BULK — For cron jobs / catalog building
+// ============================================
+
+export async function fetchBulkProducts({ maxProducts = 1500 } = {}) {
+  const feeds = await getFeedNames()
+  if (feeds.length === 0) return []
+
+  const allProducts = []
+  const seen = new Set()
+
+  // Filter out adult feeds
+  const safeFeedNames = feeds
+    .map(f => f.promo_name || '')
+    .filter(n => !n.toLowerCase().includes('sex') && !n.toLowerCase().includes('adult'))
+
+  for (const feedName of safeFeedNames) {
+    if (allProducts.length >= maxProducts) break
+
+    for (let page = 1; page <= 3; page++) {
+      if (allProducts.length >= maxProducts) break
+
+      const result = await fetchFeedProducts(feedName, page, 50)
+      for (const p of result.products) {
+        if (!seen.has(p.product_id)) {
+          seen.add(p.product_id)
+          allProducts.push(normaliseProduct(p))
+        }
+      }
+
+      if (result.finished || result.products.length < 50) break
+      await new Promise(r => setTimeout(r, 300))
+    }
+  }
+
+  console.log(`[AliExpress] fetchBulkProducts: ${allProducts.length} unique products`)
   return filterNSFW(allProducts)
 }
 
@@ -426,21 +416,13 @@ export async function fetchBulkProducts({ maxProducts = 1500 } = {}) {
 // ============================================
 export function groupByProduct(products) {
   const normalise = (title) => title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\s*(from aliexpress).*$/i, '')
+    .toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim()
 
   const groups = new Map()
-
   for (const product of products) {
     const key = normalise(product.title)
-    if (groups.has(key)) {
-      groups.get(key).push(product)
-    } else {
-      groups.set(key, [product])
-    }
+    if (groups.has(key)) groups.get(key).push(product)
+    else groups.set(key, [product])
   }
 
   const result = []
@@ -448,30 +430,14 @@ export function groupByProduct(products) {
     if (group.length > 1) {
       group.sort((a, b) => a.totalCost - b.totalCost)
       group[0]._bestDeal = true
-      const cheapest = group[0].totalCost
-      for (const p of group) {
-        p._supplierCount = group.length
-        p._alternatives = group
-          .filter(alt => alt.id !== p.id)
-          .map(alt => ({
-            id: alt.id,
-            supplier: alt.supplier,
-            totalCost: alt.totalCost,
-            deliveryDays: alt.deliveryDays,
-          }))
-        if (p.totalCost > cheapest) {
-          p._savings = Math.round((p.totalCost - cheapest) * 100) / 100
-        }
-      }
     }
     result.push(...group)
   }
-
   return result
 }
 
 // ============================================
-// SUPPLIER SEARCH MAP & FILTERING
+// SUPPLIER SEARCH MAP
 // ============================================
 const SUPPLIER_SEARCH_MAP = {
   'AliExpress': (q, page) => searchAliExpress(q, page),
@@ -482,24 +448,13 @@ export function parseSuppliers(suppliersParam) {
   return suppliersParam.split(',').filter(s => SUPPLIER_SEARCH_MAP[s])
 }
 
-// ============================================
-// SEARCH ALL SUPPLIERS
-// ============================================
 export async function searchAllSuppliers(query, page = 1, suppliersParam) {
   const activeSuppliers = parseSuppliers(suppliersParam)
-
   const results = await Promise.allSettled(
     activeSuppliers.map(s => SUPPLIER_SEARCH_MAP[s](query, page))
   )
-
-  let products = results
-    .filter(r => r.status === 'fulfilled')
-    .flatMap(r => r.value)
-
-  const hasLiveData = results.some(r =>
-    r.status === 'fulfilled' && r.value.length > 0 && r.value[0]._live
-  )
-
+  let products = results.filter(r => r.status === 'fulfilled').flatMap(r => r.value)
+  const hasLiveData = products.some(p => p._live)
   return { products, hasLiveData }
 }
 
