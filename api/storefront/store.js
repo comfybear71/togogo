@@ -1,6 +1,7 @@
 // Public storefront API — serves store info + products by subdomain
 // No auth required — this is the customer-facing store
 import { sql, ensureSchema } from '../_lib/db.js'
+import { searchAliExpress } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // CORS for subdomain requests
@@ -40,14 +41,57 @@ export default async function handler(req, res) {
 
     const store = stores[0]
 
-    // Get the store owner's products
-    const { rows: products } = await sql`
+    // Get the store owner's custom products
+    const { rows: ownerProducts } = await sql`
       SELECT id, title, description, image, images, supplier, supplier_cost,
              sale_price, category, total_sold, created_at
       FROM user_products
       WHERE user_id = ${store.owner_id} AND is_active = true
       ORDER BY created_at DESC
     `
+
+    let products = ownerProducts.map((p) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      image: p.image,
+      images: p.images || [],
+      price: parseFloat(p.sale_price) || 0,
+      supplierCost: parseFloat(p.supplier_cost) || 0,
+      category: p.category || 'General',
+      totalSold: p.total_sold || 0,
+      createdAt: p.created_at,
+    }))
+
+    // If the owner has no custom products, fetch live AliExpress products
+    // so the store always has something to display
+    if (products.length === 0) {
+      try {
+        console.log(`[Storefront] Store "${subdomain}" has no owner products — fetching AliExpress products`)
+        const aliProducts = await searchAliExpress('', 1)
+        if (aliProducts.length > 0) {
+          products = aliProducts.slice(0, 100).map((p) => ({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            image: p.image,
+            images: p.images || [],
+            price: p.suggestedPrice || 0,
+            supplierCost: p.cost || 0,
+            category: p.category || 'General',
+            totalSold: p.orders || 0,
+            createdAt: new Date().toISOString(),
+            supplier: 'AliExpress',
+            sourceUrl: p.sourceUrl || '',
+          }))
+          console.log(`[Storefront] Loaded ${products.length} AliExpress products for "${subdomain}"`)
+        } else {
+          console.log(`[Storefront] AliExpress returned 0 products — check API keys`)
+        }
+      } catch (err) {
+        console.error(`[Storefront] AliExpress fetch failed for "${subdomain}":`, err.message)
+      }
+    }
 
     // Get categories for filtering
     const categories = [...new Set(products.map((p) => p.category).filter(Boolean))]
@@ -62,17 +106,7 @@ export default async function handler(req, res) {
         ownerAvatar: store.owner_avatar,
         createdAt: store.created_at,
       },
-      products: products.map((p) => ({
-        id: p.id,
-        title: p.title,
-        description: p.description,
-        image: p.image,
-        images: p.images || [],
-        price: parseFloat(p.sale_price) || 0,
-        category: p.category || 'General',
-        totalSold: p.total_sold || 0,
-        createdAt: p.created_at,
-      })),
+      products,
       categories,
     })
   } catch (err) {
