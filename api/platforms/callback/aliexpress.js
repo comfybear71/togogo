@@ -29,20 +29,17 @@ export default async function handler(req, res) {
   try {
     console.log(`[AliExpress OAuth] Received auth code: ${code.slice(0, 10)}...`)
 
-    // Exchange code for access token
+    // Exchange code for access token using /auth/token/create
     const params = {
       app_key: appKey,
-      method: 'taobao.top.auth.token.create',
       sign_method: 'hmac-sha256',
       timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      format: 'json',
-      v: '2.0',
       code,
     }
     params.sign = signRequest(params, appSecret)
 
     const qs = new URLSearchParams(params).toString()
-    const response = await fetch(`https://api-sg.aliexpress.com/sync?${qs}`, {
+    const response = await fetch(`https://api-sg.aliexpress.com/auth/token/create?${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
@@ -59,23 +56,14 @@ export default async function handler(req, res) {
       })
     }
 
-    // Extract token data
-    const tokenData = data.top_auth_token_create_response || data
-    const accessToken = tokenData.access_token || tokenData.token_result?.access_token
-    const refreshToken = tokenData.refresh_token || tokenData.token_result?.refresh_token
-    const expiresIn = tokenData.expire_time || tokenData.token_result?.expire_time
-    const refreshExpiresIn = tokenData.r1_expire_time || tokenData.token_result?.r1_expire_time
+    // Extract token — response format from docs:
+    // { access_token, refresh_token, expire_time, refresh_token_valid_time, user_id, seller_id, sp, ... }
+    const accessToken = data.access_token
+    const refreshToken = data.refresh_token
+    const expireTime = data.expire_time
+    const refreshExpireTime = data.refresh_token_valid_time
 
     if (!accessToken) {
-      // Try alternative response format
-      const resultStr = tokenData.token_result
-      if (typeof resultStr === 'string') {
-        try {
-          const parsed = JSON.parse(resultStr)
-          return await saveToken(parsed.access_token, parsed.refresh_token, parsed.expire_time, parsed.r1_expire_time, res)
-        } catch { /* fall through */ }
-      }
-
       console.error('[AliExpress OAuth] No access_token in response:', JSON.stringify(data).slice(0, 500))
       return res.status(400).json({
         error: 'No access token received',
@@ -83,14 +71,16 @@ export default async function handler(req, res) {
       })
     }
 
-    return await saveToken(accessToken, refreshToken, expiresIn, refreshExpiresIn, res)
+    console.log(`[AliExpress OAuth] Got token! user_id=${data.user_id}, seller_id=${data.seller_id}, expires_in=${data.expires_in}`)
+
+    return await saveToken(accessToken, refreshToken, expireTime, refreshExpireTime, res, data)
   } catch (err) {
     console.error('[AliExpress OAuth] Error:', err)
     return res.status(500).json({ error: err.message })
   }
 }
 
-async function saveToken(accessToken, refreshToken, expiresIn, refreshExpiresIn, res) {
+async function saveToken(accessToken, refreshToken, expiresIn, refreshExpiresIn, res, fullResponse = {}) {
   await ensureSchema()
 
   // Save to admin_settings
@@ -99,6 +89,9 @@ async function saveToken(accessToken, refreshToken, expiresIn, refreshExpiresIn,
     refresh_token: refreshToken,
     expires_at: expiresIn ? new Date(parseInt(expiresIn)).toISOString() : null,
     refresh_expires_at: refreshExpiresIn ? new Date(parseInt(refreshExpiresIn)).toISOString() : null,
+    user_id: fullResponse.user_id || null,
+    seller_id: fullResponse.seller_id || null,
+    account: fullResponse.account || null,
     obtained_at: new Date().toISOString(),
   }
 
