@@ -19,7 +19,6 @@ export default function ProductsPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [actionMenuProduct, setActionMenuProduct] = useState(null);
-  const [commissionRate, setCommissionRate] = useState(0.05);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [page, setPage] = useState(1);
@@ -44,16 +43,9 @@ export default function ProductsPage() {
     }
   }, [page, searchQuery, categoryFilter]);
 
-  useEffect(() => { fetchProducts(); fetchCommission(); }, []);
+  useEffect(() => { fetchProducts(); }, []);
 
   useEffect(() => { fetchProducts(page, searchQuery, categoryFilter); }, [page, searchQuery, categoryFilter]);
-
-  async function fetchCommission() {
-    try {
-      const data = await authFetch('/api/config/commission');
-      setCommissionRate((data.commissionPercent || 5) / 100);
-    } catch { /* use default */ }
-  }
 
   async function handleImportFromAliExpress() {
     setImporting(true);
@@ -96,13 +88,6 @@ export default function ProductsPage() {
     ? products.filter(p => statusFilter === 'active' ? p.is_active : !p.is_active)
     : products;
 
-  // Summary stats for current page
-  const totalSupplierCost = filteredProducts.reduce((s, p) => s + (parseFloat(p.supplier_cost) || 0), 0);
-  const totalCommission = filteredProducts.reduce((s, p) => s + ((parseFloat(p.supplier_cost) || 0) * commissionRate), 0);
-  const totalWePay = totalSupplierCost + totalCommission;
-  const totalSaleValue = filteredProducts.reduce((s, p) => s + (parseFloat(p.sale_price) || 0), 0);
-  const totalProfit = totalSaleValue - totalWePay;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -142,40 +127,11 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="rounded-[16px] bg-[#111] p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total Products</p>
-          <p className="text-xl font-bold text-white">{pagination.totalProducts.toLocaleString()}</p>
-          <p className="text-[10px] text-zinc-600">page {page} of {pagination.totalPages}</p>
-        </div>
-        <div className="rounded-[16px] bg-[#111] p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Supplier Cost</p>
-          <p className="text-xl font-bold text-zinc-300">${totalSupplierCost.toFixed(2)}</p>
-          <p className="text-[10px] text-zinc-600">This page</p>
-        </div>
-        <div className="rounded-[16px] bg-[#111] p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Commission</p>
-          <p className="text-xl font-bold text-[#FFD23F]">${totalCommission.toFixed(2)}</p>
-          <p className="text-[10px] text-zinc-600">{(commissionRate * 100).toFixed(0)}% platform fee</p>
-        </div>
-        <div className="rounded-[16px] bg-[#111] p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">We Pay</p>
-          <p className="text-xl font-bold text-zinc-300">${totalWePay.toFixed(2)}</p>
-          <p className="text-[10px] text-zinc-600">Cost + commission</p>
-        </div>
-        <div className="rounded-[16px] bg-[#111] p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Sale Value</p>
-          <p className="text-xl font-bold text-white">${totalSaleValue.toFixed(2)}</p>
-          <p className="text-[10px] text-zinc-600">Listed total</p>
-        </div>
-        <div className="rounded-[16px] bg-[#111] p-4">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total Profit</p>
-          <p className={`text-xl font-bold ${totalProfit > 0 ? 'text-[#06D6A0]' : 'text-red-400'}`}>
-            {totalProfit > 0 ? '+' : ''}${totalProfit.toFixed(2)}
-          </p>
-          <p className="text-[10px] text-zinc-600">If all sold once</p>
-        </div>
+      {/* Total Products */}
+      <div className="rounded-[16px] bg-[#111] p-4 inline-block">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Total Products</p>
+        <p className="text-xl font-bold text-white">{pagination.totalProducts.toLocaleString()}</p>
+        <p className="text-[10px] text-zinc-600">page {page} of {pagination.totalPages}</p>
       </div>
 
       {/* Search & Filters */}
@@ -235,12 +191,9 @@ export default function ProductsPage() {
                 <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                   <th className="pb-3 pr-4">Product</th>
                   <th className="pb-3 pr-4">Supplier Cost</th>
-                  <th className="pb-3 pr-4">Commission</th>
-                  <th className="pb-3 pr-4">We Pay</th>
                   <th className="pb-3 pr-4">Sale Price</th>
-                  <th className="pb-3 pr-4">Profit</th>
                   <th className="pb-3 pr-4">Category</th>
-                  <th className="pb-3 pr-4">Seller</th>
+                  <th className="pb-3 pr-4">Store</th>
                   <th className="pb-3 pr-4">Status</th>
                   <th className="pb-3 text-right">Actions</th>
                 </tr>
@@ -249,10 +202,7 @@ export default function ProductsPage() {
                 {filteredProducts.map((p) => {
                   const status = p.is_active ? 'active' : 'inactive';
                   const supplierCost = parseFloat(p.supplier_cost || 0);
-                  const commissionAmt = supplierCost * commissionRate;
-                  const userCost = supplierCost + commissionAmt;
                   const salePrice = parseFloat(p.sale_price || 0);
-                  const profit = salePrice - userCost;
                   return (
                     <tr key={p.id} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]">
                       <td className="py-3 pr-4">
@@ -268,14 +218,7 @@ export default function ProductsPage() {
                         </div>
                       </td>
                       <td className="py-3 pr-4 text-zinc-400">${supplierCost.toFixed(2)}</td>
-                      <td className="py-3 pr-4">
-                        <span className="text-[#FFD23F]">${commissionAmt.toFixed(2)}</span>
-                      </td>
-                      <td className="py-3 pr-4 font-medium text-zinc-300">${userCost.toFixed(2)}</td>
                       <td className="py-3 pr-4 font-medium text-white">${salePrice.toFixed(2)}</td>
-                      <td className={`py-3 pr-4 font-semibold ${profit > 0 ? 'text-[#06D6A0]' : 'text-red-400'}`}>
-                        {profit > 0 ? '+' : ''}${profit.toFixed(2)}
-                      </td>
                       <td className="py-3 pr-4 text-zinc-400 max-w-[120px] truncate">{p.category || 'General'}</td>
                       <td className="py-3 pr-4 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>
                       <td className="py-3 pr-4">
