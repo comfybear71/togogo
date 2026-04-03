@@ -138,8 +138,8 @@ export default function HomePage() {
                 { icon: '📣', text: 'Automated marketing' },
                 { icon: '🛒', text: 'Auto-list on platforms' },
                 { icon: '📊', text: 'Dashboard & analytics' },
-                { icon: '📦', text: 'All 5 suppliers' },
-                { icon: '🖨️', text: 'Print-on-demand' },
+                { icon: '🛒', text: 'AliExpress products' },
+                { icon: '💰', text: 'Wholesale prices' },
                 { icon: '♾️', text: 'Unlimited products' },
               ].map((f) => (
                 <div key={f.text} className="flex items-center gap-2">

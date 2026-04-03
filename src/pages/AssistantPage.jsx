@@ -51,7 +51,7 @@ const GUIDES = {
         body: "Pet owners spend like crazy. Collapsible bowls, LED collars, grooming tools, pet beds — the pet industry is worth billions and growing every year. Emotional purchases mean higher prices.",
       },
       {
-        heading: 'Print-on-demand custom items',
+        heading: 'Custom items from AliExpress',
         body: "Custom mugs, t-shirts, tote bags, phone cases — find them on AliExpress through ToGoGo at wholesale prices and start selling today.",
       },
     ],
@@ -99,7 +99,7 @@ const GUIDES = {
         body: "Pick products from our suppliers, list them on eBay or your own store. When someone buys, the supplier ships directly. You never touch the product. Start with zero investment and scale up from profits.",
       },
       {
-        heading: 'Print-on-demand merch',
+        heading: 'Sell trending products',
         body: "Find trending t-shirts, mugs, hoodies, and phone cases on AliExpress at wholesale prices. List them on your store and sell at retail. No minimum orders, no upfront stock needed.",
       },
       {
