@@ -25,13 +25,15 @@ This session (2026-04-04) rebuilt:
 ## Current State
 
 ### Working Today:
-- 600+ AliExpress products in database (growing via cron)
-- 4 active stores: stu, jum, stuie, annies-shop
-- Admin panel: all 7 pages functional
-- Storefront: dark theme, product grid, categories, cart, checkout
-- Stripe Connect: onboarding endpoint built
-- Stripe Checkout: destination charges with payment splits
-- Cron: imports ~100 new products every 6 hours
+- 1,400+ AliExpress products in database (growing via cron every 6hrs)
+- 4 active stores: stu, jum, stuie, annies-shop (all with 250+ products each)
+- Admin panel: all 7 pages functional, products page with pagination
+- Storefront: dark theme, product grid, image gallery, categories with counts, cart, checkout
+- Stripe Connect: onboard/status/dashboard endpoints built
+- Stripe Checkout: destination charges with Connect payment splits built
+- Cron: imports ~100 new products every 6 hours (vercel.json configured)
+- CLAUDE.md + HANDOFF.md restored with MasterHQ safety header
+- AliExpress OAuth callback endpoint ready at /api/platforms/callback/aliexpress
 
 ### Known Issues:
 1. Admin products "Import from AliExpress" button fails auth (use URL with ?secret= instead)
@@ -53,15 +55,29 @@ This session (2026-04-04) rebuilt:
 - AliExpress Affiliate APIs: ALL DENIED (app lacks permission)
 - Stripe Connect: Custom accounts, embedded onboarding
 
+## AliExpress OAuth Status
+
+- App: ToGoGo, AppKey: 529066, Category: Drop Shipping, Status: Online
+- DS APIs working: feedname.get ✅, recommend.feed.get ✅
+- OAuth authorization FAILED: `appkey不存在` (appkey does not exist) error
+- Tried: `https://oauth.aliexpress.com/authorize?response_type=code&client_id=529066&redirect_uri=...`
+- Possible issue: DS apps may use a different OAuth flow or need activation
+- Callback endpoint READY at: /api/platforms/callback/aliexpress
+- **NEXT STEP:** Contact AliExpress support or check DropShippers API Developer docs
+  for the correct OAuth URL format for Drop Shipping category apps
+- Once OAuth works: ds.order.create, ds.order.get, ds.product.get all unlock
+- Stuart has valid ABN for business verification
+
 ## Next Session Priorities
 
-1. **Test Stripe Connect end-to-end** — have a store owner complete onboarding
-2. **Test checkout** — place a test order, verify payment split
-3. **Infinite scroll** — Temu-style product feed on storefronts
-4. **Store owner product management** — let owners curate their catalog
-5. **Order tracking** — fulfillment pipeline
-6. **Dev branch workflow** — stop pushing directly to production
+1. **AliExpress OAuth** — resolve the appkey error, get access_token for order APIs
+2. **Test Stripe Connect** — have a store owner complete onboarding
+3. **Test checkout** — place a test order, verify payment split
+4. **Manual order management** — admin can update order status, add tracking numbers
+5. **Infinite scroll** — Temu-style product feed on storefronts
+6. **Store owner product management** — let owners curate their catalog
 7. **Email notifications** — order confirmations, welcome emails
+8. **Dev branch workflow** — stop pushing directly to production
 
 ## Important URLs
 
