@@ -59,6 +59,7 @@ export default async function handler(req, res) {
         let imported = 0
         for (const p of products) {
           try {
+            const imgArray = Array.isArray(p.images) ? p.images : []
             await sql`
               INSERT INTO user_products (
                 user_id, title, description, image, images, supplier,
@@ -69,7 +70,7 @@ export default async function handler(req, res) {
                 ${p.title},
                 ${p.description || p.title},
                 ${p.image || ''},
-                ${JSON.stringify(p.images || [])},
+                ${imgArray},
                 ${'AliExpress'},
                 ${p.productId || p.id},
                 ${p.cost || 0},
@@ -77,7 +78,6 @@ export default async function handler(req, res) {
                 ${p.category || 'General'},
                 true
               )
-              ON CONFLICT DO NOTHING
             `
             imported++
           } catch (err) {
