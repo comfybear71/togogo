@@ -105,12 +105,17 @@ export default async function handler(req, res) {
       })
     }
 
-    // Extract token — response format from docs:
-    // { access_token, refresh_token, expire_time, refresh_token_valid_time, user_id, seller_id, sp, ... }
-    const accessToken = data.access_token
-    const refreshToken = data.refresh_token
-    const expireTime = data.expire_time
-    const refreshExpireTime = data.refresh_token_valid_time
+    // Extract token — response may be nested under a key like "/auth/token/create_response"
+    const tokenData = data.access_token ? data : (
+      data['/auth/token/create_response'] ||
+      data['auth_token_create_response'] ||
+      Object.values(data)[0] ||
+      {}
+    )
+    const accessToken = tokenData.access_token
+    const refreshToken = tokenData.refresh_token
+    const expireTime = tokenData.expire_time
+    const refreshExpireTime = tokenData.refresh_token_valid_time
 
     if (!accessToken) {
       console.error('[AliExpress OAuth] No access_token in response:', JSON.stringify(data).slice(0, 500))
@@ -120,9 +125,9 @@ export default async function handler(req, res) {
       })
     }
 
-    console.log(`[AliExpress OAuth] Got token! user_id=${data.user_id}, seller_id=${data.seller_id}, expires_in=${data.expires_in}`)
+    console.log(`[AliExpress OAuth] Got token! user_id=${tokenData.user_id}, seller_id=${tokenData.seller_id}, expires_in=${tokenData.expires_in}`)
 
-    return await saveToken(accessToken, refreshToken, expireTime, refreshExpireTime, res, data)
+    return await saveToken(accessToken, refreshToken, expireTime, refreshExpireTime, res, tokenData)
   } catch (err) {
     console.error('[AliExpress OAuth] Error:', err)
     return res.status(500).json({ error: err.message })
