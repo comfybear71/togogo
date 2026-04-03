@@ -56,6 +56,15 @@ export default function StorefrontPage({ subdomain }) {
         setStoreData(null)
       })
       .finally(() => setLoading(false))
+
+    // Check if returning from Stripe checkout
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('checkout') === 'success') {
+      setView('success')
+      cart.clear()
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname)
+    }
   }, [subdomain])
 
   const filteredProducts = useMemo(() => {
@@ -405,7 +414,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
     setError(null)
 
     try {
-      const res = await fetch(`${API_BASE}/api/storefront/order`, {
+      const res = await fetch(`${API_BASE}/api/storefront/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -427,8 +436,14 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
       })
 
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to place order')
-      onSuccess()
+      if (!res.ok) throw new Error(data.error || 'Failed to create checkout')
+
+      // Redirect to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error('No checkout URL returned')
+      }
     } catch (err) {
       setError(err.message)
     } finally {

@@ -117,6 +117,26 @@ export default async function handler(req, res) {
             WHERE id = ${user_id}
           `.catch(e => console.error('User role upgrade failed:', e.message))
 
+        } else if (session.metadata?.togogo_order_ref) {
+          // Storefront checkout completed — confirm the order
+          const orderRef = session.metadata.togogo_order_ref
+          const paymentIntent = session.payment_intent
+          console.log(`[Webhook] Storefront checkout completed: ${orderRef} (payment: ${paymentIntent})`)
+
+          try {
+            await sql`
+              UPDATE user_orders
+              SET status = 'pending',
+                  stripe_payment_intent = ${paymentIntent},
+                  notes = ${'Payment confirmed via Stripe'},
+                  updated_at = NOW()
+              WHERE platform_order_id = ${orderRef} AND status = 'pending_payment'
+            `
+            console.log(`[Webhook] Order ${orderRef} confirmed`)
+          } catch (err) {
+            console.error(`[Webhook] Failed to confirm order ${orderRef}:`, err.message)
+          }
+
         } else if (type === 'domain_purchase' && domain && user_id) {
           await sql`
             UPDATE user_orders
