@@ -38,29 +38,50 @@ export default async function handler(req, res) {
     }
     params.sign = signRequest(params, appSecret)
 
-    // Try the /rest endpoint format per AliExpress HTTP documentation
+    // Try all known endpoint formats for token exchange
     const qs = new URLSearchParams(params).toString()
-    let response = await fetch(`https://api-sg.aliexpress.com/rest/auth/token/create?${qs}`, {
-      method: 'GET',
-    })
+    let response, rawText, method
 
-    // If /rest doesn't work, try /sync with method parameter
-    if (!response.ok) {
-      console.log(`[AliExpress OAuth] /rest returned ${response.status}, trying /sync`)
+    // Attempt 1: GET to /auth/token/create
+    method = 'GET /auth/token/create'
+    response = await fetch(`https://api-sg.aliexpress.com/auth/token/create?${qs}`)
+    rawText = await response.text()
+    console.log(`[AliExpress OAuth] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
+
+    if (!response.ok || !rawText || rawText.length < 10) {
+      // Attempt 2: POST to /sync with code param (same as other API calls)
+      method = 'POST /sync'
       const syncParams = {
-        ...params,
+        app_key: appKey,
         method: '/auth/token/create',
+        sign_method: 'hmac-sha256',
+        timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        format: 'json',
+        v: '2.0',
+        code,
       }
       syncParams.sign = signRequest(syncParams, appSecret)
-      const syncQs = new URLSearchParams(syncParams).toString()
-      response = await fetch(`https://api-sg.aliexpress.com/sync?${syncQs}`, {
+      const syncBody = new URLSearchParams(syncParams).toString()
+      response = await fetch('https://api-sg.aliexpress.com/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: syncBody,
       })
+      rawText = await response.text()
+      console.log(`[AliExpress OAuth] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
     }
 
-    const rawText = await response.text()
-    console.log('[AliExpress OAuth] Raw response:', rawText.slice(0, 1000))
+    if (!response.ok || !rawText || rawText.length < 10) {
+      // Attempt 3: POST body to /auth/token/create
+      method = 'POST body /auth/token/create'
+      response = await fetch('https://api-sg.aliexpress.com/auth/token/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: qs,
+      })
+      rawText = await response.text()
+      console.log(`[AliExpress OAuth] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
+    }
 
     let data
     try {
@@ -68,6 +89,7 @@ export default async function handler(req, res) {
     } catch {
       return res.json({
         error: 'AliExpress returned non-JSON response',
+        method,
         httpStatus: response.status,
         raw: rawText.slice(0, 500),
       })
