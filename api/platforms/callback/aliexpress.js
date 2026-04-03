@@ -38,10 +38,11 @@ export default async function handler(req, res) {
     }
     params.sign = signRequest(params, appSecret)
 
-    const qs = new URLSearchParams(params).toString()
-    const response = await fetch(`https://api-sg.aliexpress.com/auth/token/create?${qs}`, {
+    const body = new URLSearchParams(params).toString()
+    const response = await fetch('https://api-sg.aliexpress.com/auth/token/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
     })
 
     const rawText = await response.text()
