@@ -31,8 +31,20 @@ export default function AuthPage() {
   const [signupPassword, setSignupPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Handle logout via ?logout=true
+  useEffect(() => {
+    if (searchParams.get('logout') === 'true') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      useAuthStore.getState().signOut?.()
+      window.location.href = '/auth'
+      return
+    }
+  }, [])
+
   // Redirect if already logged in
   useEffect(() => {
+    if (searchParams.get('logout') === 'true') return
     if (user) navigate(redirectTo);
   }, [user, navigate, redirectTo]);
 
