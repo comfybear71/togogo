@@ -197,7 +197,7 @@ export async function getProductDetails(productId) {
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
-export async function submitOrder({ productId, skuId, quantity, shippingAddress }) {
+export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount }) {
   try {
     // If no SKU ID provided, fetch product details to get the first/default SKU
     let resolvedSkuId = skuId
@@ -239,6 +239,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
         product_id: String(productId),
         count: quantity || 1,
       }]),
+      order_amount: String(orderAmount || '0'),
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)

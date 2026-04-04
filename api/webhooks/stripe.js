@@ -204,6 +204,7 @@ export default async function handler(req, res) {
                       console.error(`[Webhook] Skipping AliExpress submit for order ${order.id}: no valid supplier_product_id (got: ${order.supplier_product_id || 'empty'})`)
                       continue
                     }
+                    const orderAmount = parseFloat(order.supplier_cost || order.sale_price || 0)
                     let shippingAddr = {}
                     try { shippingAddr = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch {}
                     console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
@@ -211,6 +212,7 @@ export default async function handler(req, res) {
                       productId,
                       skuId: null, // auto-resolved from product details
                       quantity: order.quantity || 1,
+                      orderAmount,
                       shippingAddress: {
                         ...shippingAddr,
                         name: order.customer_name || shippingAddr.name || '',
