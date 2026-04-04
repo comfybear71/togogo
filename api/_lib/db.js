@@ -194,14 +194,13 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
   // Fix store_customers table — previous session created it with wrong columns (had password_hash)
-  // Drop and recreate since it never had valid data
   try {
     const { rows } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'store_customers' AND column_name = 'password_hash'`
     if (rows.length > 0) {
-      await sql`DROP TABLE store_customers`
+      await sql`DROP TABLE IF EXISTS store_customers CASCADE`
       console.log('[Schema] Dropped broken store_customers table (had password_hash column)')
     }
-  } catch { /* table might not exist */ }
+  } catch (e) { console.error('[Schema] store_customers migration check:', e.message) }
 
   // Migration: expand subscription status to include 'past_due'
   try { await sql`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check` } catch { /* */ }
