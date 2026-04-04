@@ -97,6 +97,8 @@ export default async function handler(req, res) {
     for (const store of stores) {
       let imported = 0
       for (const p of batch) {
+        // Skip products over A$1000 or with no valid price
+        if (!p.suggestedPrice || p.suggestedPrice > 1000) continue
         try {
           const imgArray = Array.isArray(p.images) ? p.images : []
           await sql`
