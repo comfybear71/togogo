@@ -19,6 +19,11 @@ export default async function handler(req, res) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
   await ensureSchema()
 
+  // Clean up stale pending_payment orders (older than 1 hour)
+  try {
+    await sql`UPDATE user_orders SET status = 'cancelled', notes = 'Auto-cancelled: payment not completed within 1 hour' WHERE status = 'pending_payment' AND created_at < NOW() - INTERVAL '1 hour'`
+  } catch { /* non-critical */ }
+
   try {
     const { subdomain, items, customer } = req.body
 
