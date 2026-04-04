@@ -180,6 +180,7 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS commission NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,4) DEFAULT 0.05` } catch { /* */ }
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS supplier_product_id TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_checkout_session TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT` } catch { /* */ }
   // Expand order status to include pending_payment
