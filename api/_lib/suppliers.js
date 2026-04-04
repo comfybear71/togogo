@@ -215,49 +215,34 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       resolvedSkuAttr = skuId
     }
 
-    const address = {
-      address: shippingAddress.line1 || shippingAddress.address || '',
-      city: shippingAddress.city || '',
-      country: shippingAddress.country || 'AU',
-      full_name: shippingAddress.name || '',
-      mobile_no: shippingAddress.phone || '',
-      phone_country: '+61',
-      province: shippingAddress.state || '',
-      zip: shippingAddress.zip || '',
-    }
+    // Generate paytime in exact format: YYYYMMDD:HHMMSS in GMT
+    const now = new Date()
+    const paytime = now.getUTCFullYear().toString()
+      + String(now.getUTCMonth() + 1).padStart(2, '0')
+      + String(now.getUTCDate()).padStart(2, '0')
+      + ':' + String(now.getUTCHours()).padStart(2, '0')
+      + String(now.getUTCMinutes()).padStart(2, '0')
+      + String(now.getUTCSeconds()).padStart(2, '0')
 
-    const productItems = [{
-      product_id: Number(productId),
-      product_count: quantity || 1,
-      sku_attr: resolvedSkuAttr,
-      logistics_service_name: 'CAINIAO_STANDARD',
-    }]
+    // Format ae_sku_info as SKU_ID:quantity (not JSON)
+    const skuParts = resolvedSkuAttr || 'default'
+    const aeSkuInfo = `${skuParts}:${quantity || 1}`
 
-    console.log(`[AliExpress] Order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${address.full_name} ${address.city} ${address.country}`)
+    const orderAmountStr = parseFloat(orderAmount || 0).toFixed(2)
+    const productAmountStr = parseFloat(orderAmount || 0).toFixed(2)
 
-    // Send BOTH wrapped object AND flat top-level params
-    // Different API versions/endpoints expect different formats
+    console.log(`[AliExpress] Data backflow: product=${productId}, sku=${aeSkuInfo}, amount=${orderAmountStr}, paytime=${paytime}`)
+
+    // This is a DATA BACKFLOW API — reports off-site sales to AliExpress
+    // NOT for placing orders. Actual AE purchasing is manual.
     const params = {
-      param_place_order_request4_open_api_d_t_o: JSON.stringify({
-        logistics_address: address,
-        product_items: productItems,
-      }),
-      // Also send as flat params — API validates these at top level
       ae_product_id: String(productId),
-      product_id: String(productId),
-      product_url: `https://www.aliexpress.com/item/${productId}.html`,
-      logistics_address: JSON.stringify(address),
-      product_count: String(quantity || 1),
-      sku_attr: resolvedSkuAttr,
-      ae_sku_info: JSON.stringify([{
-        sku_id: resolvedSkuAttr,
-        product_id: String(productId),
-        count: quantity || 1,
-      }]),
-      sku_info: JSON.stringify({ sku_attr: resolvedSkuAttr }),
-      order_amount: String(orderAmount || '0'),
-      paytime: new Date().toISOString().replace('T', ' ').slice(0, 19),
-      order_memo: 'ToGoGo dropship order',
+      product_url: `https://stu.togogo.me`, // external store URL
+      ae_sku_info: aeSkuInfo,
+      product_amount: productAmountStr,
+      order_amount: orderAmountStr,
+      paytime,
+      ae_orderid: '', // no AE order yet — this is the backflow report
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
