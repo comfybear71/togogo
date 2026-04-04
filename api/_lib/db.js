@@ -257,7 +257,6 @@ export async function initializeSchema() {
       email TEXT NOT NULL,
       name TEXT,
       phone TEXT,
-      shipping_address JSONB DEFAULT '{}',
       order_count INTEGER DEFAULT 0,
       total_spent NUMERIC(10,2) DEFAULT 0,
       last_order_at TIMESTAMPTZ,

@@ -187,10 +187,33 @@ export async function getProductDetails(productId) {
 
 export async function submitOrder({ productId, skuId, quantity, shippingAddress }) {
   try {
+    // First, get product details to find the correct SKU if not provided
+    let aeSkuId = skuId || ''
+    if (!aeSkuId) {
+      try {
+        const productData = await callAuthenticatedAPI('aliexpress.ds.product.get', {
+          product_id: String(productId),
+          ship_to_country: shippingAddress.country || 'AU',
+          target_currency: 'AUD',
+        })
+        const productResult = productData?.aliexpress_ds_product_get_response?.result
+        const skuList = productResult?.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
+        if (skuList.length > 0) {
+          // Use the first available SKU
+          aeSkuId = skuList[0].id || skuList[0].sku_id || ''
+          console.log(`[AliExpress] Auto-selected SKU: ${aeSkuId} for product ${productId}`)
+        }
+      } catch (skuErr) {
+        console.warn(`[AliExpress] Could not fetch SKU for product ${productId}:`, skuErr.message)
+      }
+    }
+
     const params = {
-      ae_product_id: String(productId),
-      ae_sku_id: String(skuId || ''),
-      quantity: String(quantity || 1),
+      product_id: String(productId),
+      ae_sku_info: JSON.stringify([{
+        sku_id: aeSkuId,
+        count: quantity || 1,
+      }]),
       logistics_address: JSON.stringify({
         receiver_country: shippingAddress.country || 'AU',
         receiver_province: shippingAddress.state || '',
@@ -198,9 +221,11 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
         receiver_address: shippingAddress.line1 || '',
         receiver_zip: shippingAddress.zip || '',
         receiver_name: shippingAddress.name || '',
-        receiver_phone: shippingAddress.phone || '',
+        receiver_phone: shippingAddress.phone || '0400000000',
       }),
     }
+
+    console.log(`[AliExpress] Submitting order: product=${productId}, sku=${aeSkuId}, qty=${quantity}`)
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
 
