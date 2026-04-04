@@ -201,12 +201,17 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
   try {
     // If no SKU attr provided, fetch product details to get the first/default SKU
     let resolvedSkuAttr = ''
+    let shippingMethod = 'CAINIAO_STANDARD'
     if (!skuId) {
       try {
         const details = await getProductDetails(productId)
         if (details?.variants?.length > 0) {
           resolvedSkuAttr = details.variants[0].skuAttr || ''
           console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr}`)
+        }
+        // Use first available shipping method
+        if (details?.shipping?.length > 0) {
+          shippingMethod = details.shipping[0].serviceName || shippingMethod
         }
       } catch (err) {
         console.error(`[AliExpress] Failed to auto-resolve SKU for ${productId}:`, err.message)
@@ -215,42 +220,42 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       resolvedSkuAttr = skuId
     }
 
-    // Generate paytime in exact format: YYYYMMDD:HHMMSS in GMT
-    const now = new Date()
-    const paytime = now.getUTCFullYear().toString()
-      + String(now.getUTCMonth() + 1).padStart(2, '0')
-      + String(now.getUTCDate()).padStart(2, '0')
-      + ':' + String(now.getUTCHours()).padStart(2, '0')
-      + String(now.getUTCMinutes()).padStart(2, '0')
-      + String(now.getUTCSeconds()).padStart(2, '0')
-
-    // Format ae_sku_info as SKU_ID:quantity (not JSON)
-    const skuParts = resolvedSkuAttr || 'default'
-    const aeSkuInfo = `${skuParts}:${quantity || 1}`
-
-    const orderAmountStr = parseFloat(orderAmount || 0).toFixed(2)
-    const productAmountStr = parseFloat(orderAmount || 0).toFixed(2)
-
-    console.log(`[AliExpress] Data backflow: product=${productId}, sku=${aeSkuInfo}, amount=${orderAmountStr}, paytime=${paytime}`)
-
-    // This is a DATA BACKFLOW API — reports off-site sales to AliExpress
-    // NOT for placing orders. Actual AE purchasing is manual.
-    const params = {
-      ae_product_id: String(productId),
-      product_url: `https://stu.togogo.me`, // external store URL
-      ae_sku_info: aeSkuInfo,
-      product_amount: productAmountStr,
-      order_amount: orderAmountStr,
-      paytime,
-      ae_orderid: '', // no AE order yet — this is the backflow report
+    // aliexpress.trade.buy.placeorder — ACTUALLY places the order on AliExpress
+    // Creates "Awaiting Payment" order. Store owner pays in bulk on AliExpress.
+    const orderRequest = {
+      logistics_address: {
+        address: shippingAddress.line1 || shippingAddress.address || '',
+        city: shippingAddress.city || '',
+        country: shippingAddress.country || 'AU',
+        full_name: shippingAddress.name || '',
+        mobile_no: shippingAddress.phone || '0000000000',
+        phone_country: '+61',
+        province: shippingAddress.state || '',
+        zip: shippingAddress.zip || '',
+      },
+      product_items: [{
+        product_id: Number(productId),
+        product_count: quantity || 1,
+        sku_attr: resolvedSkuAttr,
+        logistics_service_name: shippingMethod,
+        order_memo: 'ToGoGo dropship order',
+      }],
     }
 
-    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, ship=${shippingMethod}, to=${orderRequest.logistics_address.full_name} ${orderRequest.logistics_address.city} ${orderRequest.logistics_address.country}`)
 
-    const result = data?.aliexpress_ds_member_orderdata_submit_response?.result
+    const params = {
+      param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
+    }
+
+    const data = await callAuthenticatedAPI('aliexpress.trade.buy.placeorder', params)
+
+    // Response can be in different formats depending on API version
+    const result = data?.aliexpress_trade_buy_placeorder_response?.result
+      || data?.result
     if (!result) {
-      console.error('[AliExpress] Order submit failed:', JSON.stringify(data).slice(0, 500))
-      return { success: false, error: 'No result from AliExpress' }
+      console.error('[AliExpress] Order placement failed:', JSON.stringify(data).slice(0, 500))
+      return { success: false, error: 'No result from AliExpress: ' + JSON.stringify(data).slice(0, 200) }
     }
 
     if (result.is_success === false) {
