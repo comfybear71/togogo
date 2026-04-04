@@ -1,7 +1,7 @@
 // Shared commission rate helper — reads from admin_settings, falls back to 5%
 import { sql } from './db.js'
 
-const DEFAULT_COMMISSION_PERCENT = 20
+const DEFAULT_COMMISSION_PERCENT = 30
 
 export async function getCommissionRate() {
   try {
