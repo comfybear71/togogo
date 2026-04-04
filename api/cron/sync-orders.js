@@ -167,6 +167,65 @@ export default async function handler(req, res) {
           notes = `Delivered — ${tracking.logisticsCompany || ''}`
           results.delivered++
           shouldUpdate = true
+
+          // Trigger payout to store owner now that order is delivered
+          try {
+            const { rows: storeRows } = await sql`
+              SELECT s.stripe_connect_id, s.store_name, u.email as owner_email
+              FROM user_stores s
+              JOIN users u ON u.id = s.user_id
+              WHERE s.user_id = ${order.user_id}
+            `
+            const storeConnect = storeRows[0]
+
+            if (storeConnect?.stripe_connect_id) {
+              // Get available balance for this Connect account
+              const balance = await stripe.balance.retrieve({
+                stripeAccount: storeConnect.stripe_connect_id,
+              })
+
+              const availableAud = balance.available.find(b => b.currency === 'aud')
+              const pendingAud = balance.pending.find(b => b.currency === 'aud')
+              const payoutAmount = (availableAud?.amount || 0)
+
+              if (payoutAmount > 0) {
+                const payout = await stripe.payouts.create(
+                  {
+                    amount: payoutAmount,
+                    currency: 'aud',
+                    description: `ToGoGo order delivered: ${order.product_title}`,
+                  },
+                  { stripeAccount: storeConnect.stripe_connect_id }
+                )
+                console.log(`[SyncOrders] Payout triggered for ${storeConnect.store_name}: $${(payoutAmount / 100).toFixed(2)} (${payout.id})`)
+                notes += ` | Payout: $${(payoutAmount / 100).toFixed(2)} (${payout.id})`
+
+                // Email store owner about payout
+                await sendEmail({
+                  to: storeConnect.owner_email,
+                  subject: `Payment Released — $${(payoutAmount / 100).toFixed(2)} AUD`,
+                  html: `
+                    <div style="font-family:system-ui;max-width:600px;margin:0 auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px">
+                      <h1 style="color:#FF6B35">ToGoGo</h1>
+                      <h2 style="color:#06D6A0">Payment Released!</h2>
+                      <p>Great news — your customer's order has been delivered and your payment has been released.</p>
+                      <div style="background:#1e293b;border-radius:12px;padding:16px;margin:16px 0">
+                        <p style="margin:4px 0;color:#94a3b8">Product: <strong style="color:#fff">${order.product_title}</strong></p>
+                        <p style="margin:4px 0;color:#94a3b8">Customer: <strong style="color:#fff">${order.customer_name}</strong></p>
+                        <p style="margin:4px 0;color:#94a3b8">Payout: <strong style="color:#06D6A0;font-size:18px">$${(payoutAmount / 100).toFixed(2)} AUD</strong></p>
+                      </div>
+                      <p style="color:#94a3b8;font-size:13px">Funds will arrive in your bank account within 1-2 business days.</p>
+                    </div>
+                  `,
+                })
+              } else {
+                console.log(`[SyncOrders] No available balance to pay out for ${storeConnect.store_name} (pending: $${((pendingAud?.amount || 0) / 100).toFixed(2)})`)
+              }
+            }
+          } catch (payoutErr) {
+            console.error(`[SyncOrders] Payout failed for order ${order.id}:`, payoutErr.message)
+            notes += ` | Payout failed: ${payoutErr.message}`
+          }
         }
 
         if (shouldUpdate) {

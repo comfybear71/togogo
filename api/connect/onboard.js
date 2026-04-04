@@ -45,6 +45,11 @@ export default async function handler(req, res) {
           url: `https://${store.subdomain}.togogo.me`,
           mcc: '5969', // Direct Marketing
         },
+        settings: {
+          payouts: {
+            schedule: { interval: 'manual' }, // Hold funds until order delivered
+          },
+        },
         metadata: {
           togogo_user_id: user.id,
           togogo_store: store.subdomain,
