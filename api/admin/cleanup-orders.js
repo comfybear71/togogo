@@ -11,18 +11,13 @@ export default async function handler(req, res) {
   await ensureSchema()
 
   try {
-    // Keep only the real AliExpress order (822facf8...)
-    const { rowCount } = await sql`
-      DELETE FROM user_orders
-      WHERE id::text NOT LIKE '822facf8%'
-    `
-
-    const { rows: kept } = await sql`SELECT id, status, product_title FROM user_orders`
+    // Delete ALL orders — clean slate
+    const { rowCount } = await sql`DELETE FROM user_orders`
 
     return res.json({
       success: true,
       deleted: rowCount,
-      remaining: kept
+      remaining: []
     })
   } catch (err) {
     console.error('[Cleanup] Error:', err.message)
