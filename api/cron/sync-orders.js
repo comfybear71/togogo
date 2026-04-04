@@ -4,6 +4,9 @@
 import { sql, ensureSchema } from '../_lib/db.js'
 import { getOrderTracking } from '../_lib/suppliers.js'
 import { sendEmail } from '../_lib/email.js'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 export default async function handler(req, res) {
   // Auth: cron secret or JWT secret
@@ -19,7 +22,7 @@ export default async function handler(req, res) {
     // Get all orders that have been submitted to AliExpress and aren't in a final state
     const { rows: orders } = await sql`
       SELECT id, supplier_order_id, status, product_title, customer_name, customer_email,
-             user_id, tracking_number, notes
+             user_id, tracking_number, notes, stripe_payment_intent, sale_price
       FROM user_orders
       WHERE supplier_order_id IS NOT NULL
         AND status IN ('processing', 'shipped', 'pending')
@@ -74,13 +77,42 @@ export default async function handler(req, res) {
                 <p>AliExpress Order: <strong>${order.supplier_order_id}</strong></p>
                 <p>Reason: <strong>${tracking.rawData?.cancel_reason || 'Not specified'}</strong></p>
                 <p>Status: <strong>${aeStatus}</strong></p>
-                <p style="color:#fbbf24;margin-top:16px">Action required: Refund the customer or re-order from a different supplier.</p>
+                <p style="color:#06D6A0;margin-top:16px">Auto-refund has been issued to the customer via Stripe.</p>
                 <a href="https://togogo.me/admin/orders" style="display:inline-block;background:#FF6B35;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:12px">View Orders</a>
               </div>
             `,
           })
 
-          // Email customer about cancellation
+          // Auto-refund via Stripe
+          let refundSuccess = false
+          if (order.stripe_payment_intent) {
+            try {
+              const refund = await stripe.refunds.create({
+                payment_intent: order.stripe_payment_intent,
+                reason: 'requested_by_customer',
+              })
+              console.log(`[SyncOrders] Refund issued for order ${order.id}: ${refund.id} ($${(refund.amount / 100).toFixed(2)})`)
+              refundSuccess = true
+              notes += ` | Refund issued: ${refund.id}`
+
+              // Record refund in DB
+              await sql`
+                INSERT INTO refunds (stripe_charge_id, amount, currency, status)
+                VALUES (${refund.charge || order.stripe_payment_intent}, ${(refund.amount || 0) / 100}, 'aud', 'completed')
+                ON CONFLICT (stripe_charge_id) DO UPDATE SET status = 'completed', updated_at = NOW()
+              `.catch(e => console.error('[SyncOrders] Failed to record refund:', e.message))
+
+              newStatus = 'refunded'
+            } catch (refundErr) {
+              console.error(`[SyncOrders] Refund failed for order ${order.id}:`, refundErr.message)
+              notes += ` | Auto-refund FAILED: ${refundErr.message}`
+            }
+          } else {
+            console.warn(`[SyncOrders] No stripe_payment_intent for order ${order.id}, cannot auto-refund`)
+            notes += ' | No payment intent found — manual refund required'
+          }
+
+          // Email customer about cancellation + refund
           await sendEmail({
             to: order.customer_email,
             subject: `Order Update — ${order.product_title}`,
@@ -90,8 +122,11 @@ export default async function handler(req, res) {
                 <h2 style="color:#fff">Order Update</h2>
                 <p>Hi ${order.customer_name},</p>
                 <p>Unfortunately, your order for <strong>${order.product_title}</strong> has been cancelled by the supplier.</p>
-                <p>We are processing your refund. You will receive a full refund within 5-10 business days.</p>
-                <p style="color:#94a3b8;font-size:13px;margin-top:16px">If you have any questions, please contact us.</p>
+                ${refundSuccess
+                  ? '<p style="color:#06D6A0">A <strong>full refund</strong> has been issued to your original payment method. Please allow 5-10 business days for it to appear.</p>'
+                  : '<p>We are processing your refund. You will receive a full refund within 5-10 business days.</p>'
+                }
+                <p style="color:#94a3b8;font-size:13px;margin-top:16px">We apologise for the inconvenience. If you have any questions, please contact us.</p>
               </div>
             `,
           })
