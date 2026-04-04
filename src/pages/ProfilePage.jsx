@@ -5,7 +5,7 @@ import {
   Store, Link2, Globe, Package, ShoppingBag,
   DollarSign, TrendingUp, BarChart3, CheckCircle2,
   ArrowUpRight, ExternalLink, ChevronRight, Plus,
-  Settings, Loader2, AlertCircle, Zap,
+  Settings, Loader2, AlertCircle, Zap, Shield,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -62,10 +62,19 @@ export default function ProfilePage() {
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [storeSubTab, setStoreSubTab] = useState('overview')
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     if (!user) {
       navigate('/auth')
+      return
+    }
+    // Check admin role via API
+    const token = localStorage.getItem('token')
+    if (token) {
+      fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => { if (r.ok) setIsAdmin(true) })
+        .catch(() => {})
     }
   }, [user, navigate])
 
@@ -147,10 +156,10 @@ export default function ProfilePage() {
       <div className="border-b border-white/5 sticky top-0 z-10 bg-[#050505]/90 backdrop-blur-lg">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1">
-            {TABS.map((tab) => (
+            {[...TABS, ...(isAdmin ? ['Admin'] : [])].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => tab === 'Admin' ? navigate('/admin') : setActiveTab(tab)}
                 className={`relative flex items-center gap-2 px-4 py-3.5 font-['Nunito'] text-xs font-bold transition-colors ${
                   activeTab === tab
                     ? 'text-[#FF6B35]'
@@ -159,6 +168,7 @@ export default function ProfilePage() {
               >
                 {tab === 'My Store' && <Store className="h-3.5 w-3.5" />}
                 {tab === 'Settings' && <Settings className="h-3.5 w-3.5" />}
+                {tab === 'Admin' && <Shield className="h-3.5 w-3.5" />}
                 {tab}
                 {activeTab === tab && (
                   <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF6B35]" />
