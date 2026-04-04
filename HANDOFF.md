@@ -1,7 +1,7 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-04 (Session 3 — Full e2e dropshipping automated!)
+**Last Updated:** 2026-04-05 (Session 3 — Full e2e dropshipping automated!)
 **Session:** Fix crashed session + UI fixes + AliExpress auto-ordering + pricing
 **Branch:** claude/fix-image-crash-BiIj9 (PRODUCTION on Vercel)
 **Previous Branch:** claude/ipad-dev-prompt-2C4eB
@@ -11,110 +11,137 @@
 ## What Was Done This Session
 
 ### AliExpress Auto-Ordering — FULLY WORKING
-- **First successful order:** 8210482925469621 (tablet holder stand x2, shipped to Gray NT, paid on AliExpress)
+- **Successful orders placed:** 9+ orders auto-created on AliExpress via API
+- **Latest test:** TG-MNKGDFFM — 4 items, A$33.31, all 4 AliExpress orders created successfully
 - **Correct API:** `aliexpress.trade.buy.placeorder` — creates real orders on AliExpress
 - **Wrong API (don't use):** `aliexpress.ds.member.orderdata.submit` — this is only data backflow/reporting
 - Wrapper param: `param_place_order_request4_open_api_d_t_o` with `logistics_address` + `product_items`
 - SKU auto-resolved from product details API (`skuAttr` format)
 - Australian states mapped to full names (NT → Northern Territory, NSW → New South Wales, etc.)
 - Country names mapped to ISO codes (Australia → AU)
-- Shipping address pulled from Stripe checkout session for completeness
 - Customer phone collected via Stripe `phone_number_collection`
+- Customer name prioritized from order form (not Stripe account name)
+- Shipping address pulled from Stripe checkout session for completeness
+- Order memo: "ToGoGo dropship order" on every AliExpress order
 - Orders appear in AliExpress "Awaiting Payment" — admin pays in bulk (up to 20 days)
-- Payment on AliExpress is manual (security restriction) — this is how DSers/AutoDS work too
+- **"Pay after Delivery"** option available on AliExpress — investigate for cash flow
+
+### Pricing Model — NEEDS REFINEMENT (Next Session Priority)
+**Current formula:** `store_price = (API_cost × 1.15 tax) × 1.5 markup` + A$6 shipping at checkout
+
+**The Problem:** AliExpress API prices don't include shipping or tax. Real checkout cost is higher:
+- Shipping: ~US$2 per item (some items free)
+- Tax: ~17-18% of product price
+- Real cost ≈ API price × 1.6-2.0 (depending on shipping)
+
+**Real data from test orders (April 5):**
+
+| Item | API Price | AE Shipping | AE Tax | AE Total (USD) |
+|------|-----------|-------------|--------|---------------|
+| Bag Toolkit | $1.89 | $1.99 | $0.39 | $4.27 |
+| Flashlight | $2.77 | $1.99 | $0.48 | $5.24 |
+| Glasses | $3.31 | $1.99 | $0.53 | $5.83 |
+| Hat Light | $2.70 | FREE | $0.47 | $3.17 |
+
+**Correct pricing formula (to implement next session):**
+```
+real_cost = API_price + shipping_per_item + (API_price × 0.18 tax)
+store_price = real_cost × 1.5 markup
+checkout adds: A$6 flat shipping (goes 100% to ToGoGo)
+```
+
+**Two approaches for next session:**
+1. **Quick:** Add flat US$2 shipping + 18% tax to cost, then 1.5x markup
+2. **Accurate (preferred):** Use enrich-prices endpoint to fetch real shipping per product from `ds.product.get` API, then calculate exact cost
+
+**Enrich endpoint ready:** `/api/admin/enrich-prices?secret=JWT_SECRET` (20 products per run)
+
+### Revenue Model
+- **Commission:** 30% of profit (sale_price - supplier_cost)
+- **Shipping fee:** A$6 flat per order → 100% to ToGoGo platform
+- **Subscription:** $19.99 AUD/month per store
+- **Commission configurable** via `admin_settings` table key `platform_fee_percent`
+- **A$6 shipping** goes entirely to platform via `application_fee` in Stripe Connect
 
 ### Full Order Flow (End-to-End Working)
 1. Customer browses store (e.g. stu.togogo.me)
-2. Adds product to cart, enters details, pays via Stripe
-3. Stripe webhook fires → order confirmed in DB
-4. 3 emails sent (customer confirmation, store owner alert, admin alert)
-5. Store customer saved for repeat recognition
-6. AliExpress order auto-created with customer's shipping address
-7. Admin logs into AliExpress and pays pending orders in bulk
+2. Products shown with A$ prices (API cost + 15% tax × 1.5 markup)
+3. Customer adds to cart, sees subtotal + A$6 shipping
+4. Fills checkout form (name, email, phone, address)
+5. Redirected to Stripe (collects phone, validates address)
+6. Payment confirmed → webhook fires:
+   - Order confirmed in DB
+   - 3 emails sent (customer, store owner, admin)
+   - Store customer saved (repeat recognition)
+   - AliExpress order auto-created per item
+7. Admin pays AliExpress orders in bulk (AE account → Pay all)
 8. AliExpress ships directly to customer
-9. Sync-orders cron polls AliExpress every 4hrs for tracking updates
-10. Auto-refund if AliExpress cancels an order
-
-### Pricing Model (Current)
-- **Formula:** `sale_price = supplier_cost × 1.5` (50% markup on AUD cost from API)
-- **Commission:** 30% of profit (sale_price - supplier_cost), NOT 30% of sale price
-- **API prices:** Requested in AUD via `target_currency: 'AUD'`
-- **Max price cap:** A$1,000 (products over this skipped during import)
-- **Subscription:** $19.99 AUD/month per store
-- **Commission configurable** via `admin_settings` table key `platform_fee_percent`
+9. Sync-orders cron polls for tracking updates every 4hrs
 
 ### UI Fixes
-1. **SKU variant labels** — Human-readable names (Pink / Large), grouped by property type (Color, Size)
-2. **Variant selection** — Color and Size tracked independently (selecting Size doesn't reset Color)
-3. **Mobile overflow** — overflow-x-hidden on all containers, no pinch-to-zoom
-4. **Search zoom fix** — All inputs 16px font (prevents iOS auto-zoom), viewport maximum-scale=1
-5. **Product description** — AliExpress lazy-loaded images fixed (data-src → src), protocol URLs fixed
-6. **Description text** — Forced light colors on dark background (was invisible)
-7. **Description images** — Added spacing (my-4) between images
-8. **Product images** — Constrained to container width on mobile
-9. **Currency labels** — All prices show A$ prefix
-10. **Products shuffled** — ORDER BY RANDOM() so every visit shows different products
+1. SKU variant labels — human-readable (Pink / Large), grouped by type
+2. Variant selection — Color/Size tracked independently
+3. Mobile overflow — no pinch-to-zoom
+4. Search input zoom — 16px font prevents iOS auto-zoom
+5. Product description — lazy-loaded images fixed, text forced light on dark bg
+6. Description images — spacing between images
+7. Product images — constrained to container on mobile
+8. Currency — A$ prefix on all prices
+9. Products shuffled — ORDER BY RANDOM()
+10. Checkout — product images, shipping line (green), subtotal + total
+11. Homepage — Sign In button (top right)
+12. Profile — Admin tab (shield icon) for admin users
+13. Logout URL — togogo.me/auth?logout=true
+14. Cold start fix — /my-shop waits for auth initialization
 
-### Backend Restored (Lost in Previous Crash)
-1. **store_customers table** — Tracks per-store customers with UPSERT (total orders, total spent)
-2. **Store customer save** — Webhook saves customer on purchase
-3. **sync-orders.js cron** — Polls AliExpress every 4hrs for shipping/delivery/cancellation updates
-4. **Auto-refund** — When AliExpress cancels, Stripe refund issued automatically
-5. **Admin tab** — Shield icon on profile page for admin users (checks role via API)
-6. **Sign In button** — Added to homepage (togogo.me) top-right
-7. **Logout URL** — togogo.me/auth?logout=true clears stale sessions
-8. **Cold start fix** — /my-shop waits for auth initialization before loading
-
-### Admin Panel Fixes
-- All 7 pages working: Dashboard, Users, Products, Orders, Stores, Marketing, Settings
-- Orders/Marketing/Stores pages fixed: read token from `localStorage.getItem('togogo-token')` not Zustand
-- Admin tab on profile: checks admin role via API call to `/api/admin/stats`
-- Cleanup endpoint: `/api/admin/cleanup-orders?secret=JWT_SECRET` (delete after use)
+### Admin Fixes
+- All 7 pages working (token read from localStorage, not Zustand)
+- Admin tab on profile checks role via API
+- Cleanup endpoint for deleting test orders
+- Product import with reset option
 
 ---
 
-## Current State (April 2026)
+## Current State (April 5, 2026)
 
 ### All Working:
-- ✅ Full e2e dropshipping: customer pays → AliExpress order auto-created
-- ✅ 3 email notifications per order (customer, store owner, admin)
-- ✅ Store customer tracking (repeat customer recognition)
-- ✅ AliExpress OAuth (access_token active, 30-day expiry from ~April 3)
-- ✅ Product import cron (every 6hrs, target_currency: AUD)
-- ✅ Order sync cron (every 4hrs, checks AliExpress for updates)
+- ✅ Full e2e: customer pays → AliExpress order auto-created
+- ✅ 3 email notifications per order
+- ✅ Store customer tracking
+- ✅ AliExpress OAuth active (30-day token from ~April 3)
+- ✅ Product import cron (every 6hrs)
+- ✅ Order sync cron (every 4hrs)
 - ✅ 4 active stores: stu, jum, stuie, annies-shop
-- ✅ Stripe Connect (destination charges, payment splits)
-- ✅ Stripe subscriptions ($19.99/mo)
-- ✅ Admin panel (7 pages, all functional)
-- ✅ Dark theme storefronts with product details, variants, gallery
-- ✅ Mobile-friendly (no zoom issues)
-- ✅ Sign In on homepage, logout URL, cold start fix
+- ✅ Stripe Connect with payment splits
+- ✅ Admin panel (all 7 pages)
+- ✅ Mobile-friendly storefronts
+- ✅ A$6 shipping fee per order (100% to platform)
 
-### Known Issues / Next Steps:
-1. ⚠️ Pricing needs real-world testing — API prices may differ from actual AE checkout cost
-2. ⚠️ Product variety limited — run import cron multiple times for more categories
-3. ⚠️ No infinite scroll on storefronts (paginated)
-4. ⚠️ No store owner product management UI
-5. ⚠️ No order tracking page for customers
-6. ⚠️ No admin customers page (data is collected, UI not built)
-7. ⚠️ Admin Products page needs sortable columns + better filtering
-8. ⚠️ Store sort function (high → low price) not built
-9. ⚠️ Storefront theme selection UI not built (hardcoded to midnight)
-10. ⚠️ Flexible subscription pricing (promos, half-price trials) not built
-11. ⚠️ Service worker caching requires Ctrl+Shift+R on cold start
+### Known Issues / Next Session:
+1. **PRIORITY: Pricing accuracy** — use enrich endpoint with real shipping data
+2. **Duplicate AliExpress orders** — webhook retries create doubles, need idempotency check
+3. **Checkout dark theme** — still white/light background, needs fixing
+4. **Admin Products** — sortable columns, store dropdown filter
+5. **Store sort function** — price high→low, new arrivals
+6. **Dynamic shipping** — if AE shipping > $6, charge more
+7. **"Awaiting AE Payment" admin page** — show pending AE orders with links
+8. **Flexible subscriptions** — promos, half-price trials
+9. **Infinite scroll** on storefronts
+10. **Store owner product management**
+11. **"Pay after Delivery"** — investigate AliExpress option for cash flow
 
 ### Database:
-- ~100 unique products (×4 stores = ~400 total) — growing via cron
-- 0 orders (cleaned up test orders)
+- ~200 unique products (×4 stores = ~800 total)
+- Test orders cleaned up (clean slate)
 - 6 users (1 admin, 3 subscribers, 2 buyers)
-- store_customers table active (tracks per-store customers)
-- admin_settings: platform_fee_percent = 30, aliexpress_access_token saved
+- store_customers table active
+- admin_settings: platform_fee_percent = 30
 
 ### Environment:
 - Production branch: claude/fix-image-crash-BiIj9
-- AliExpress: OAuth active, DS APIs working, trade.buy.placeorder confirmed
+- AliExpress: OAuth active, trade.buy.placeorder confirmed working
 - Stripe: Live mode, Connect active (4 accounts)
-- Resend: Email sending confirmed working
+- Resend: Email sending confirmed
 - All API keys in Vercel
 
 ---
@@ -124,35 +151,19 @@
 | URL | Purpose |
 |-----|---------|
 | https://togogo.me | Main site (Sign In top-right) |
-| https://togogo.me/auth | Sign in page |
-| https://togogo.me/auth?logout=true | Force logout + fresh sign in |
-| https://togogo.me/profile | Store owner dashboard (Admin tab for admins) |
-| https://togogo.me/admin | Admin panel |
-| https://togogo.me/my-shop | Store owner product management |
+| https://togogo.me/auth?logout=true | Force logout |
+| https://togogo.me/profile | Store owner dashboard + Admin tab |
+| https://togogo.me/admin | Admin panel (7 pages) |
 | https://stu.togogo.me | Stu's store |
 | https://jum.togogo.me | Jum's store |
-| https://stuie.togogo.me | Stuie's store |
-| https://annies-shop.togogo.me | Annie's store |
-| togogo.me/api/cron/import-products?secret=JWT_SECRET | Manual product import |
-| togogo.me/api/cron/import-products?secret=JWT_SECRET&reset=true | Reset + re-import all products |
-| togogo.me/api/admin/cleanup-orders?secret=JWT_SECRET | Delete all orders (cleanup) |
-| togogo.me/api/admin/fix-role?secret=JWT_SECRET | Fix admin role |
-| https://www.aliexpress.com/p/order/index.html | AliExpress orders (pay pending) |
+| togogo.me/api/cron/import-products?secret=JWT_SECRET | Import products |
+| togogo.me/api/cron/import-products?secret=JWT_SECRET&reset=true | Reset + re-import |
+| togogo.me/api/admin/enrich-prices?secret=JWT_SECRET | Enrich prices with real shipping (20/run) |
+| togogo.me/api/admin/cleanup-orders?secret=JWT_SECRET | Delete all orders |
+| aliexpress.com/p/order/index.html | Pay AliExpress orders in bulk |
 
 ---
 
-## Key API Endpoints
+## Comprehensive Platform Docs
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/storefront/store?subdomain=X` | GET | Public store products + info |
-| `/api/storefront/checkout` | POST | Stripe Checkout with Connect splits |
-| `/api/products/details?id=X` | GET | Full product details from AliExpress |
-| `/api/webhooks/stripe` | POST | Stripe webhook (orders, emails, AE auto-order) |
-| `/api/connect/onboard` | POST | Stripe Connect onboarding |
-| `/api/connect/status` | GET | Connect account status |
-| `/api/cron/import-products` | GET | Import products from AliExpress |
-| `/api/cron/sync-orders` | GET | Sync order status from AliExpress |
-| `/api/admin/stats` | GET | Admin dashboard stats |
-| `/api/admin/orders` | GET | Admin orders list |
-| `/api/admin/stores` | GET | Admin stores list |
+Full documentation at: `docs/TOGOGO-HOW-IT-WORKS.md` (copy to MasterHQ)
