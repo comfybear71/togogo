@@ -1,7 +1,8 @@
 // AliExpress DS (Dropshipping) API integration for ToGoGo
 // Uses aliexpress.ds.feedname.get + aliexpress.ds.recommend.feed.get
-// Only needs ALIEXPRESS_APP_KEY + ALIEXPRESS_APP_SECRET (no OAuth)
+// OAuth token unlocks: ds.product.get, ds.order.submit, ds.order.get
 import crypto from 'crypto'
+import { sql } from './db.js'
 
 // ============================================
 // NSFW / INAPPROPRIATE CONTENT FILTER
@@ -81,6 +82,178 @@ async function callAPI(method, params = {}) {
     throw new Error(`AliExpress: ${data.error_response.msg || 'API error'}`)
   }
   return data
+}
+
+// ============================================
+// OAUTH TOKEN — retrieve saved access_token from DB
+// ============================================
+
+async function getAccessToken() {
+  try {
+    const { rows } = await sql`SELECT value FROM admin_settings WHERE key = 'aliexpress_access_token'`
+    if (!rows[0]) return null
+    const data = JSON.parse(rows[0].value)
+    // Check if expired
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      console.warn('[AliExpress] OAuth token expired, needs refresh')
+      return null
+    }
+    return data.access_token
+  } catch {
+    return null
+  }
+}
+
+// Call DS API with OAuth access_token
+async function callAuthenticatedAPI(method, params = {}) {
+  const accessToken = await getAccessToken()
+  if (!accessToken) {
+    throw new Error('No AliExpress OAuth token. Authorize at /api/platforms/callback/aliexpress')
+  }
+  return callAPI(method, { ...params, access_token: accessToken })
+}
+
+// ============================================
+// DS PRODUCT DETAILS — full info with all images, description, specs
+// ============================================
+
+export async function getProductDetails(productId) {
+  try {
+    const data = await callAuthenticatedAPI('aliexpress.ds.product.get', {
+      product_id: String(productId),
+      target_currency: 'AUD',
+      target_language: 'EN',
+      ship_to_country: 'AU',
+    })
+
+    const result = data?.aliexpress_ds_product_get_response?.result
+    if (!result) return null
+
+    const baseInfo = result.ae_item_base_info_dto || {}
+    const multimedia = result.ae_multimedia_info_dto || {}
+    const skuInfo = result.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
+    const storeInfo = result.ae_store_info || {}
+    const shippingInfo = result.logistics_info_dto?.logistics_info_list?.logistics_info_d_t_o || []
+
+    // All images
+    const imageUrls = multimedia.image_urls ? multimedia.image_urls.split(';').filter(Boolean) : []
+
+    return {
+      productId: String(productId),
+      title: baseInfo.subject || '',
+      description: baseInfo.detail || baseInfo.mobile_detail || '',
+      images: imageUrls,
+      image: imageUrls[0] || '',
+      videoUrl: multimedia.ae_video_dtos?.ae_video_d_t_o?.[0]?.media_url || '',
+      cost: parseFloat(baseInfo.sale_price?.amount || baseInfo.price?.amount || '0'),
+      originalPrice: parseFloat(baseInfo.price?.amount || '0'),
+      currency: baseInfo.sale_price?.currency_code || 'AUD',
+      category: baseInfo.category_id || '',
+      categoryName: baseInfo.product_category_name || '',
+      // SKU variants (sizes, colors, etc.)
+      variants: skuInfo.map(sku => ({
+        skuId: sku.id,
+        skuAttr: sku.sku_attr || '',
+        price: parseFloat(sku.offer_sale_price || sku.sku_price || '0'),
+        stock: sku.sku_stock ? parseInt(sku.sku_stock) : null,
+        image: sku.ae_sku_property_dtos?.ae_sku_property_d_t_o?.[0]?.sku_image || '',
+      })),
+      // Shipping options
+      shipping: shippingInfo.map(s => ({
+        company: s.logistics_company || '',
+        serviceName: s.service_name || '',
+        estimatedDays: s.estimated_delivery_time || '',
+        shippingFee: parseFloat(s.freight?.amount || '0'),
+        trackingAvailable: s.tracking_available || false,
+      })),
+      // Store info
+      store: {
+        id: storeInfo.store_id || '',
+        name: storeInfo.store_name || '',
+        rating: storeInfo.evaluation_positive_rate || '',
+      },
+      orders: baseInfo.sales_count || 0,
+      rating: baseInfo.avg_evaluation_rating || null,
+    }
+  } catch (err) {
+    console.error(`[AliExpress] ds.product.get failed for ${productId}:`, err.message)
+    return null
+  }
+}
+
+// ============================================
+// DS ORDER SUBMIT — place order on AliExpress
+// ============================================
+
+export async function submitOrder({ productId, skuId, quantity, shippingAddress }) {
+  try {
+    const params = {
+      ae_product_id: String(productId),
+      ae_sku_id: String(skuId || ''),
+      quantity: String(quantity || 1),
+      logistics_address: JSON.stringify({
+        receiver_country: shippingAddress.country || 'AU',
+        receiver_province: shippingAddress.state || '',
+        receiver_city: shippingAddress.city || '',
+        receiver_address: shippingAddress.line1 || '',
+        receiver_zip: shippingAddress.zip || '',
+        receiver_name: shippingAddress.name || '',
+        receiver_phone: shippingAddress.phone || '',
+      }),
+    }
+
+    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+
+    const result = data?.aliexpress_ds_member_orderdata_submit_response?.result
+    if (!result) {
+      console.error('[AliExpress] Order submit failed:', JSON.stringify(data).slice(0, 500))
+      return { success: false, error: 'No result from AliExpress' }
+    }
+
+    if (result.is_success === false) {
+      return { success: false, error: result.error_msg || 'Order submission failed' }
+    }
+
+    console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
+    return {
+      success: true,
+      orderId: result.order_id || result.ae_order_id,
+      orderData: result,
+    }
+  } catch (err) {
+    console.error('[AliExpress] Order submit error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ============================================
+// DS ORDER TRACKING — get order status and tracking
+// ============================================
+
+export async function getOrderTracking(orderId) {
+  try {
+    // Try the member order query API
+    const data = await callAuthenticatedAPI('aliexpress.ds.member.order.get', {
+      order_id: String(orderId),
+    })
+
+    const result = data?.aliexpress_ds_member_order_get_response?.result
+    if (!result) return null
+
+    return {
+      orderId: result.order_id || orderId,
+      status: result.order_status || result.logistics_status || '',
+      trackingNumber: result.logistics_info?.tracking_number || '',
+      trackingUrl: result.logistics_info?.tracking_url || '',
+      logisticsCompany: result.logistics_info?.logistics_company || '',
+      shippedDate: result.send_goods_date || '',
+      estimatedDelivery: result.logistics_info?.estimated_delivery_time || '',
+      rawData: result,
+    }
+  } catch (err) {
+    console.error(`[AliExpress] Order tracking failed for ${orderId}:`, err.message)
+    return null
+  }
 }
 
 // ============================================
