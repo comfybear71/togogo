@@ -215,8 +215,10 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
 
     const productUrl = `https://www.aliexpress.com/item/${productId}.html`
 
+    // Send ALL known param names — AliExpress DS API docs are inconsistent
     const params = {
       product_id: String(productId),
+      ae_product_id: String(productId),
       product_url: productUrl,
       logistics_address: JSON.stringify({
         receiver_country: shippingAddress.country || 'AU',
@@ -228,9 +230,15 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
         receiver_phone: shippingAddress.phone || '',
       }),
       product_count: String(quantity || 1),
+      quantity: String(quantity || 1),
       sku_info: JSON.stringify({
         sku_id: String(resolvedSkuId || ''),
       }),
+      ae_sku_info: JSON.stringify([{
+        sku_id: String(resolvedSkuId || ''),
+        product_id: String(productId),
+        count: quantity || 1,
+      }]),
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
