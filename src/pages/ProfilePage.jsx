@@ -48,6 +48,7 @@ const statusColors = {
 // Setup steps tracker
 const SETUP_STEPS = [
   { key: 'account', label: 'Create account', icon: User, desc: 'Sign up for ToGoGo' },
+  { key: 'stripe_connect', label: 'Connect payments', icon: CreditCard, desc: 'Set up Stripe to get paid', action: 'connect_stripe' },
   { key: 'platform', label: 'Connect a platform', icon: Link2, desc: 'eBay, Etsy, WooCommerce, etc.' },
   { key: 'products', label: 'Add products', icon: Package, desc: 'Find & list products to sell' },
   { key: 'first_sale', label: 'Make first sale', icon: DollarSign, desc: 'Get your first order!' },
@@ -105,6 +106,7 @@ export default function ProfilePage() {
 
   const completedSteps = {
     account: true,
+    stripe_connect: stats?.stripeConnectStatus === 'active',
     platform: activeConnections.length > 0,
     products: products.total > 0,
     first_sale: orders.total > 0,
@@ -232,6 +234,14 @@ export default function ProfilePage() {
                             </p>
                             <p className="text-[10px] text-zinc-600">{step.desc}</p>
                           </div>
+                          {isNext && step.key === 'stripe_connect' && (
+                            <button
+                              onClick={() => navigate('/setup-payments')}
+                              className="px-3 py-1.5 rounded-lg bg-[#06D6A0] text-[10px] font-bold text-white flex-shrink-0 hover:bg-[#05b88a] transition-colors"
+                            >
+                              Connect
+                            </button>
+                          )}
                           {isNext && step.key === 'platform' && (
                             <Link to="/launch-store" className="px-3 py-1.5 rounded-lg bg-[#FF6B35] text-[10px] font-bold text-white flex-shrink-0">
                               Connect

@@ -1,16 +1,11 @@
 import {
-  searchCJ, searchAliExpress, searchPrintful, searchPrintify, searchGooten,
-  getSampleCJProducts, getSampleAliExpressProducts, getSamplePrintfulProducts, getSamplePrintifyProducts, getSampleGootenProducts,
-  getCuratedTrending, groupByProduct, TRENDING_TERMS,
-  parseSuppliers, getSampleForSuppliers, filterNSFW,
+  searchAliExpress,
+  groupByProduct, TRENDING_TERMS,
+  parseSuppliers, filterNSFW,
 } from '../_lib/suppliers.js'
 
 const SUPPLIER_SEARCH_FNS = {
-  'CJ Dropshipping': (term) => searchCJ(term, 1),
   'AliExpress': (term) => searchAliExpress(term, 1),
-  'Printful': (term) => searchPrintful(term),
-  'Printify': (term) => searchPrintify(term),
-  'Gooten': (term) => searchGooten(term),
 }
 
 export default async function handler(req, res) {
@@ -23,13 +18,10 @@ export default async function handler(req, res) {
     const activeSuppliers = parseSuppliers(suppliersParam)
     const terms = TRENDING_TERMS[category] || TRENDING_TERMS['']
 
-    // Use all terms for maximum product variety
-    const searchTerms = terms
-
-    // Only search selected suppliers
+    // Search AliExpress for all trending terms
     const results = await Promise.allSettled(
       activeSuppliers.flatMap(s =>
-        SUPPLIER_SEARCH_FNS[s] ? searchTerms.map(term => SUPPLIER_SEARCH_FNS[s](term)) : []
+        SUPPLIER_SEARCH_FNS[s] ? terms.map(term => SUPPLIER_SEARCH_FNS[s](term)) : []
       )
     )
 
@@ -38,21 +30,6 @@ export default async function handler(req, res) {
       .flatMap(r => r.value)
 
     const hasLiveData = products.some(p => p._live)
-
-    // If live APIs returned nothing, use sample data from selected suppliers
-    if (products.length === 0) {
-      products = getSampleForSuppliers(activeSuppliers, searchTerms[0])
-    }
-
-    // Merge curated trending products (they have images) — only from active suppliers
-    const curated = getCuratedTrending(category || null, null)
-    const existingIds = new Set(products.map(p => p.id))
-    for (const c of curated) {
-      if (!existingIds.has(c.id) && activeSuppliers.includes(c.supplier)) {
-        products.push(c)
-        existingIds.add(c.id)
-      }
-    }
 
     // Deduplicate by id, group by product for price comparison
     const seen = new Set()

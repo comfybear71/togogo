@@ -117,6 +117,26 @@ export default async function handler(req, res) {
             WHERE id = ${user_id}
           `.catch(e => console.error('User role upgrade failed:', e.message))
 
+        } else if (session.metadata?.togogo_order_ref) {
+          // Storefront checkout completed — confirm the order
+          const orderRef = session.metadata.togogo_order_ref
+          const paymentIntent = session.payment_intent
+          console.log(`[Webhook] Storefront checkout completed: ${orderRef} (payment: ${paymentIntent})`)
+
+          try {
+            await sql`
+              UPDATE user_orders
+              SET status = 'pending',
+                  stripe_payment_intent = ${paymentIntent},
+                  notes = ${'Payment confirmed via Stripe'},
+                  updated_at = NOW()
+              WHERE platform_order_id = ${orderRef} AND status = 'pending_payment'
+            `
+            console.log(`[Webhook] Order ${orderRef} confirmed`)
+          } catch (err) {
+            console.error(`[Webhook] Failed to confirm order ${orderRef}:`, err.message)
+          }
+
         } else if (type === 'domain_purchase' && domain && user_id) {
           await sql`
             UPDATE user_orders
@@ -353,6 +373,28 @@ export default async function handler(req, res) {
           console.error('Failed to record refund:', err.message)
         }
         console.log(`Charge refunded: ${charge.id} amount=${refundAmount}`)
+        break
+      }
+
+      // Stripe Connect — account status changed
+      case 'account.updated': {
+        const account = event.data.object
+        const status = account.charges_enabled && account.payouts_enabled
+          ? 'active'
+          : account.details_submitted
+            ? 'pending_verification'
+            : 'onboarding_incomplete'
+
+        try {
+          await sql`
+            UPDATE user_stores
+            SET stripe_connect_status = ${status}, updated_at = NOW()
+            WHERE stripe_connect_id = ${account.id}
+          `
+          console.log(`Connect account ${account.id} status updated to: ${status}`)
+        } catch (err) {
+          console.error('Failed to update connect status:', err.message)
+        }
         break
       }
 

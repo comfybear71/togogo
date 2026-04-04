@@ -180,9 +180,17 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS commission NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,4) DEFAULT 0.05` } catch { /* */ }
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_checkout_session TEXT` } catch { /* */ }
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT` } catch { /* */ }
+  // Expand order status to include pending_payment
+  try { await sql`ALTER TABLE user_orders DROP CONSTRAINT IF EXISTS user_orders_status_check` } catch { /* */ }
+  try { await sql`ALTER TABLE user_orders ADD CONSTRAINT user_orders_status_check CHECK (status IN ('pending', 'pending_payment', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'))` } catch { /* */ }
 
   // Migrations: add missing columns/constraints to user_stores if table already existed
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'pro'` } catch { /* already exists or not supported */ }
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS theme_id TEXT DEFAULT 'midnight'` } catch { /* already exists */ }
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_id TEXT` } catch { /* */ }
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_connected'` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
   // Migration: expand subscription status to include 'past_due'

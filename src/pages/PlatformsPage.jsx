@@ -16,7 +16,7 @@ const MARKETPLACES = [
     color: '#F56400',
     desc: 'Perfect for handmade, vintage, and creative products. 90M+ active buyers.',
     fees: '20c per listing + 6.5% when you sell.',
-    bestFor: 'Print-on-demand, custom items, crafts, digital downloads',
+    bestFor: 'Custom items, crafts, digital downloads, unique products',
   },
   {
     name: 'Amazon',

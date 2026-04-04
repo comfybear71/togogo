@@ -3,16 +3,6 @@ import { ArrowLeft } from 'lucide-react'
 
 const SUPPLIERS = [
   {
-    name: 'CJ Dropshipping',
-    initials: 'CJ',
-    color: '#FF6B35',
-    glow: 'rgba(255,107,53,0.15)',
-    what: 'Massive product catalogue with warehouses worldwide. Fast shipping, quality control, and custom packaging.',
-    products: 'Electronics, fashion, home, beauty, gadgets — millions of products',
-    shipping: '5-15 days (US/EU warehouses available for 3-5 day delivery)',
-    cost: 'Free to use. You only pay per product when you sell.',
-  },
-  {
     name: 'AliExpress',
     initials: 'Ali',
     color: '#E53238',
@@ -21,36 +11,6 @@ const SUPPLIERS = [
     products: 'Literally everything — 100+ million products across every category',
     shipping: '7-20 days standard, 3-7 days with AliExpress Premium',
     cost: 'Free. Buy at wholesale prices, sell at retail.',
-  },
-  {
-    name: 'Printful',
-    initials: 'PF',
-    color: '#29AB51',
-    glow: 'rgba(41,171,81,0.15)',
-    what: 'Print-on-demand. Upload your designs, they print and ship when someone orders. Zero inventory.',
-    products: 'T-shirts, hoodies, mugs, phone cases, posters, hats, bags, and more',
-    shipping: '3-5 business days (printed in US, EU, or AU)',
-    cost: 'Free to use. You pay per item only when a customer orders.',
-  },
-  {
-    name: 'Printify',
-    initials: 'Pi',
-    color: '#39B54A',
-    glow: 'rgba(57,181,74,0.15)',
-    what: 'Print-on-demand with 80+ print providers worldwide. More options and competitive pricing.',
-    products: 'Apparel, accessories, home decor, drinkware, stationery',
-    shipping: '3-7 business days (multiple print locations)',
-    cost: 'Free plan available. Premium plan $29/mo for up to 20% cheaper products.',
-  },
-  {
-    name: 'Gooten',
-    initials: 'Go',
-    color: '#00A9E0',
-    glow: 'rgba(0,169,224,0.15)',
-    what: 'Enterprise print-on-demand with automated routing to the nearest manufacturer.',
-    products: 'Apparel, wall art, photo books, home goods, accessories',
-    shipping: '3-8 business days (smart routing for fastest delivery)',
-    cost: 'Free to use. Pay per product when orders come in.',
   },
 ]
 
@@ -68,7 +28,7 @@ export default function SuppliersPage() {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <h1 className="text-xl font-heading font-bold text-white">Our Suppliers</h1>
+          <h1 className="text-xl font-heading font-bold text-white">Our Supplier</h1>
           <p className="text-[11px] text-zinc-500">Who we work with to get you products</p>
         </div>
       </div>
@@ -76,7 +36,7 @@ export default function SuppliersPage() {
       {/* Intro */}
       <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-5 mb-5">
         <p className="text-sm text-zinc-300 leading-relaxed">
-          ToGoGo connects you to <span className="text-white font-semibold">5 world-class suppliers</span> so you can sell anything without buying stock upfront. When a customer buys from you, the supplier ships directly to them. You keep the profit.
+          ToGoGo connects you to <span className="text-white font-semibold">AliExpress</span> — the world's largest wholesale marketplace — so you can sell anything without buying stock upfront. When a customer buys from you, the supplier ships directly to them. You keep the profit.
         </p>
       </div>
 

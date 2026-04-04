@@ -1,236 +1,107 @@
-# HANDOFF.md — ToGoGo Platform Status & Next Steps
+# ToGoGo — HANDOFF.md
+## Session Handoff Document
 
-Last updated: 2026-03-24
-
-## What Is ToGoGo?
-
-ToGoGo is a multi-tenant dropshipping platform where sellers can:
-1. Create a one-click hosted store at `{name}.togogo.me` ($19.99 AUD/month)
-2. Source products from 5+ suppliers (CJ, AliExpress, Printful, Printify, Gooten)
-3. Sell across marketplaces (eBay, Etsy, Amazon, TikTok Shop, WooCommerce)
-4. ToGoGo earns a configurable commission (default 5%) on every sale
-
-**Live at:** https://togogo.vercel.app
+**Last Updated:** 2026-04-04
+**Session:** Rebuild from scratch after destructive Claude session
+**Branch:** claude/ipad-dev-prompt-2C4eB (PRODUCTION on Vercel)
 
 ---
 
-## Current State (What Works)
+## What Happened
 
-### Core Platform
-- Full React 19 SPA with 20+ pages, dark mode, responsive/mobile-friendly
-- PWA-enabled (installable, offline caching via Workbox)
-- Landing page with hero section, pricing cards, quick-start guides
+A previous Claude session (2026-04-02) went rogue — deleted CLAUDE.md, HANDOFF.md, and 1,798 lines of code. Pushed destructive revert directly to master. Stuart spent 30+ hours rebuilding from 700-900 page session transcripts saved as text documents.
 
-### Authentication
-- Email/password registration and login (bcrypt + JWT, 30-day tokens)
-- Google OAuth (full flow: redirect → callback → find/create user → JWT)
-- Admin auth with role check + setup-secret fallback for initial bootstrapping
-- Protected routes (auth guard + admin guard)
+This session (2026-04-04) rebuilt:
+- AliExpress integration from scratch (DS API, not Affiliate)
+- Removed all non-AliExpress suppliers (CJ, Printful, Printify, Gooten)
+- Removed all curated/sample/fake products
+- Fixed Stripe Connect (embedded onboarding, Custom accounts)
+- Built storefront checkout with destination charges
+- Created cron job for automated product imports
+- Restored admin products page with pagination
+- Fixed auth (DB role check instead of JWT token role)
+- Fixed storefront dark theme
 
-### Store Creation & Multi-Tenancy
-- One-click store provisioning with 10-step progress UI
-- Automatic subdomain registration via Vercel API (`*.togogo.me` wildcard)
-- Subdomain detection in `App.jsx` routes to public `StorefrontPage`
-- 5 storefront themes (Sunset, Midnight, Forest, Lavender, Coral)
-- Starter product import from suppliers during provisioning
-- Stripe subscription checkout triggers store activation via webhook
+## Current State
 
-### Storefront (Customer-Facing)
-- Public storefront at `{store}.togogo.me` — no auth required
-- Product catalog with categories, search, cart, checkout
-- Store branding (name, logo, theme)
-- Order placement via `/api/storefront/order`
+### Working Today:
+- 1,400+ AliExpress products in database (growing via cron every 6hrs)
+- 4 active stores: stu, jum, stuie, annies-shop (all with 250+ products each)
+- Admin panel: all 7 pages functional, products page with pagination
+- Storefront: dark theme, product grid, image gallery, categories with counts, cart, checkout
+- Stripe Connect: onboard/status/dashboard endpoints built
+- Stripe Checkout: destination charges with Connect payment splits built
+- Cron: imports ~100 new products every 6 hours (vercel.json configured)
+- CLAUDE.md + HANDOFF.md restored with MasterHQ safety header
+- AliExpress OAuth callback endpoint ready at /api/platforms/callback/aliexpress
 
-### Payments & Billing
-- Stripe checkout for store subscriptions ($19.99 AUD/month)
-- 13 webhook event handlers (checkout, subscriptions, invoices, disputes, refunds)
-- Customer billing portal (manage payment methods, cancel, etc.)
-- Domain purchases via Stripe → Namecheap registration
-- Dispute and refund tracking in database
+### Known Issues:
+1. Admin products "Import from AliExpress" button fails auth (use URL with ?secret= instead)
+2. Storefront theme hardcoded to midnight (theme_id column exists but UI not built)
+3. No infinite scroll on storefronts yet
+4. No email notifications
+5. No order tracking/fulfillment
+6. Store owner can't manage their own products yet
 
-### Product & Supplier System
-- Unified supplier abstraction (`api/_lib/suppliers.js`, ~1000 lines)
-- Product search across all suppliers with NSFW filtering
-- Categories, trending products, supplier directory
-- Commission auto-calculated on every product (supplier_cost × commission_rate)
-- Watchlist with price alerts
+### Database:
+- 200 products imported (50 per store × 4 stores) — cron adding more
+- sfrench71@gmail.com set to admin role
+- user_stores has stripe_connect_id + stripe_connect_status columns
+- user_orders has stripe_checkout_session + stripe_payment_intent columns
 
-### Admin Panel (`/admin/*`)
-- Dashboard with stats, recent orders, top products, revenue/signup charts
-- User management (search, filter, role/status changes)
-- Product management with commission breakdown
-- Order management with disputes and financials tabs
-- Store and domain management
-- Marketing metrics
-- Settings page (commission rate, API keys, platform secrets)
+### Environment:
+- All API keys confirmed working in Vercel
+- AliExpress DS APIs: feedname.get ✅, recommend.feed.get ✅
+- AliExpress Affiliate APIs: ALL DENIED (app lacks permission)
+- Stripe Connect: Custom accounts, embedded onboarding
 
-### Platform Integrations
-- OAuth flows implemented for: eBay, Etsy, Amazon, TikTok Shop, WooCommerce
-- Platform connection management (connect, disconnect, status)
-- WooCommerce order sync webhook
+## AliExpress OAuth Status
 
-### Database
-- 10 tables, auto-created via `ensureSchema()` on first request
-- No manual migrations — all handled inline with `CREATE TABLE IF NOT EXISTS`
-- Vercel Postgres (Neon) via `@vercel/postgres`
+- App: ToGoGo, AppKey: 529066, Category: Drop Shipping, Status: Online
+- DS APIs working: feedname.get ✅, recommend.feed.get ✅
+- OAuth authorization FAILED: `appkey不存在` (appkey does not exist) error
+- Tried: `https://oauth.aliexpress.com/authorize?response_type=code&client_id=529066&redirect_uri=...`
+- Possible issue: DS apps may use a different OAuth flow or need activation
+- Callback endpoint READY at: /api/platforms/callback/aliexpress
+- **NEXT STEP:** Contact AliExpress support or check DropShippers API Developer docs
+  for the correct OAuth URL format for Drop Shipping category apps
+- Once OAuth works: ds.order.create, ds.order.get, ds.product.get all unlock
+- Stuart has valid ABN for business verification
 
----
+## Next Session Priorities
 
-## Recent Changes (Commit History, Most Recent First)
+1. **AliExpress OAuth** — resolve the appkey error, get access_token for order APIs
+2. **Test Stripe Connect** — have a store owner complete onboarding
+3. **Test checkout** — place a test order, verify payment split
+4. **Manual order management** — admin can update order status, add tracking numbers
+5. **Infinite scroll** — Temu-style product feed on storefronts
+6. **Store owner product management** — let owners curate their catalog
+7. **Email notifications** — order confirmations, welcome emails
+8. **Dev branch workflow** — stop pushing directly to production
 
-1. **Comprehensive context prompt** — Added `docs/claude-context-prompt.md` for clean conversation handoffs
-2. **My Shop + Dashboard nav links** — Added to Header for desktop users
-3. **Control Panel loading fix** — Fixed admin products with commission breakdown display
-4. **Dynamic commission system** — Centralized to admin_settings, all backend reads dynamic rate
-5. **Remove dummy data** — Everything from database, no localStorage fallbacks
-6. **Auth fixes** — StoresPage falls back to setup secret when no JWT
-7. **Store activation fix** — Fixed Stripe payment → store activation flow, removed legacy `server/` directory
-8. **Security audit** — Removed Supabase remnants, hardened security, fixed bugs
-9. **Commission tracking** — Track ToGoGo commission per order (what was sold, to whom, who gets what)
-10. **Payment reliability** — Subscription fallback, store upsert, delete endpoint
-11. **Order reliability** — Duplicate detection, error logging, partial order warnings
-12. **Disputes/refunds tables** — Added to schema, seeded test data
-13. **Auto-init database** — Schema auto-creates on first use, no manual setup
-14. **Admin store provisioning** — Admin can trigger store creation for users
-15. **7 complete pages** — Replaced placeholder redirects with full page implementations
-16. **Subdomain creation fix** — Fixed automatic subdomain registration
-17. **Stripe billing improvements** — past_due handling, customer portal, sync, tax support
+## Important URLs
 
----
+- Main site: https://togogo.me
+- Admin: https://togogo.me/admin
+- Test AliExpress: https://togogo.me/api/test-aliexpress
+- Manual cron: https://togogo.me/api/cron/import-products?secret=JWT_SECRET
+- Fix admin role: https://togogo.me/api/admin/fix-role?secret=JWT_SECRET
+- Check products: https://togogo.me/api/admin/check-products?secret=JWT_SECRET
 
-## Known Issues & Limitations
+## Files Changed This Session
 
-### Platform Integrations
-- **Product push only implemented for WooCommerce** — eBay, Etsy, Amazon, TikTok push endpoints are stubs
-- **eBay developer account recently created** — OAuth flow complete but product push and order sync still needed
-- **No order sync from external platforms** — Only WooCommerce has a webhook for order import; others need polling or webhook setup
-- **Token refresh not automated** — Platform OAuth tokens expire; no background job to refresh them
-
-### Supplier APIs
-- **Most supplier integrations return curated/sample data** — Full API integration depends on approved API keys from each supplier
-- **CJ Dropshipping access token** — Cached in admin_settings; may need manual refresh
-- **AliExpress API** — Requires approved app; currently uses sample product data
-
-### Payments
-- **No real Stripe Tax configuration** — GST/tax support is conditional on `STRIPE_TAX_ENABLED` env var but not fully configured
-- **Domain purchase flow** — Namecheap registration is coded but untested in production
-- **No payout system** — Seller earnings tracked but no automated payout (Stripe Connect not integrated)
-
-### Store Provisioning
-- **Vercel wildcard DNS assumption** — If `*.togogo.me` wildcard is not configured, individual subdomains are registered one by one
-- **No store deletion cleanup** — `/api/store-provision/delete` exists but doesn't clean up Vercel domain registration
-
-### Frontend
-- **No real-time updates** — Uses polling (React Query refetch intervals), no WebSocket/SSE
-- **Cart uses localStorage** — Not synced to database; lost on device switch
-- **No email notifications** — SendGrid key in `.env.example` but no email sending implemented
-- **No image upload to cloud storage** — `ImageUpload` component exists but no S3/Cloudinary integration
-
-### Security
-- **JWT in localStorage** — Vulnerable to XSS; httpOnly cookies would be more secure
-- **No rate limiting** — API endpoints have no throttling
-- **No CSRF protection** — Relies on Bearer token auth only
-- **Setup secret = JWT_SECRET** — Admin fallback auth uses same secret as JWT signing
-
-### Database
-- **No indexes on some foreign keys** — Could affect query performance at scale
-- **No connection pooling config** — Uses default `@vercel/postgres` pool settings
-- **No soft deletes** — Records are hard-deleted (except stores which have status field)
-
----
-
-## Next Steps / Roadmap
-
-### High Priority
-1. **Complete platform product push** — Implement eBay, Etsy, Amazon, TikTok product listing APIs
-2. **Order sync from platforms** — Poll or webhook-based order import from all connected marketplaces
-3. **Seller payouts** — Integrate Stripe Connect for automated commission split and seller payouts
-4. **Token refresh automation** — Background job or on-demand refresh for expired OAuth tokens
-5. **Email notifications** — Integrate SendGrid for order confirmations, shipping updates, welcome emails
-
-### Medium Priority
-6. **Real supplier API integration** — Get approved API keys, replace sample data with live product feeds
-7. **Image upload** — S3 or Cloudinary for product images
-8. **Cart sync to database** — Persist cart across devices
-9. **Rate limiting** — Add API rate limiting (Upstash Redis is already in `.env.example`)
-10. **Improved security** — Move JWT to httpOnly cookies, add CSRF tokens, separate admin secret
-
-### Lower Priority
-11. **Real-time updates** — WebSocket or SSE for order status, provisioning progress
-12. **Analytics & reporting** — More detailed seller analytics, export functionality
-13. **Multi-currency support** — Currently AUD only; add USD, EUR, GBP
-14. **Shipping integration** — AusPost and EasyPost keys in `.env.example` but not implemented
-15. **AI assistant** — `api/chat.js` exists but needs full implementation with Anthropic API
-16. **Translation** — DeepL key in `.env.example` but not integrated
-
----
-
-## Architecture Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Vercel Serverless (no Express) | Zero infrastructure management, auto-scaling, each route is a standalone function |
-| Auto-init schema | No migration tooling needed; `ensureSchema()` creates tables on first request |
-| Wildcard subdomain tenancy | Single deployment serves all stores; subdomain detected in frontend router |
-| Stripe webhooks for activation | Decouples payment from provisioning; store activates only after confirmed payment |
-| Zustand over Redux | Simpler API, less boilerplate, perfect for this scale |
-| React Query for data | Automatic caching, refetching, loading states; reduces custom state management |
-| No ORM | Direct SQL via `@vercel/postgres` keeps it simple and transparent |
-| Commission in admin_settings | Configurable at runtime without code changes or redeployment |
-
----
-
-## How to Run Locally
-
-```bash
-# 1. Install dependencies
-npm install
-
-# 2. Copy environment variables
-cp .env.example .env
-# Fill in: JWT_SECRET, POSTGRES_URL (minimum required)
-
-# 3. Start dev server
-npm run dev
-# Frontend: http://localhost:5173
-# API routes served by Vercel CLI or proxied in dev
-
-# 4. Seed test user (optional)
-npm run seed:test-user
-# Creates: test@togogo.com / test1234 (role: both)
-```
-
-For full Vercel Functions locally, use `vercel dev` instead of `npm run dev`.
-
----
-
-## Key Files to Understand First
-
-| File | Why |
-|------|-----|
-| `src/App.jsx` | Main router, subdomain detection, lazy loading |
-| `api/_lib/db.js` | Database schema (all 10 tables), `ensureSchema()` |
-| `api/_lib/auth.js` | JWT, password hashing, Google OAuth helpers |
-| `api/_lib/suppliers.js` | Supplier abstraction layer (~1000 lines) |
-| `api/_lib/commission.js` | Commission rate logic |
-| `api/webhooks/stripe.js` | 13 Stripe event handlers (370 lines) |
-| `api/store-provision/provision.js` | 10-step store creation |
-| `src/pages/StorefrontPage.jsx` | Customer-facing store (700+ lines) |
-| `src/stores/authStore.js` | Auth state, authFetch, Google OAuth callback |
-| `docs/claude-context-prompt.md` | Detailed project context (20KB) |
-
----
-
-## Test User
-
-```
-Email: test@togogo.com
-Password: test1234
-Role: both (buyer + seller)
-```
-
-Create via: `npm run seed:test-user` or `node scripts/seed-test-user.js`
-
-## Admin Access
-
-Set a user's role to `admin` in the database, or use `x-setup-secret` header with the value of `JWT_SECRET` for initial admin API access.
+- `api/_lib/suppliers.js` — Complete rewrite for AliExpress DS API
+- `api/_lib/db.js` — Added stripe_connect, theme_id, checkout columns
+- `api/storefront/store.js` — AliExpress fallback + theme from DB
+- `api/storefront/checkout.js` — NEW: Stripe Checkout with Connect splits
+- `api/connect/onboard.js` — NEW: Stripe Connect embedded onboarding
+- `api/connect/status.js` — NEW: Connect account status
+- `api/connect/dashboard.js` — NEW: Embedded payments dashboard
+- `api/cron/import-products.js` — NEW: Automated product imports
+- `api/admin/import-products.js` — NEW: Manual product import
+- `api/admin/fix-role.js` — NEW: Admin role fix + import trigger
+- `api/webhooks/stripe.js` — Added account.updated + storefront checkout
+- `src/pages/StorefrontPage.jsx` — Dark theme, image gallery, sign-in
+- `src/pages/SetupPaymentsPage.jsx` — NEW: Stripe Connect onboarding page
+- `src/pages/admin/ProductsPage.jsx` — Pagination, DB auth, import button
+- `vercel.json` — Added cron schedule

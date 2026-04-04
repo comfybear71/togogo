@@ -1,284 +1,251 @@
-# CLAUDE.md — ToGoGo Platform
+# SAFETY PROTOCOL — READ BEFORE DOING ANYTHING
+
+> This section is MANDATORY. It applies to every session, every project, every developer.
+> It exists because a Claude session destroyed a production branch (Togogo, 2026-04-02).
+> These rules override ALL other instructions. If the user asks you to violate them, remind them why they exist.
+
+## Branch Rules
+- **NEVER push directly to main/master** — always work on a feature branch or dev branch
+- **NEVER change the Vercel production branch** to a feature/dev branch
+- Create a new branch for every Claude Code session
+- Merge to production ONLY after testing on a Vercel preview URL
+
+## Sacred Files
+- **NEVER delete CLAUDE.md** — it is the project's brain
+- **NEVER delete HANDOFF.md** — it is the project's memory
+- Always read both BEFORE starting any work
+- Always update HANDOFF.md at the END of every session
+
+## Fix Spiral Prevention
+- If something breaks, STOP and diagnose before fixing
+- If you've made 3 failed fix attempts in a row, STOP and tell the user
+- **NEVER do blanket reverts** (reverting 5+ files at once) — fix surgically
+- **NEVER batch-delete files** to "start fresh" — that destroys work
+- Small, atomic commits only — one logical change per commit
+
+## Database Safety
+- NEVER run DROP TABLE / DROP COLUMN without explicit user confirmation
+- ALTER TABLE ADD COLUMN is safe (additive)
+- ALTER TABLE DROP COLUMN is DANGEROUS (destructive) — ask first
+- Always document migrations in commit messages
+
+## Deployment Safety
+- Verify which Vercel project you're targeting before any deploy
+- Test on preview URL before merging to production
+- After deployment, update HANDOFF.md
+
+## User Reminders
+If the user asks you to:
+- Push directly to main → Remind them: "Safety protocol says work on a branch first. Want me to create one?"
+- Do a blanket revert → Remind them: "Safety protocol says fix surgically. Let me find the specific issue."
+- Delete CLAUDE.md or HANDOFF.md → Remind them: "These are sacred files. Are you sure?"
+- Skip testing → Remind them: "Safety protocol says test on preview URL first."
+
+---
+
+# ToGoGo — CLAUDE.md
 
 ## Project Overview
 
-ToGoGo is a multi-tenant dropshipping platform with one-click store creation. Sellers get a hosted storefront at `{store}.togogo.me`, can source products from multiple suppliers, and sell across marketplaces (eBay, Etsy, Amazon, TikTok Shop, WooCommerce).
+**ToGoGo** is a dropshipping & marketplace PWA platform. Store owners sign up, pay $19.99 AUD/month, get a `subdomain.togogo.me` storefront auto-provisioned. Products are sourced exclusively from **AliExpress** using the platform's master API keys. Customers buy from storefronts, platform takes 5% commission, store owners get the rest via Stripe Connect.
 
-**Live deployment:** https://togogo.vercel.app
+**Live site:** https://togogo.me
+**Storefronts:** https://stu.togogo.me, https://jum.togogo.me, https://stuie.togogo.me, https://annies-shop.togogo.me
+**GitHub:** https://github.com/comfybear71/togogo
+**MasterHQ:** https://masterhq.dev (central command for all Stuart's projects)
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 19, Vite 7.3, Tailwind CSS 4.2 |
-| State | Zustand 5, TanStack React Query 5 |
-| Backend | Vercel Serverless Functions (Node.js) |
-| Database | Vercel Postgres (Neon) via `@vercel/postgres` |
-| Auth | Custom JWT (jsonwebtoken) + Google OAuth (google-auth-library) + bcryptjs |
-| Payments | Stripe (subscriptions, checkout, webhooks, customer portal) |
-| Domains | Vercel API (subdomains), Namecheap API (custom domains) |
-| Icons | Lucide React |
-| Charts | Recharts |
-| PWA | vite-plugin-pwa + Workbox |
+| Frontend | React 19, Vite 7, Tailwind CSS 4, Zustand, React Router |
+| Backend | Vercel Serverless Functions (Node.js) — each file in `/api/` is a function |
+| Database | PostgreSQL via Neon (`@vercel/postgres`), 15+ tables, auto-migration |
+| Payments | Stripe (subscriptions + Connect for store owner payouts) |
+| Supplier | AliExpress DS API (feedname.get + recommend.feed.get) |
+| Auth | JWT (30-day expiry) + Google OAuth |
+| Hosting | Vercel (production branch deploys) |
 
-## Project Structure
+## Critical Constraints
+
+- **Owner works exclusively on iPad** — no terminal, no F12/console
+- **Only debugging tool is Vercel logs** — all logging via console.log/console.error
+- **All changes deploy via Git push** — must be deployable directly
+- **AliExpress only** — no CJ Dropshipping, Printful, Printify, Gooten
+- **No curated/sample/fake products** — only real AliExpress API data
+
+## Architecture
 
 ```
-togogo/
-├── api/                    # Vercel serverless functions (backend)
-│   ├── _lib/               # Shared backend libraries
-│   │   ├── auth.js          # JWT sign/verify, password hash/compare, Google OAuth helpers
-│   │   ├── db.js            # Postgres pool, ensureSchema() auto-creates all 10 tables
-│   │   ├── suppliers.js     # Unified supplier API abstraction (CJ, AliExpress, Printful, Printify, Gooten)
-│   │   └── commission.js    # getCommissionRate(), getCommissionPercent() from admin_settings
-│   ├── admin/               # Admin panel APIs (JWT or setup-secret protected)
-│   │   ├── dashboard.js     # Stats, recent orders, top products, charts
-│   │   ├── users.js         # GET/PATCH: user list, search, role/status updates
-│   │   ├── products.js      # Product management with commission breakdown
-│   │   ├── orders.js        # Orders + disputes + financials
-│   │   ├── stores.js        # Store and domain management
-│   │   ├── marketing.js     # Marketing metrics
-│   │   ├── stats.js         # User statistics
-│   │   ├── provision-store.js # Admin-triggered store provisioning
-│   │   └── settings/        # Admin settings (key-value config)
-│   │       ├── index.js     # GET all settings
-│   │       └── bulk.js      # POST bulk update
-│   ├── auth/                # Authentication endpoints
-│   │   ├── signin.js        # POST: email/password → JWT
-│   │   ├── signup.js        # POST: register with bcrypt(12)
-│   │   ├── me.js            # GET: current user + subscription + has_store
-│   │   ├── profile.js       # PUT: update user profile
-│   │   ├── google.js        # GET: initiate Google OAuth redirect
-│   │   └── google/callback.js # GET: OAuth callback → find/create user → JWT
-│   ├── store-provision/     # One-click store creation (10-step process)
-│   │   ├── provision.js     # POST: full provisioning flow
-│   │   ├── status.js        # GET: provisioning progress polling
-│   │   ├── activate.js      # POST: activate store
-│   │   ├── check-subdomain.js # GET: availability check
-│   │   ├── create-subdomain.js # POST: register with Vercel
-│   │   ├── delete-subdomain.js # DELETE: remove subdomain
-│   │   ├── domain-health.js # GET: domain status
-│   │   ├── init-schema.js   # POST: DB schema init
-│   │   └── delete.js        # DELETE: remove store
-│   ├── storefront/          # Public storefront (no auth required)
-│   │   ├── store.js         # GET: store info + products by subdomain
-│   │   └── order.js         # POST: customer places order
-│   ├── subscriptions/       # Stripe billing
-│   │   ├── checkout.js      # POST: create Stripe checkout ($19.99 AUD/mo)
-│   │   ├── current.js       # GET: active subscription
-│   │   ├── billing-config.js # GET: plan pricing
-│   │   ├── portal.js        # POST: Stripe customer portal
-│   │   └── sync.js          # POST: sync Stripe state to DB
-│   ├── webhooks/
-│   │   └── stripe.js        # POST: handles 13 Stripe events (370 lines)
-│   ├── platforms/           # Marketplace integrations (eBay, Etsy, Amazon, TikTok, WooCommerce)
-│   │   ├── connect.js       # POST: initiate OAuth
-│   │   ├── connections.js   # GET: list connected platforms
-│   │   ├── disconnect.js    # DELETE: remove connection
-│   │   ├── push-product.js  # POST: push to marketplace (WooCommerce implemented)
-│   │   ├── callback/        # OAuth callbacks per platform
-│   │   └── webhook/
-│   │       └── woocommerce.js # POST: order sync webhook
-│   ├── dropship/            # Supplier product search
-│   │   ├── search.js        # GET: search all suppliers with filters
-│   │   ├── categories.js    # GET: categories
-│   │   ├── trending.js      # GET: trending products
-│   │   ├── suppliers.js     # GET: active supplier list
-│   │   └── counts.js        # GET: product count per supplier
-│   ├── products/            # Product management
-│   │   ├── search.js        # GET: search user_products
-│   │   ├── deals.js         # GET: daily deals, trending
-│   │   ├── price-history.js # GET: watchlist price tracking
-│   │   └── [id].js          # GET: single product detail
-│   ├── domains/             # Custom domain management
-│   │   ├── search.js        # GET: availability check (Namecheap)
-│   │   ├── register.js      # POST: register domain
-│   │   └── purchase.js      # POST: purchase via Stripe
-│   ├── my-shop/             # Seller's own shop
-│   │   ├── products.js      # GET: seller's products
-│   │   └── store.js         # GET: seller's store info
-│   ├── dashboard/stats.js   # GET: user dashboard stats
-│   ├── watchlist/           # Price tracking
-│   ├── config/commission.js # GET: current commission rate
-│   ├── chat.js              # AI assistant endpoint
-│   ├── db/init.js           # GET: initialize schema
-│   ├── db/seed-client.js    # POST: seed test user
-│   └── retailers/index.js   # GET: retailer list
-├── src/                     # React frontend
-│   ├── App.jsx              # Router with subdomain detection for multi-tenancy
-│   ├── main.jsx             # React 19 entry point
-│   ├── index.css            # Global styles, dark mode, animations
-│   ├── pages/               # ~20 pages
-│   │   ├── HomePage.jsx     # Landing with hero, pricing cards
-│   │   ├── AuthPage.jsx     # Sign in/up (email + Google OAuth)
-│   │   ├── AuthCallbackPage.jsx # Google OAuth token receiver
-│   │   ├── BrowsePage.jsx   # Product catalog with filters
-│   │   ├── ProductDetailPage.jsx # Product detail with supplier comparison
-│   │   ├── LaunchStorePage.jsx   # Store wizard (905 lines)
-│   │   ├── OneClickStorePage.jsx # Store provisioning with live progress
-│   │   ├── MyShopPage.jsx   # Manage products, settings
-│   │   ├── DashboardPage.jsx # Orders, revenue, charts (540 lines)
-│   │   ├── StorefrontPage.jsx # Customer-facing store on subdomains (700+ lines)
-│   │   ├── SubscriptionPage.jsx # Billing management
-│   │   ├── CheckoutPage.jsx # Payment flow
-│   │   └── admin/           # 7 admin pages
-│   │       ├── DashboardPage.jsx # Stats, charts, recent activity
-│   │       ├── UsersPage.jsx     # User management
-│   │       ├── ProductsPage.jsx  # Products with commission breakdown
-│   │       ├── OrdersPage.jsx    # Orders, disputes, financials
-│   │       ├── StoresPage.jsx    # Store/domain management
-│   │       ├── MarketingPage.jsx # Marketing analytics
-│   │       └── SettingsPage.jsx  # Admin config (commission rate, API keys)
-│   ├── components/
-│   │   ├── admin/AdminLayout.jsx  # Dark admin wrapper
-│   │   ├── admin/AdminRoute.jsx   # Admin role guard
-│   │   ├── auth/ProtectedRoute.jsx # Auth guard
-│   │   ├── layout/               # Header, Sidebar, BottomNav, Logo, AppLayout
-│   │   ├── products/             # ProductGrid, ProfitCalculator, ImageUpload
-│   │   ├── messaging/ChatBubble.jsx
-│   │   └── ui/                   # Avatar, Card, Badge, Button, Input, Modal, etc.
-│   ├── stores/              # Zustand state stores
-│   │   ├── authStore.js     # User auth, JWT, Google OAuth, authFetch helper
-│   │   ├── cartStore.js     # Shopping cart (localStorage)
-│   │   ├── orderStore.js    # Order state
-│   │   └── themeStore.js    # Dark mode toggle (persisted)
-│   ├── hooks/               # React Query hooks
-│   │   ├── useProducts.js   # Deals, search, price history
-│   │   ├── usePlatforms.js  # Platform connections
-│   │   ├── useSubscription.js # Active subscription
-│   │   ├── useSuppliers.js  # Supplier directory
-│   │   └── useWatchlist.js  # Watchlist alerts
-│   └── lib/
-│       ├── constants.js     # Categories, plans, themes, currencies
-│       └── storefrontThemes.js # 5 themes: Sunset, Midnight, Forest, Lavender, Coral
-├── scripts/
-│   └── seed-test-user.js    # Create test user (test@togogo.com / test1234)
-├── docs/
-│   └── claude-context-prompt.md # Detailed project context (20KB)
-├── public/
-│   ├── favicon.svg
-│   └── tiktok*.txt          # TikTok verification files
-├── vercel.json              # Rewrites + security headers
-├── vite.config.js           # React, Tailwind, PWA config
-├── eslint.config.js         # ESLint with React hooks
-├── index.html               # SPA entry point
-└── package.json             # Dependencies and scripts
+┌─────────────────────────────────────────────┐
+│  Frontend (React SPA)                        │
+│  togogo.me — main site                       │
+│  *.togogo.me — customer storefronts          │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────┴────────────────────────────┐
+│  Vercel Serverless Functions (/api/)         │
+│  Each .js file = independent function        │
+│  Auth: JWT + Google OAuth + setup secret     │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────┴────────────────────────────┐
+│  PostgreSQL (Neon) — @vercel/postgres        │
+│  Auto-migration via ensureSchema()           │
+│  15+ tables, all CREATE IF NOT EXISTS        │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────┴────────────────────────────┐
+│  External APIs                               │
+│  - AliExpress DS API (products)              │
+│  - Stripe (payments, subscriptions, Connect) │
+│  - Google OAuth                              │
+└─────────────────────────────────────────────┘
 ```
+
+## Key Directories
+
+```
+/api/
+  _lib/          — Shared: db.js, auth.js, suppliers.js, commission.js
+  admin/         — Admin panel endpoints (products, users, orders, stores, settings)
+  auth/          — Signup, signin, Google OAuth, profile
+  connect/       — Stripe Connect (onboard, status, dashboard)
+  cron/          — Cron jobs (import-products runs every 6hrs)
+  storefront/    — Public store API (store.js, order.js, checkout.js)
+  subscriptions/ — Stripe billing (checkout, portal, sync)
+  webhooks/      — Stripe webhook handler
+  dropship/      — Product search, trending, categories, counts
+  store-provision/ — Store creation, subdomain setup
+/src/
+  pages/         — All React pages (HomePage, StorefrontPage, ProfilePage, admin/*)
+  components/    — Shared UI (ProductGrid, AdminLayout, etc.)
+  stores/        — Zustand stores (authStore, cartStore, orderStore, themeStore)
+  lib/           — Constants, storefront themes
+```
+
+## Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| users | Accounts, roles (buyer/subscriber/admin), stripe_account_id |
+| user_products | Products per store owner (from AliExpress import) |
+| user_orders | Order tracking with commission, Stripe payment refs |
+| user_stores | Store subdomains, Stripe Connect ID/status, theme |
+| subscriptions | Stripe subscription billing ($19.99/mo) |
+| platform_connections | OAuth tokens for eBay, Etsy, Amazon, etc. |
+| user_domains | Custom domain purchases |
+| disputes | Stripe chargebacks |
+| refunds | Refund tracking |
+| admin_settings | Key-value config (commission rate, API keys, cron stats) |
+| categories | Product category hierarchy |
+| catalog_products | Admin-curated product catalog |
+
+## AliExpress Integration
+
+**APIs used (DS = Dropshipping, no OAuth required):**
+- `aliexpress.ds.feedname.get` — returns 135 feeds with product counts
+- `aliexpress.ds.recommend.feed.get` — returns products from a feed (50/page)
+
+**APIs NOT available (InsufficientPermission):**
+- `aliexpress.affiliate.*` — app doesn't have affiliate permissions
+- `aliexpress.ds.product.get` — requires OAuth access_token
+
+**Product flow:**
+1. Cron job runs every 6 hours → fetches from 15+ feeds
+2. Products normalized: title, images[], cost, suggestedPrice, category
+3. Stored in `user_products` table for each active store
+4. Storefront serves from database, falls back to live API if empty
+
+**Feed names that work:** DS_Global_topsellers, DS_ConsumerElectronics_bestsellers, DS_Home&Kitchen_bestsellers, DS_Beauty_bestsellers, DS_Sports&Outdoors_bestsellers, DS_Automobile&Accessories_bestsellers, etc.
+
+## Stripe Integration
+
+**Subscriptions:**
+- $19.99 AUD/month for store creation
+- Stripe Checkout → webhook confirms → store activated
+
+**Stripe Connect (Custom accounts, embedded onboarding):**
+- POST /api/connect/onboard — creates account + returns embedded session
+- GET /api/connect/status — checks account status/balance
+- POST /api/connect/dashboard — embedded payments/payouts dashboard
+- Webhook: account.updated syncs status to user_stores
+
+**Storefront Checkout (destination charges):**
+- POST /api/storefront/checkout — creates Stripe Checkout Session
+- If store has active Connect: transfer_data.destination + application_fee_amount
+- Webhook: checkout.session.completed confirms order
+
+## Environment Variables (all in Vercel)
+
+**Required:**
+- `JWT_SECRET` — Auth token signing
+- `POSTGRES_URL` — Neon database connection
+- `STRIPE_SECRET_KEY` — Stripe API
+- `STRIPE_WEBHOOK_SECRET` — Webhook verification
+- `VITE_STRIPE_PUBLISHABLE_KEY` — Client-side Stripe
+- `ALIEXPRESS_APP_KEY` — AliExpress DS API
+- `ALIEXPRESS_APP_SECRET` — AliExpress signing
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
+
+**Optional:**
+- `CRON_SECRET` — Vercel cron authentication
+- `VERCEL_TOKEN`, `VERCEL_PROJECT_ID` — Store provisioning
+- `RESEND_API_KEY` — Email notifications
+
+## Admin Access
+
+- Admin role set in database: `UPDATE users SET role = 'admin' WHERE email = 'sfrench71@gmail.com'`
+- Admin endpoints check role from DATABASE (not JWT) to avoid stale tokens
+- Setup secret fallback: `x-setup-secret` header or `?secret=JWT_SECRET` query param
+
+## Current State (April 2026)
+
+### Working:
+- ✅ Auth (email + Google OAuth)
+- ✅ Database (15+ tables, auto-migration)
+- ✅ Admin panel (7 pages: dashboard, users, products, orders, stores, marketing, settings)
+- ✅ AliExpress product fetching (600+ products, growing via cron)
+- ✅ Multi-tenant storefronts (4 active stores)
+- ✅ Stripe subscriptions ($19.99/mo)
+- ✅ Stripe Connect onboarding (embedded, Custom accounts)
+- ✅ Stripe Connect checkout (destination charges, payment splits)
+- ✅ Product import (manual + cron every 6hrs)
+- ✅ Dark theme storefronts
+- ✅ Product image gallery
+- ✅ Category filtering with counts
+
+### Needs Work:
+- ⚠️ Storefront infinite scroll (currently paginated)
+- ⚠️ Store owner dashboard for managing products
+- ⚠️ Email notifications (welcome, order confirmation)
+- ⚠️ Order tracking/fulfillment pipeline
+- ⚠️ Dispute resolution UI
+- ⚠️ Dev branch workflow (currently pushing to production)
 
 ## Commands
 
 ```bash
-npm run dev           # Start Vite dev server (port 5173)
-npm run build         # Build production bundle
-npm run lint          # ESLint check
-npm run preview       # Preview production build
-npm run seed:test-user # Seed test user (test@togogo.com / test1234)
+npm run dev          # Local dev server
+npm run build        # Production build (vite build)
+npm run lint         # ESLint
 ```
 
-## Database
+## Key Files
 
-**10 tables, auto-created on first request via `ensureSchema()` in `api/_lib/db.js`:**
-
-| Table | Purpose |
-|-------|---------|
-| `users` | Accounts (email, password_hash, google_id, role, wallet_balance, trust_score) |
-| `user_orders` | Orders with supplier_cost, sale_price, profit, commission, tracking |
-| `user_products` | Products listed by sellers (supplier_cost, sale_price, platforms_listed) |
-| `subscriptions` | Stripe subscriptions (plan, status, stripe_subscription_id) |
-| `platform_connections` | OAuth tokens for eBay/Etsy/Amazon/TikTok/WooCommerce |
-| `user_domains` | Purchased custom domains (Namecheap registration) |
-| `user_stores` | One-click stores (subdomain, status, provision_data JSONB) |
-| `disputes` | Stripe chargebacks (stripe_dispute_id, evidence_due_by) |
-| `refunds` | Refund records (stripe_charge_id, amount, reason) |
-| `admin_settings` | Key-value config (commission rate, API keys, secrets) |
-
-No manual migrations needed — schema uses `CREATE TABLE IF NOT EXISTS` and inline `ALTER TABLE` for column additions.
-
-## Authentication
-
-- **JWT:** 30-day expiry, payload `{ id, email, role }`, stored in localStorage as `togogo-token`
-- **Password:** bcryptjs with 12 rounds
-- **Google OAuth:** Full flow via `google-auth-library` (redirect → callback → find/create user → JWT)
-- **Admin auth:** role === 'admin' OR `x-setup-secret` header matching `JWT_SECRET` (for initial setup)
-- **authFetch:** Helper in `authStore.js` that auto-attaches Bearer token to all API requests
-
-## Multi-Tenant Architecture
-
-1. Wildcard DNS `*.togogo.me` routes all subdomains to the same Vercel deployment
-2. `App.jsx` detects subdomain from `window.location.hostname`
-3. Subdomain requests render `StorefrontPage` (public, no auth)
-4. StorefrontPage fetches `/api/storefront/store?subdomain=X` for store data and products
-5. Data isolation via `user_stores.user_id` and `user_products.user_id`
-
-## Commission System
-
-- Default: **5%** of sale_price (configurable in admin_settings `platform_fee_percent`)
-- Centralized via `api/_lib/commission.js` — all backend reads dynamic admin setting
-- Tracked per-order: `user_orders.commission` and `user_orders.commission_rate`
-- `sale_price = supplier_cost + (supplier_cost × commission_rate) + seller_markup`
-- Admin dashboard shows total_fees, total_payouts, platform_balance
-
-## Stripe Integration
-
-- **Subscription:** $19.99 AUD/month for store creation
-- **Checkout:** Creates Stripe session → redirects to Stripe → webhook activates store
-- **Webhook** (`/api/webhooks/stripe`): Handles 13 events — checkout.session.completed, subscription lifecycle, invoice success/failure, disputes, refunds
-- **Customer Portal:** `/api/subscriptions/portal` returns Stripe-hosted billing management URL
-- **Domain purchase:** Stripe checkout → webhook → Namecheap registration
-- **Webhook security:** Signature verification via `stripe.webhooks.constructEvent()`, raw body required (`config.api.bodyParser = false`)
-
-## Store Provisioning (10 Steps)
-
-`/api/store-provision/provision.js` runs a 10-step process:
-1. validate — verify store name & subdomain format
-2. subdomain — register with Vercel API
-3. dns — configure DNS (automatic via Vercel wildcard)
-4. ssl — provision SSL certificate
-5. storefront — deploy (already live via Vercel)
-6. theme — apply store theme
-7. products — import starter products from suppliers via `importStarterProducts()`
-8. payments — setup payment processing
-9. suppliers — link supplier connections
-10. finalize — mark store active
-
-Frontend polls `/api/store-provision/status` every ~2s for progress. Progress stored in `user_stores.provision_data` (JSONB).
-
-## Supplier Integrations
-
-Unified interface in `api/_lib/suppliers.js` (~1000 lines):
-- **CJ Dropshipping** — API key auth, product search, order placement
-- **AliExpress** — App key/secret, product search
-- **Printful** — API key, print-on-demand
-- **Printify** — API key, print-on-demand
-- **Gooten** — Recipe ID + partner billing key, print-on-demand
-
-All normalized to common product format with NSFW filtering and margin calculation.
-
-## Platform Integrations
-
-OAuth-based connections for selling on external marketplaces:
-- **eBay** — Standard OAuth2 flow
-- **Etsy** — PKCE OAuth flow
-- **Amazon** — SP-API OAuth
-- **TikTok Shop** — Standard OAuth
-- **WooCommerce** — WC-Auth flow + order sync webhook
-
-Product push currently implemented only for WooCommerce (`api/platforms/push-product.js`).
-
-## Environment Variables
-
-See `.env.example` for all required variables. Key ones:
-- `JWT_SECRET` — required for auth
-- `POSTGRES_URL` — Vercel Postgres / Neon connection string
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Google OAuth
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` — Stripe billing
-- `VERCEL_TOKEN`, `VERCEL_PROJECT_ID` — store provisioning
-- Platform and supplier API keys (see `.env.example` for full list)
-
-## Key Patterns
-
-- **No Express server** — pure Vercel Functions, each route is a standalone `.js` file
-- **Auto-init schema** — `ensureSchema()` runs on every DB connection, creates tables if missing
-- **Webhook-driven activation** — Stripe webhook triggers store activation after payment
-- **No dummy data** — all data comes from database, no localStorage fallbacks
-- **Currency:** AUD (Australian Dollars) throughout
+| File | What it does |
+|------|-------------|
+| `api/_lib/suppliers.js` | AliExpress API: signing, feeds, product normalization, search |
+| `api/_lib/db.js` | Database connection, schema, all migrations |
+| `api/_lib/auth.js` | JWT, password hashing, OAuth, admin checks |
+| `api/_lib/commission.js` | Platform fee calculation (5% default) |
+| `api/storefront/store.js` | Public storefront API (products + store info) |
+| `api/storefront/checkout.js` | Stripe Checkout with Connect payment splits |
+| `api/webhooks/stripe.js` | All Stripe webhook handling (13+ events) |
+| `api/connect/onboard.js` | Stripe Connect account creation + embedded onboarding |
+| `api/cron/import-products.js` | Automated product import from AliExpress |
+| `src/pages/StorefrontPage.jsx` | Customer-facing store (products, cart, checkout) |
+| `src/pages/ProfilePage.jsx` | User profile + store setup steps |
+| `src/pages/SetupPaymentsPage.jsx` | Stripe Connect onboarding page |
+| `src/stores/authStore.js` | Zustand auth state + authFetch helper |
+| `vercel.json` | Rewrites, headers, cron schedule |

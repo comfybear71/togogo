@@ -9,8 +9,7 @@ const FEATURES = [
   'Automated marketing across all social channels',
   'Auto-list products on eBay, Etsy, Amazon & more',
   'Dashboard with earnings, trends & stats',
-  'All 5 suppliers (CJ, AliExpress, Printful, Printify, Gooten)',
-  'Print-on-demand included',
+  'AliExpress — millions of products at wholesale prices',
   'Unlimited product listings',
 ];
 
