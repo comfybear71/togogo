@@ -377,9 +377,9 @@ async function fetchFeedProducts(feedName, page = 1, pageSize = 50) {
   try {
     const data = await callAPI('aliexpress.ds.recommend.feed.get', {
       feed_name: feedName,
+      country: 'AU',
       target_currency: 'AUD',
       target_language: 'EN',
-      ship_to_country: 'AU',
       page_no: String(page),
       page_size: String(Math.min(pageSize, 50)),
       sort: 'volumeDesc',
