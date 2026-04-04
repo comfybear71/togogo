@@ -213,8 +213,11 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
       }
     }
 
+    const productUrl = `https://www.aliexpress.com/item/${productId}.html`
+
     const params = {
-      ae_product_id: String(productId),
+      product_id: String(productId),
+      product_url: productUrl,
       logistics_address: JSON.stringify({
         receiver_country: shippingAddress.country || 'AU',
         receiver_province: shippingAddress.state || '',
@@ -224,12 +227,10 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
         receiver_name: shippingAddress.name || '',
         receiver_phone: shippingAddress.phone || '',
       }),
-      // ae_sku_info is required — JSON array of product/SKU/count
-      ae_sku_info: JSON.stringify([{
+      product_count: String(quantity || 1),
+      sku_info: JSON.stringify({
         sku_id: String(resolvedSkuId || ''),
-        product_id: String(productId),
-        count: quantity || 1,
-      }]),
+      }),
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
