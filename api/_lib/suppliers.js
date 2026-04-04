@@ -205,7 +205,6 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       try {
         const details = await getProductDetails(productId)
         if (details?.variants?.length > 0) {
-          // Use the raw skuAttr string (format: "14:350853#Black;5:361386")
           resolvedSkuAttr = details.variants[0].skuAttr || ''
           console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr}`)
         }
@@ -216,30 +215,40 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       resolvedSkuAttr = skuId
     }
 
-    // DS API requires ALL params wrapped in param_place_order_request4_open_api_d_t_o
-    const orderRequest = {
-      logistics_address: {
-        address: shippingAddress.line1 || shippingAddress.address || '',
-        city: shippingAddress.city || '',
-        country: shippingAddress.country || 'AU',
-        full_name: shippingAddress.name || '',
-        mobile_no: shippingAddress.phone || '',
-        phone_country: '+61',
-        province: shippingAddress.state || '',
-        zip: shippingAddress.zip || '',
-      },
-      product_items: [{
-        product_id: Number(productId),
-        product_count: quantity || 1,
-        sku_attr: resolvedSkuAttr,
-        logistics_service_name: 'CAINIAO_STANDARD',
-      }],
+    const address = {
+      address: shippingAddress.line1 || shippingAddress.address || '',
+      city: shippingAddress.city || '',
+      country: shippingAddress.country || 'AU',
+      full_name: shippingAddress.name || '',
+      mobile_no: shippingAddress.phone || '',
+      phone_country: '+61',
+      province: shippingAddress.state || '',
+      zip: shippingAddress.zip || '',
     }
 
-    console.log(`[AliExpress] Order request: ${JSON.stringify(orderRequest).slice(0, 500)}`)
+    const productItems = [{
+      product_id: Number(productId),
+      product_count: quantity || 1,
+      sku_attr: resolvedSkuAttr,
+      logistics_service_name: 'CAINIAO_STANDARD',
+    }]
 
+    console.log(`[AliExpress] Order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${address.full_name} ${address.city} ${address.country}`)
+
+    // Send BOTH wrapped object AND flat top-level params
+    // Different API versions/endpoints expect different formats
     const params = {
-      param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
+      param_place_order_request4_open_api_d_t_o: JSON.stringify({
+        logistics_address: address,
+        product_items: productItems,
+      }),
+      // Also send as flat params in case API version expects them
+      ae_product_id: String(productId),
+      product_id: String(productId),
+      product_url: `https://www.aliexpress.com/item/${productId}.html`,
+      logistics_address: JSON.stringify(address),
+      product_count: String(quantity || 1),
+      sku_attr: resolvedSkuAttr,
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
