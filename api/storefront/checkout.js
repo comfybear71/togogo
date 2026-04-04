@@ -90,7 +90,10 @@ export default async function handler(req, res) {
     }
 
     const totalAmount = lineItems.reduce((s, li) => s + li.price_data.unit_amount * li.quantity, 0)
-    const applicationFee = Math.round(totalAmount * commissionRate) // platform commission in cents
+    const totalSupplierCostCents = Math.round(totalSupplierCost * 100)
+    // Commission on PROFIT (sale minus cost), not on total sale
+    const profitCents = totalAmount - totalSupplierCostCents
+    const applicationFee = Math.round(Math.max(profitCents, 0) * commissionRate) // 20% of profit
 
     const orderRef = `TG-${Date.now().toString(36).toUpperCase()}`
 
