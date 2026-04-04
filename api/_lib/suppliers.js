@@ -222,14 +222,19 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 
     // aliexpress.trade.buy.placeorder — ACTUALLY places the order on AliExpress
     // Creates "Awaiting Payment" order. Store owner pays in bulk on AliExpress.
+    const countryCode = mapCountryToISO(shippingAddress.country || 'AU')
+    const fullName = shippingAddress.name || 'Customer'
+    const phone = shippingAddress.phone || '0400000000'
+
     const orderRequest = {
       logistics_address: {
-        address: shippingAddress.line1 || shippingAddress.address || '',
-        city: shippingAddress.city || '',
-        country: shippingAddress.country || 'AU',
-        full_name: shippingAddress.name || '',
-        mobile_no: shippingAddress.phone || '0000000000',
-        phone_country: '+61',
+        address: shippingAddress.line1 || shippingAddress.address || 'N/A',
+        city: shippingAddress.city || 'N/A',
+        country: countryCode,
+        contact_person: fullName,
+        full_name: fullName,
+        mobile_no: phone,
+        phone_country: countryCode === 'AU' ? '+61' : '+1',
         province: shippingAddress.state || '',
         zip: shippingAddress.zip || '',
       },
@@ -277,6 +282,24 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 // ============================================
 // DS ORDER TRACKING — get order status and tracking
 // ============================================
+
+// Map common country names to 2-letter ISO codes
+function mapCountryToISO(country) {
+  if (!country || country.length === 2) return (country || 'AU').toUpperCase()
+  const map = {
+    'australia': 'AU', 'united states': 'US', 'usa': 'US', 'united kingdom': 'GB',
+    'uk': 'GB', 'canada': 'CA', 'new zealand': 'NZ', 'germany': 'DE',
+    'france': 'FR', 'italy': 'IT', 'spain': 'ES', 'japan': 'JP',
+    'china': 'CN', 'india': 'IN', 'brazil': 'BR', 'mexico': 'MX',
+    'south korea': 'KR', 'singapore': 'SG', 'malaysia': 'MY',
+    'indonesia': 'ID', 'thailand': 'TH', 'philippines': 'PH',
+    'vietnam': 'VN', 'ireland': 'IE', 'netherlands': 'NL',
+    'sweden': 'SE', 'norway': 'NO', 'denmark': 'DK', 'finland': 'FI',
+    'poland': 'PL', 'austria': 'AT', 'switzerland': 'CH',
+    'belgium': 'BE', 'portugal': 'PT', 'russia': 'RU',
+  }
+  return map[country.toLowerCase()] || country.slice(0, 2).toUpperCase()
+}
 
 export async function getOrderTracking(orderId) {
   try {
