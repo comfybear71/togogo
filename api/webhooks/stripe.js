@@ -195,7 +195,8 @@ export default async function handler(req, res) {
                 // Auto-submit to AliExpress
                 try {
                   const { rows: fullOrders } = await sql`
-                    SELECT id, supplier_product_id, quantity, shipping_address, customer_name, customer_email
+                    SELECT id, supplier_product_id, quantity, shipping_address, customer_name, customer_email,
+                           supplier_cost, sale_price, stripe_checkout_session
                     FROM user_orders WHERE platform_order_id = ${orderRef} AND supplier = 'AliExpress'
                   `
                   for (const order of fullOrders) {
@@ -207,6 +208,29 @@ export default async function handler(req, res) {
                     const orderAmount = parseFloat(order.supplier_cost || order.sale_price || 0)
                     let shippingAddr = {}
                     try { shippingAddr = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch {}
+
+                    // Also try to get shipping address from Stripe session (more complete)
+                    try {
+                      const stripeSession = await stripe.checkout.sessions.retrieve(
+                        order.stripe_checkout_session || '',
+                        { expand: ['shipping_details'] }
+                      )
+                      if (stripeSession?.shipping_details?.address) {
+                        const sa = stripeSession.shipping_details
+                        shippingAddr = {
+                          ...shippingAddr,
+                          name: sa.name || shippingAddr.name || order.customer_name,
+                          line1: sa.address.line1 || shippingAddr.line1 || '',
+                          city: sa.address.city || shippingAddr.city || '',
+                          state: sa.address.state || shippingAddr.state || '',
+                          zip: sa.address.postal_code || shippingAddr.zip || '',
+                          country: sa.address.country || shippingAddr.country || 'AU',
+                          phone: shippingAddr.phone || '',
+                        }
+                        console.log(`[Webhook] Stripe shipping: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
+                      }
+                    } catch { /* non-critical */ }
+
                     console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
                     const result = await submitOrder({
                       productId,
