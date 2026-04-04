@@ -660,14 +660,33 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
           <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
             <h2 className={`text-sm font-semibold ${theme.textPrimary} mb-3`}>Order Summary</h2>
             {cart.items.map((item) => (
-              <div key={item.id} className="flex justify-between py-2 text-sm">
-                <span className={theme.textSecondary}>{item.title} x{item.quantity}</span>
-                <span className={`font-medium ${theme.textPrimary}`}>A${(item.price * item.quantity).toFixed(2)}</span>
+              <div key={item.id} className="flex items-center gap-3 py-3 border-b border-white/[0.06] last:border-0">
+                <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                  {item.image ? (
+                    <img src={item.image} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-gray-300" /></div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${theme.textPrimary} line-clamp-2`}>{item.title}</p>
+                  <p className={`text-xs ${theme.textMuted}`}>Qty: {item.quantity}</p>
+                </div>
+                <span className={`font-semibold ${theme.textPrimary} text-sm`}>A${(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
-            <div className={`mt-3 border-t pt-3 flex justify-between text-base font-bold ${theme.textPrimary}`} style={{ borderColor: theme.accentLight }}>
-              <span>Total</span>
-              <span>A${cart.total.toFixed(2)}</span>
+            <div className={`mt-3 border-t pt-3 space-y-2`} style={{ borderColor: theme.accentLight }}>
+              <div className={`flex justify-between text-sm ${theme.textSecondary}`}>
+                <span>Subtotal</span>
+                <span>A${cart.total.toFixed(2)}</span>
+              </div>
+              <div className={`flex justify-between text-sm text-emerald-400`}>
+                <span>Shipping</span>
+                <span>A$6.00</span>
+              </div>
+              <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
+                <span>Total</span>
+                <span>A${(cart.total + 6).toFixed(2)}</span>
             </div>
           </div>
 
@@ -705,7 +724,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             className="w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
-            {submitting ? 'Placing Order...' : `Place Order — A$${cart.total.toFixed(2)}`}
+            {submitting ? 'Placing Order...' : `Place Order — A$${(cart.total + 6).toFixed(2)}`}
           </button>
 
           <p className={`text-center text-xs ${theme.textMuted}`}>
