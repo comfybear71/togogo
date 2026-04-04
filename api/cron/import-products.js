@@ -146,12 +146,14 @@ export default async function handler(req, res) {
             INSERT INTO user_products (
               user_id, title, description, image, images, supplier,
               supplier_product_id, supplier_cost, sale_price,
+              api_price, shipping_cost, tax_amount,
               category, is_active
             ) VALUES (
               ${store.user_id}, ${p.title}, ${p.title},
               ${p.image || ''}, ${imgArray},
               ${'AliExpress'}, ${p.productId || p.id},
               ${wholesaleCost}, ${salePrice},
+              ${realProductCost}, ${shippingCost}, ${taxEstimate},
               ${p.category || 'General'}, true
             )
           `

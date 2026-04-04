@@ -49,7 +49,8 @@ export default async function handler(req, res) {
       if (search && category) {
         productQuery = await sql`
           SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
+                 p.sale_price, p.api_price, p.shipping_cost, p.tax_amount,
+                 p.category, p.is_active, p.total_sold, p.total_revenue,
                  p.created_at, p.updated_at,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_products p
@@ -61,7 +62,8 @@ export default async function handler(req, res) {
       } else if (search) {
         productQuery = await sql`
           SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
+                 p.sale_price, p.api_price, p.shipping_cost, p.tax_amount,
+                 p.category, p.is_active, p.total_sold, p.total_revenue,
                  p.created_at, p.updated_at,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_products p
@@ -73,7 +75,8 @@ export default async function handler(req, res) {
       } else if (category) {
         productQuery = await sql`
           SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
+                 p.sale_price, p.api_price, p.shipping_cost, p.tax_amount,
+                 p.category, p.is_active, p.total_sold, p.total_revenue,
                  p.created_at, p.updated_at,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_products p
@@ -85,7 +88,8 @@ export default async function handler(req, res) {
       } else {
         productQuery = await sql`
           SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
+                 p.sale_price, p.api_price, p.shipping_cost, p.tax_amount,
+                 p.category, p.is_active, p.total_sold, p.total_revenue,
                  p.created_at, p.updated_at,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_products p
