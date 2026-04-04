@@ -122,19 +122,66 @@ export default async function handler(req, res) {
         } else if (session.metadata?.togogo_order_ref) {
           // Storefront checkout completed — confirm the order
           const orderRef = session.metadata.togogo_order_ref
+          const storeUserId = session.metadata.togogo_store_user_id
           const paymentIntent = session.payment_intent
+          const shippingDetails = session.shipping_details || session.customer_details || {}
           console.log(`[Webhook] Storefront checkout completed: ${orderRef} (payment: ${paymentIntent})`)
 
           try {
+            // Update order with payment intent and shipping address from Stripe
+            const shippingAddress = shippingDetails.address ? JSON.stringify({
+              name: shippingDetails.name || '',
+              line1: shippingDetails.address.line1 || '',
+              line2: shippingDetails.address.line2 || '',
+              city: shippingDetails.address.city || '',
+              state: shippingDetails.address.state || '',
+              postcode: shippingDetails.address.postal_code || '',
+              country: shippingDetails.address.country || 'AU',
+            }) : null
+
             await sql`
               UPDATE user_orders
               SET status = 'pending',
                   stripe_payment_intent = ${paymentIntent},
+                  shipping_address = COALESCE(${shippingAddress}::jsonb, shipping_address),
                   notes = ${'Payment confirmed via Stripe'},
                   updated_at = NOW()
               WHERE platform_order_id = ${orderRef} AND status = 'pending_payment'
             `
             console.log(`[Webhook] Order ${orderRef} confirmed`)
+
+            // Save/update store customer
+            try {
+              const { rows: storeRows } = await sql`SELECT id FROM user_stores WHERE user_id = ${storeUserId}`
+              const storeId = storeRows[0]?.id
+              const custEmail = session.customer_details?.email || session.customer_email
+              const custName = shippingDetails.name || session.customer_details?.name || ''
+
+              if (storeId && custEmail) {
+                const { rows: orderTotals } = await sql`
+                  SELECT COALESCE(SUM(sale_price), 0)::numeric as total
+                  FROM user_orders WHERE platform_order_id = ${orderRef}
+                `
+                const orderTotal = parseFloat(orderTotals[0]?.total) || 0
+
+                await sql`
+                  INSERT INTO store_customers (store_id, email, name, phone, shipping_address, order_count, total_spent, last_order_at)
+                  VALUES (${storeId}, ${custEmail}, ${custName}, ${session.customer_details?.phone || ''},
+                          ${shippingAddress || '{}'}::jsonb, 1, ${orderTotal}, NOW())
+                  ON CONFLICT (store_id, email) DO UPDATE SET
+                    name = COALESCE(NULLIF(${custName}, ''), store_customers.name),
+                    phone = COALESCE(NULLIF(${session.customer_details?.phone || ''}, ''), store_customers.phone),
+                    shipping_address = COALESCE(${shippingAddress}::jsonb, store_customers.shipping_address),
+                    order_count = store_customers.order_count + 1,
+                    total_spent = store_customers.total_spent + ${orderTotal},
+                    last_order_at = NOW(),
+                    updated_at = NOW()
+                `
+                console.log(`[Webhook] Store customer saved: ${custEmail} for store ${storeId}`)
+              }
+            } catch (custErr) {
+              console.error(`[Webhook] Failed to save store customer:`, custErr.message)
+            }
 
             // Send email notifications
             try {

@@ -39,7 +39,7 @@ function useCart(subdomain) {
 export default function StorefrontPage({ subdomain }) {
   const [storeData, setStoreData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState('grid') // grid | product | cart | checkout | success
+  const [view, setView] = useState('grid') // grid | product | cart | checkout | success | orders
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
@@ -123,6 +123,11 @@ export default function StorefrontPage({ subdomain }) {
         </button>
       </div>
     </div>
+  )
+
+  // ─── Order Tracking View ─────────────────────────────────────────────
+  if (view === 'orders') return (
+    <OrderTrackingView store={store} theme={theme} subdomain={subdomain} cart={cart} onBack={() => setView('grid')} />
   )
 
   // ─── Checkout View ──────────────────────────────────────────────────
@@ -223,8 +228,8 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
-    <div className={`min-h-screen ${theme.pageBg}`}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
+    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} onTrackOrder={() => setView('orders')} />
 
       {/* Hero */}
       <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] py-16 px-4 text-center">
@@ -340,9 +345,10 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   const [selectedVariant, setSelectedVariant] = useState(null)
 
   useEffect(() => {
-    // Extract AliExpress product ID from the product ID (remove ae_ prefix)
-    const aeId = (product.id || '').replace('ae_', '')
-    if (!aeId || aeId.startsWith('cur_')) {
+    // Use the supplier product ID (AliExpress ID) for fetching details
+    const aeId = (product.supplierProductId || product.id || '').replace('ae_', '')
+    // Skip if it's a UUID (not an AliExpress numeric ID)
+    if (!aeId || aeId.includes('-') || aeId.startsWith('cur_')) {
       setLoadingDetails(false)
       return
     }
@@ -368,9 +374,9 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   const hasVariants = details?.variants?.length > 1
 
   return (
-    <div className="min-h-screen bg-[#0f172a]">
+    <div className="min-h-screen bg-[#0f172a] overflow-x-hidden">
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={onCartClick} />
-      <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="mx-auto max-w-5xl px-4 py-8 overflow-hidden">
         <button
           onClick={onBack}
           className="mb-6 flex items-center gap-1 text-sm text-slate-400 hover:text-white"
@@ -490,7 +496,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   )
 }
 
-function StoreHeader({ store, cart, theme, onCartClick }) {
+function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
@@ -500,10 +506,19 @@ function StoreHeader({ store, cart, theme, onCartClick }) {
           </div>
           <span className="text-lg font-bold text-white">{store.name}</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {onTrackOrder && (
+            <button
+              onClick={onTrackOrder}
+              className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
+            >
+              <Package className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Track Order</span>
+            </button>
+          )}
           <a
             href="/auth"
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
+            className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
           >
             Sign In
           </a>
@@ -694,6 +709,156 @@ function ProductImageGallery({ product }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Order Tracking View ──────────────────────────────────────────────
+function OrderTrackingView({ store, theme, subdomain, cart, onBack }) {
+  const [email, setEmail] = useState('')
+  const [orderRef, setOrderRef] = useState('')
+  const [orders, setOrders] = useState(null)
+  const [customer, setCustomer] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function lookupOrders(e) {
+    e.preventDefault()
+    if (!email) return
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ email })
+      if (orderRef) params.set('orderRef', orderRef)
+      else params.set('subdomain', subdomain)
+
+      const res = await fetch(`${API_BASE}/api/storefront/customer?${params}`)
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Order not found')
+        setOrders(null)
+        return
+      }
+
+      setOrders(data.orders || [])
+      setCustomer(data.customer || null)
+    } catch {
+      setError('Failed to look up orders. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const statusConfig = {
+    pending: { color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'Pending' },
+    pending_payment: { color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Awaiting Payment' },
+    processing: { color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Processing' },
+    shipped: { color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Shipped' },
+    delivered: { color: 'text-green-400', bg: 'bg-green-400/10', label: 'Delivered' },
+    cancelled: { color: 'text-red-400', bg: 'bg-red-400/10', label: 'Cancelled' },
+    refunded: { color: 'text-zinc-400', bg: 'bg-zinc-400/10', label: 'Refunded' },
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0f172a] overflow-x-hidden">
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={onBack} />
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <button onClick={onBack} className="mb-6 flex items-center gap-1 text-sm text-slate-400 hover:text-white">
+          <ChevronLeft className="h-4 w-4" /> Back to store
+        </button>
+
+        <div className="mb-8 text-center">
+          <Package className="mx-auto h-12 w-12 text-slate-500 mb-3" />
+          <h2 className="text-2xl font-bold text-white mb-1">Track Your Order</h2>
+          <p className="text-sm text-slate-400">Enter your email to see your orders from {store.name}</p>
+        </div>
+
+        <form onSubmit={lookupOrders} className="mb-8 space-y-3">
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="Your email address"
+            required
+            className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-[#FF6B35] focus:outline-none"
+          />
+          <input
+            type="text"
+            value={orderRef}
+            onChange={e => setOrderRef(e.target.value)}
+            placeholder="Order reference (optional — e.g. TG-XXXXX)"
+            className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-3 text-sm text-white placeholder-zinc-500 focus:border-[#FF6B35] focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={loading || !email}
+            className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-colors disabled:opacity-50"
+            style={{ backgroundColor: theme.accent }}
+          >
+            {loading ? 'Looking up...' : 'Find My Orders'}
+          </button>
+        </form>
+
+        {error && (
+          <div className="mb-6 rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-center">
+            <p className="text-sm text-red-400">{error}</p>
+          </div>
+        )}
+
+        {customer && (
+          <div className="mb-6 rounded-xl bg-white/[0.03] border border-white/[0.06] p-4">
+            <p className="text-sm text-slate-400">Welcome back, <span className="text-white font-medium">{customer.name}</span></p>
+            <p className="text-xs text-slate-500 mt-1">{customer.order_count} order{customer.order_count !== 1 ? 's' : ''} · ${parseFloat(customer.total_spent || 0).toFixed(2)} AUD total</p>
+          </div>
+        )}
+
+        {orders && orders.length === 0 && (
+          <div className="text-center py-12">
+            <Package className="mx-auto h-10 w-10 text-slate-600 mb-3" />
+            <p className="text-slate-400">No orders found for this email.</p>
+          </div>
+        )}
+
+        {orders && orders.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Your Orders ({orders.length})</h3>
+            {orders.map(order => {
+              const sc = statusConfig[order.status] || statusConfig.pending
+              return (
+                <div key={order.id} className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-4">
+                  <div className="flex items-start gap-4">
+                    {order.product_image && (
+                      <img src={order.product_image} alt="" className="h-16 w-16 rounded-lg object-cover flex-shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{order.product_title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Ref: {order.order_ref} · {new Date(order.created_at).toLocaleDateString()}</p>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${sc.bg} ${sc.color}`}>
+                          {sc.label}
+                        </span>
+                        <span className="text-sm font-semibold text-white">${parseFloat(order.sale_price).toFixed(2)}</span>
+                      </div>
+                      {order.tracking_number && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <Truck className="h-3.5 w-3.5 text-slate-500" />
+                          <span className="text-xs text-slate-400">Tracking: </span>
+                          {order.tracking_url ? (
+                            <a href={order.tracking_url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium" style={{ color: theme.accent }}>{order.tracking_number}</a>
+                          ) : (
+                            <span className="text-xs font-medium text-white">{order.tracking_number}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     // Get the store owner's custom products
     const { rows: ownerProducts } = await sql`
       SELECT id, title, description, image, images, supplier, supplier_cost,
-             sale_price, category, total_sold, created_at
+             sale_price, category, total_sold, created_at, supplier_product_id
       FROM user_products
       WHERE user_id = ${store.owner_id} AND is_active = true
       ORDER BY created_at DESC
@@ -53,6 +53,7 @@ export default async function handler(req, res) {
 
     let products = ownerProducts.map((p) => ({
       id: p.id,
+      supplierProductId: p.supplier_product_id || '',
       title: p.title,
       description: p.description,
       image: p.image,
