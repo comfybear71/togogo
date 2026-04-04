@@ -687,6 +687,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
               <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
                 <span>Total</span>
                 <span>A${(cart.total + 6).toFixed(2)}</span>
+              </div>
             </div>
           </div>
 
