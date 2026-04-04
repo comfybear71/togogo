@@ -1,40 +1,48 @@
 import { useState, useEffect } from 'react'
-import { useAuthStore } from '../../stores/authStore'
 import { Shield, Loader2, ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 export default function AdminRoute({ children }) {
-  const user = useAuthStore((s) => s.user)
-  const authLoading = useAuthStore((s) => s.loading)
   const [setupSecret, setSetupSecret] = useState(sessionStorage.getItem('togogo-setup-secret') || '')
   const [checking, setChecking] = useState(true)
   const [hasAccess, setHasAccess] = useState(false)
   const [error, setError] = useState(null)
 
-  // Check access: either admin user token or valid setup secret
+  // Check access: verify via API call (checks DB role, not JWT payload)
   useEffect(() => {
-    // Wait for auth store to finish loading
-    if (authLoading) return
-
-    // If user is logged in as admin, grant access
-    if (user?.role === 'admin') {
-      setHasAccess(true)
-      setChecking(false)
-      return
-    }
-
-    // If there's a stored setup secret, validate it via API
+    const token = localStorage.getItem('togogo-token')
     const storedSecret = sessionStorage.getItem('togogo-setup-secret')
-    if (storedSecret) {
-      validateSecret(storedSecret)
-      return
-    }
 
-    // No auth — show login prompt
-    setChecking(false)
-  }, [authLoading, user])
+    if (token) {
+      // Verify admin access via API — this checks DB role
+      verifyAdminAccess(token)
+    } else if (storedSecret) {
+      validateSecret(storedSecret)
+    } else {
+      setChecking(false)
+    }
+  }, [])
+
+  async function verifyAdminAccess(token) {
+    setChecking(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        setHasAccess(true)
+      } else {
+        // Token exists but not admin — show secret prompt
+        setHasAccess(false)
+      }
+    } catch {
+      setError('Could not reach the server')
+    } finally {
+      setChecking(false)
+    }
+  }
 
   async function validateSecret(secret) {
     setChecking(true)
