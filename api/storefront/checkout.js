@@ -143,13 +143,13 @@ export default async function handler(req, res) {
       try {
         await sql`
           INSERT INTO user_orders (
-            user_id, supplier, product_title, product_image,
+            user_id, supplier, supplier_product_id, product_title, product_image,
             supplier_cost, sale_price, profit, commission, commission_rate, quantity,
             platform, platform_order_id,
             customer_name, customer_email, shipping_address,
             status, notes, stripe_checkout_session
           ) VALUES (
-            ${store.user_id}, ${item.supplier || 'AliExpress'}, ${item.title}, ${item.image},
+            ${store.user_id}, ${item.supplier || 'AliExpress'}, ${item.supplierProductId || ''}, ${item.title}, ${item.image},
             ${supplierCost}, ${salePrice},
             ${Math.round((salePrice - supplierCost - commission) * 100) / 100},
             ${commission}, ${commissionRate}, ${qty},

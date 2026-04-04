@@ -200,7 +200,10 @@ export default async function handler(req, res) {
                   `
                   for (const order of fullOrders) {
                     const productId = (order.supplier_product_id || '').replace('ae_', '')
-                    if (!productId) continue
+                    if (!productId || productId.includes('-')) {
+                      console.error(`[Webhook] Skipping AliExpress submit for order ${order.id}: no valid supplier_product_id (got: ${order.supplier_product_id || 'empty'})`)
+                      continue
+                    }
                     let shippingAddr = {}
                     try { shippingAddr = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch {}
                     console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
