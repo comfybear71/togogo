@@ -494,8 +494,8 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
 
             {/* Shipping */}
             <div className="flex flex-wrap gap-2 mb-6">
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-emerald-400 bg-emerald-500/10">
-                <Truck className="h-4 w-4" /> Free Shipping
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
+                <Truck className="h-4 w-4" /> A$6 flat rate shipping
               </div>
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection
