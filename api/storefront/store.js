@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     // Get the store owner's custom products
     const { rows: ownerProducts } = await sql`
       SELECT id, title, description, image, images, supplier, supplier_cost,
-             sale_price, category, total_sold, created_at
+             sale_price, category, total_sold, supplier_product_id, created_at
       FROM user_products
       WHERE user_id = ${store.owner_id} AND is_active = true
       ORDER BY created_at DESC
@@ -67,6 +67,7 @@ export default async function handler(req, res) {
       images,
       price: parseFloat(p.sale_price) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
+      supplierProductId: p.supplier_product_id || '',
       category: p.category || 'General',
       totalSold: p.total_sold || 0,
       createdAt: p.created_at,

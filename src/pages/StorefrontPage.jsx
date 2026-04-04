@@ -340,9 +340,11 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   const [selectedVariant, setSelectedVariant] = useState(null)
 
   useEffect(() => {
-    // Extract AliExpress product ID from the product ID (remove ae_ prefix)
-    const aeId = (product.id || '').replace('ae_', '')
-    if (!aeId || aeId.startsWith('cur_')) {
+    // Use supplierProductId (AliExpress numeric ID) — NOT the DB UUID
+    const aeId = product.supplierProductId
+      || (product.id || '').replace('ae_', '')
+    // Skip if it's a UUID or non-AliExpress product
+    if (!aeId || aeId.includes('-') || aeId.startsWith('cur_')) {
       setLoadingDetails(false)
       return
     }
@@ -380,9 +382,11 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
         >
           <ChevronLeft className="h-4 w-4" /> Back to products
         </button>
-        <div className="grid gap-8 md:grid-cols-2">
+        <div className="grid gap-8 md:grid-cols-2 overflow-hidden">
           {/* Image Gallery */}
-          <ProductImageGallery product={displayProduct} />
+          <div className="min-w-0">
+            <ProductImageGallery product={displayProduct} />
+          </div>
 
           {/* Product Info */}
           <div>
@@ -715,9 +719,9 @@ function ProductImageGallery({ product }) {
   }
 
   return (
-    <div>
+    <div className="w-full min-w-0 max-w-full">
       {/* Main image */}
-      <div className="aspect-square overflow-hidden rounded-2xl bg-[#1e293b] mb-3">
+      <div className="aspect-square overflow-hidden rounded-2xl bg-[#1e293b] mb-3 w-full">
         <img
           src={images[selectedIdx] || images[0]}
           alt={product.title}
