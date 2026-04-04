@@ -338,6 +338,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   const [details, setDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(true)
   const [selectedVariant, setSelectedVariant] = useState(null)
+  const [selectedProps, setSelectedProps] = useState({}) // e.g. { Color: "Beige", Size: "S" }
 
   useEffect(() => {
     // Use supplierProductId (AliExpress numeric ID) — NOT the DB UUID
@@ -420,6 +421,25 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               })
               const groupNames = Object.keys(propGroups)
 
+              // Helper: update one property, keep others, then find best matching variant
+              const handleSelect = (groupName, val) => {
+                const next = { ...selectedProps }
+                if (next[groupName] === val) {
+                  delete next[groupName] // deselect
+                } else {
+                  next[groupName] = val
+                }
+                setSelectedProps(next)
+                // Find the variant that matches ALL selected properties
+                const match = details.variants.find(v => {
+                  const vProps = v.properties || []
+                  return Object.entries(next).every(([k, vv]) =>
+                    vProps.some(p => p.name === k && p.value === vv)
+                  )
+                })
+                setSelectedVariant(match || null)
+              }
+
               // If we can't parse properties, fall back to flat list
               if (groupNames.length === 0) {
                 return (
@@ -434,7 +454,6 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
                             className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
                             {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
                             <span>{label}</span>
-                            {v.price > 0 && <span className="text-slate-500">${(v.price || 0).toFixed(2)}</span>}
                           </button>
                         )
                       })}
@@ -450,16 +469,12 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
                       <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">{groupName}</p>
                       <div className="flex flex-wrap gap-2 overflow-x-auto">
                         {[...propGroups[groupName]].map(val => {
-                          // Find a variant that has this property value
-                          const matchingVariant = details.variants.find(v =>
-                            (v.properties || []).some(p => p.name === groupName && p.value === val)
-                          )
-                          const img = matchingVariant?.properties?.find(p => p.name === groupName && p.value === val)?.image
-                          const isSelected = selectedVariant?.properties?.some(p => p.name === groupName && p.value === val)
+                          const img = details.variants.find(v =>
+                            (v.properties || []).some(p => p.name === groupName && p.value === val && p.image)
+                          )?.properties?.find(p => p.name === groupName && p.value === val)?.image
+                          const isSelected = selectedProps[groupName] === val
                           return (
-                            <button key={val} onClick={() => {
-                              if (matchingVariant) setSelectedVariant(isSelected ? null : matchingVariant)
-                            }}
+                            <button key={val} onClick={() => handleSelect(groupName, val)}
                               className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
                               {img && <img src={img} alt="" className="h-6 w-6 rounded object-cover" />}
                               <span>{val}</span>
@@ -523,7 +538,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
             {details.description.includes('<') ? (
               <div
-                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto overflow-x-hidden break-words"
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words"
                 dangerouslySetInnerHTML={{ __html: details.description }}
               />
             ) : (
