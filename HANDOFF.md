@@ -1,10 +1,10 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-04 (Session 3 — Restore lost features + UI fixes)
-**Session:** Fix UI issues from crashed session + restore lost backend features
-**Branch:** claude/fix-image-crash-BiIj9 (needs Vercel preview test)
-**Previous Branch:** claude/ipad-dev-prompt-2C4eB (PRODUCTION on Vercel)
+**Last Updated:** 2026-04-04 (Session 3 — Full e2e dropshipping working!)
+**Session:** Fix UI + restore lost features + AliExpress auto-ordering
+**Branch:** claude/fix-image-crash-BiIj9 (PRODUCTION on Vercel)
+**Previous Branch:** claude/ipad-dev-prompt-2C4eB
 
 ---
 
@@ -23,6 +23,16 @@
 4. **AliExpress auto-order** — Stripe webhook now auto-submits orders to AliExpress after payment confirmation.
 5. **sync-orders.js cron** — NEW: Polls AliExpress every 4 hours for order status updates (shipping, delivery, cancellation).
 6. **Auto-refund** — When AliExpress cancels an order, auto-issues Stripe refund.
+
+### AliExpress Auto-Ordering — FULLY WORKING:
+- **First successful order:** 8210482925469621 (tablet holder stand x2, shipped to Gray NT)
+- API: `aliexpress.trade.buy.placeorder` (NOT `aliexpress.ds.member.orderdata.submit` which is data backflow only)
+- Wrapper param: `param_place_order_request4_open_api_d_t_o` with `logistics_address` + `product_items`
+- SKU auto-resolved from product details API
+- Australian states mapped to full names (NT → Northern Territory)
+- Shipping address pulled from Stripe checkout session for completeness
+- Orders appear in AliExpress "Awaiting Payment" — admin pays in bulk
+- Platform commission increased to 20% (configurable via admin_settings)
 
 ### Files Changed:
 - `api/_lib/suppliers.js` — SKU variant labels with human-readable names, ae_sku_info in submitOrder
