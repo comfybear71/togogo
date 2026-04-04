@@ -89,16 +89,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No valid products found' })
     }
 
-    // Add flat A$6 shipping fee
-    lineItems.push({
-      price_data: {
-        currency: 'aud',
-        product_data: { name: 'Shipping & Handling' },
-        unit_amount: 600, // A$6.00 in cents
-      },
-      quantity: 1,
-    })
-
+    // No separate shipping fee — shipping + tax included in product price (Temu model)
     const totalAmount = lineItems.reduce((s, li) => s + li.price_data.unit_amount * li.quantity, 0)
     const totalSupplierCostCents = Math.round(totalSupplierCost * 100)
     // Commission on PROFIT (sale minus cost), not on total sale

@@ -46,9 +46,9 @@ export default async function handler(req, res) {
           : 0
         const freeShipping = cheapestShipping === 0
 
-        // Real cost = product price + shipping + ~18% tax
+        // Real cost = product price + shipping + ~13% tax (AU GST + AE fees)
         const productCost = details.cost || parseFloat(product.supplier_cost) || 0
-        const taxEstimate = productCost * 0.18
+        const taxEstimate = productCost * 0.13
         const totalRealCost = productCost + cheapestShipping + taxEstimate
 
         // Store price = real cost × 1.5 (50% markup)
