@@ -256,6 +256,8 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       }]),
       sku_info: JSON.stringify({ sku_attr: resolvedSkuAttr }),
       order_amount: String(orderAmount || '0'),
+      paytime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      order_memo: 'ToGoGo dropship order',
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
