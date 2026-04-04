@@ -339,8 +339,6 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   const [loadingDetails, setLoadingDetails] = useState(true)
   const [selectedVariant, setSelectedVariant] = useState(null)
 
-  const API_BASE = import.meta.env.VITE_API_URL || ''
-
   useEffect(() => {
     // Extract AliExpress product ID from the product ID (remove ae_ prefix)
     const aeId = (product.id || '').replace('ae_', '')
@@ -366,7 +364,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
     title: details.title || product.title,
   } : product
 
-  const displayPrice = selectedVariant ? selectedVariant.price : product.price
+  const displayPrice = selectedVariant ? selectedVariant.price : (product.price || 0)
   const hasVariants = details?.variants?.length > 1
 
   return (
@@ -389,8 +387,8 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
             <p className="text-3xl font-bold text-white mb-2">${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">AUD</span></p>
 
-            {product.originalPrice > displayPrice && (
-              <p className="text-sm text-slate-500 line-through mb-4">${product.originalPrice?.toFixed(2)}</p>
+            {product.originalPrice && product.originalPrice > displayPrice && (
+              <p className="text-sm text-slate-500 line-through mb-4">${parseFloat(product.originalPrice).toFixed(2)}</p>
             )}
 
             {/* Rating + Orders */}
