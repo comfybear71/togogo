@@ -409,9 +409,9 @@ function normaliseProduct(p) {
   const originalPrice = parseFloat(p.target_original_price || p.original_price || '0')
   // Use the SALE price (what people actually pay), not the inflated "was" price
   const cost = salePrice || originalPrice
-  // Add 13% tax estimate (AU GST + AE fees) — shipping added by enrich-prices endpoint
-  const costWithTax = cost * 1.13
-  // 1.5x markup — final price includes everything (Temu model, no separate shipping)
+  // Add 15% tax estimate (AU GST 10% + AE platform fees ~5%)
+  const costWithTax = cost * 1.15
+  // 1.5x markup on cost+tax — this is the price shown on screen
   const suggestedPrice = Math.ceil(costWithTax * 1.5 * 100) / 100
 
   const title = p.product_title || ''

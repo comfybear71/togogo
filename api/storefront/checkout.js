@@ -91,10 +91,24 @@ export default async function handler(req, res) {
 
     // No separate shipping fee — shipping + tax included in product price (Temu model)
     const totalAmount = lineItems.reduce((s, li) => s + li.price_data.unit_amount * li.quantity, 0)
+
+    // Add A$6 flat shipping — goes to PLATFORM (ToGoGo), not store owner
+    const shippingFeeCents = 600
+    lineItems.push({
+      price_data: {
+        currency: 'aud',
+        product_data: { name: 'Shipping' },
+        unit_amount: shippingFeeCents,
+      },
+      quantity: 1,
+    })
+    const totalWithShipping = totalAmount + shippingFeeCents
+
     const totalSupplierCostCents = Math.round(totalSupplierCost * 100)
     // Commission on PROFIT (sale minus cost), not on total sale
     const profitCents = totalAmount - totalSupplierCostCents
-    const applicationFee = Math.round(Math.max(profitCents, 0) * commissionRate) // 20% of profit
+    // Platform gets: 30% of profit + ALL of the shipping fee
+    const applicationFee = Math.round(Math.max(profitCents, 0) * commissionRate) + shippingFeeCents
 
     const orderRef = `TG-${Date.now().toString(36).toUpperCase()}`
 
