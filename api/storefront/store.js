@@ -51,18 +51,26 @@ export default async function handler(req, res) {
       ORDER BY created_at DESC
     `
 
-    let products = ownerProducts.map((p) => ({
+    let products = ownerProducts.map((p) => {
+      // Safely parse images — could be array, string, or null from Postgres TEXT[]
+      let images = p.images
+      if (!images) images = []
+      else if (typeof images === 'string') {
+        try { images = JSON.parse(images) } catch { images = images.replace(/[{}]/g, '').split(',').filter(Boolean) }
+      }
+      if (!Array.isArray(images)) images = []
+      return {
       id: p.id,
       title: p.title,
       description: p.description,
-      image: p.image,
-      images: p.images || [],
+      image: p.image || (images[0] || ''),
+      images,
       price: parseFloat(p.sale_price) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
       category: p.category || 'General',
       totalSold: p.total_sold || 0,
       createdAt: p.created_at,
-    }))
+    }})
 
     // If the owner has no custom products, fetch live AliExpress products
     // so the store always has something to display

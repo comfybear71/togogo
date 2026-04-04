@@ -304,7 +304,7 @@ export default function StorefrontPage({ subdomain }) {
                   <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
                   <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
                   <div className="flex items-center justify-between">
-                    <p className={`text-lg font-bold ${theme.textPrimary}`}>${product.price.toFixed(2)}</p>
+                    <p className={`text-lg font-bold ${theme.textPrimary}`}>${(product.price || 0).toFixed(2)}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); cart.add(product) }}
                       className="rounded-lg p-2 transition-colors hover:text-white"
@@ -356,10 +356,11 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
       .finally(() => setLoadingDetails(false))
   }, [product.id])
 
-  // Merge details with basic product data
+  // Merge details with basic product data — safely handle images
+  const safeImages = (arr) => Array.isArray(arr) ? arr : typeof arr === 'string' ? arr.replace(/[{}]/g, '').split(',').filter(Boolean) : []
   const displayProduct = details ? {
     ...product,
-    images: details.images?.length > 0 ? details.images : product.images,
+    images: safeImages(details.images).length > 0 ? safeImages(details.images) : safeImages(product.images),
     description: details.description || product.description,
     title: details.title || product.title,
   } : product
@@ -419,7 +420,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
                       >
                         {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
                         <span>{label}</span>
-                        <span className="text-slate-500">${v.price.toFixed(2)}</span>
+                        <span className="text-slate-500">${(v.price || 0).toFixed(2)}</span>
                       </button>
                     )
                   })}
@@ -656,8 +657,12 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
 // ─── Product Image Gallery — shows all images with thumbnails ──────────
 function ProductImageGallery({ product }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const images = (product.images && product.images.length > 0)
-    ? [...new Set(product.images)].filter(Boolean) // deduplicate
+  // Safely handle images — could be array, string, or null from DB
+  const rawImages = Array.isArray(product.images) ? product.images
+    : typeof product.images === 'string' ? product.images.replace(/[{}]/g, '').split(',').filter(Boolean)
+    : []
+  const images = rawImages.length > 0
+    ? [...new Set(rawImages)].filter(Boolean)
     : product.image ? [product.image] : []
 
   if (images.length === 0) {
@@ -676,6 +681,7 @@ function ProductImageGallery({ product }) {
           src={images[selectedIdx] || images[0]}
           alt={product.title}
           className="h-full w-full object-contain"
+          onError={(e) => { e.target.style.display = 'none' }}
         />
       </div>
       {/* Thumbnails */}
