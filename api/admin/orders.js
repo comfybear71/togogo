@@ -27,7 +27,7 @@ export default async function handler(req, res) {
                  o.created_at, o.updated_at,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_orders o
-          JOIN users u ON u.id = o.user_id
+          LEFT JOIN users u ON u.id = o.user_id
           ORDER BY o.created_at DESC
           LIMIT 200
         `.catch(e => { console.error('Orders query failed:', e.message); return { rows: [] } }),
