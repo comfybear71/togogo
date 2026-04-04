@@ -408,8 +408,10 @@ function normaliseProduct(p) {
   const originalPrice = parseFloat(p.target_original_price || p.original_price || '0')
   // Use the SALE price (what people actually pay), not the inflated "was" price
   const cost = salePrice || originalPrice
-  // 1.5x markup (50% on supplier cost)
-  const suggestedPrice = Math.ceil(cost * 1.5 * 100) / 100
+  // Add 18% tax estimate to cost (AliExpress charges tax at checkout)
+  const costWithTax = cost * 1.18
+  // 1.5x markup on cost+tax — shipping covered by flat A$6 fee at checkout
+  const suggestedPrice = Math.ceil(costWithTax * 1.5 * 100) / 100
 
   const title = p.product_title || ''
   const image = p.product_main_image_url || p.product_main_image || ''
