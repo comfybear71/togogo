@@ -538,7 +538,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
             {details.description.includes('<') ? (
               <div
-                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words"
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words [&_*]:!text-slate-300 [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_strong]:!text-white [&_b]:!text-white"
                 dangerouslySetInnerHTML={{ __html: fixDescriptionImages(details.description) }}
               />
             ) : (
