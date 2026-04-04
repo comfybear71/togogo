@@ -237,24 +237,24 @@ export default function StorefrontPage({ subdomain }) {
 
       <div className="mx-auto max-w-7xl px-4 py-8">
         {/* Search + Filters */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center overflow-hidden">
+          <div className="relative flex-1 min-w-0">
             <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.textMuted}`} />
             <input
               type="text"
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
-              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight }}
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
+              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight, fontSize: '16px' }}
             />
           </div>
           {storeData.categories.length > 0 && (
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className={`rounded-xl border px-4 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
-              style={{ borderColor: theme.accentLight }}
+              className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
+              style={{ borderColor: theme.accentLight, fontSize: '16px' }}
             >
               <option value="">All Categories ({storeData.products.length})</option>
               {storeData.categories.map((c) => (
@@ -619,7 +619,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
     }
   }
 
-  const inputClass = `rounded-lg border px-3 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`
+  const inputClass = `rounded-lg border px-3 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`
 
   return (
     <div className={`min-h-screen ${theme.pageBg}`}>
