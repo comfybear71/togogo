@@ -205,7 +205,7 @@ export default function StorefrontPage({ subdomain }) {
             <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
               <div className={`flex justify-between text-lg font-bold ${theme.textPrimary} mb-4`}>
                 <span>Total</span>
-                <span>${cart.total.toFixed(2)}</span>
+                <span>A${cart.total.toFixed(2)}</span>
               </div>
               <button
                 onClick={() => setView('checkout')}
@@ -304,7 +304,7 @@ export default function StorefrontPage({ subdomain }) {
                   <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
                   <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
                   <div className="flex items-center justify-between">
-                    <p className={`text-lg font-bold ${theme.textPrimary}`}>${(product.price || 0).toFixed(2)}</p>
+                    <p className={`text-lg font-bold ${theme.textPrimary}`}>A${(product.price || 0).toFixed(2)}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); cart.add(product) }}
                       className="rounded-lg p-2 transition-colors hover:text-white"
@@ -527,7 +527,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
               style={{ backgroundColor: theme.accent }}
             >
-              Add to Cart — ${displayPrice.toFixed(2)}
+              Add to Cart — A${displayPrice.toFixed(2)}
             </button>
           </div>
         </div>
@@ -659,12 +659,12 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             {cart.items.map((item) => (
               <div key={item.id} className="flex justify-between py-2 text-sm">
                 <span className={theme.textSecondary}>{item.title} x{item.quantity}</span>
-                <span className={`font-medium ${theme.textPrimary}`}>${(item.price * item.quantity).toFixed(2)}</span>
+                <span className={`font-medium ${theme.textPrimary}`}>A${(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <div className={`mt-3 border-t pt-3 flex justify-between text-base font-bold ${theme.textPrimary}`} style={{ borderColor: theme.accentLight }}>
               <span>Total</span>
-              <span>${cart.total.toFixed(2)}</span>
+              <span>A${cart.total.toFixed(2)}</span>
             </div>
           </div>
 
@@ -702,7 +702,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             className="w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
-            {submitting ? 'Placing Order...' : `Place Order — $${cart.total.toFixed(2)}`}
+            {submitting ? 'Placing Order...' : `Place Order — A$${cart.total.toFixed(2)}`}
           </button>
 
           <p className={`text-center text-xs ${theme.textMuted}`}>
