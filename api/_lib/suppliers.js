@@ -151,13 +151,25 @@ export async function getProductDetails(productId) {
       category: baseInfo.category_id || '',
       categoryName: baseInfo.product_category_name || '',
       // SKU variants (sizes, colors, etc.)
-      variants: skuInfo.map(sku => ({
-        skuId: sku.id,
-        skuAttr: sku.sku_attr || '',
-        price: parseFloat(sku.offer_sale_price || sku.sku_price || '0'),
-        stock: sku.sku_stock ? parseInt(sku.sku_stock) : null,
-        image: sku.ae_sku_property_dtos?.ae_sku_property_d_t_o?.[0]?.sku_image || '',
-      })),
+      variants: skuInfo.map(sku => {
+        const props = sku.ae_sku_property_dtos?.ae_sku_property_d_t_o || []
+        // Build human-readable label from property values
+        const labelParts = props.map(p => p.property_value_definition_name || p.sku_property_value || '').filter(Boolean)
+        const image = props.find(p => p.sku_image)?.sku_image || ''
+        return {
+          skuId: sku.id,
+          skuAttr: sku.sku_attr || '',
+          label: labelParts.join(' / ') || '',
+          properties: props.map(p => ({
+            name: p.sku_property_name || '',
+            value: p.property_value_definition_name || p.sku_property_value || '',
+            image: p.sku_image || '',
+          })),
+          price: parseFloat(sku.offer_sale_price || sku.sku_price || '0'),
+          stock: sku.sku_stock ? parseInt(sku.sku_stock) : null,
+          image,
+        }
+      }),
       // Shipping options
       shipping: shippingInfo.map(s => ({
         company: s.logistics_company || '',
@@ -187,10 +199,22 @@ export async function getProductDetails(productId) {
 
 export async function submitOrder({ productId, skuId, quantity, shippingAddress }) {
   try {
+    // If no SKU ID provided, fetch product details to get the first/default SKU
+    let resolvedSkuId = skuId
+    if (!resolvedSkuId) {
+      try {
+        const details = await getProductDetails(productId)
+        if (details?.variants?.length > 0) {
+          resolvedSkuId = details.variants[0].skuId
+          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuId}`)
+        }
+      } catch (err) {
+        console.error(`[AliExpress] Failed to auto-resolve SKU for ${productId}:`, err.message)
+      }
+    }
+
     const params = {
-      ae_product_id: String(productId),
-      ae_sku_id: String(skuId || ''),
-      quantity: String(quantity || 1),
+      product_id: String(productId),
       logistics_address: JSON.stringify({
         receiver_country: shippingAddress.country || 'AU',
         receiver_province: shippingAddress.state || '',
@@ -200,6 +224,12 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
         receiver_name: shippingAddress.name || '',
         receiver_phone: shippingAddress.phone || '',
       }),
+      // ae_sku_info is required — JSON array of product/SKU/count
+      ae_sku_info: JSON.stringify([{
+        sku_id: String(resolvedSkuId || ''),
+        product_id: String(productId),
+        count: quantity || 1,
+      }]),
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)

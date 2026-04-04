@@ -248,7 +248,26 @@ export async function initializeSchema() {
     )
   `
 
+  // Store customers — tracks customers per storefront
+  await sql`
+    CREATE TABLE IF NOT EXISTS store_customers (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      store_id UUID REFERENCES user_stores(id) ON DELETE CASCADE NOT NULL,
+      email TEXT NOT NULL,
+      name TEXT DEFAULT '',
+      phone TEXT DEFAULT '',
+      total_orders INTEGER DEFAULT 0,
+      total_spent NUMERIC(10,2) DEFAULT 0,
+      first_order_at TIMESTAMPTZ DEFAULT NOW(),
+      last_order_at TIMESTAMPTZ DEFAULT NOW(),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(store_id, email)
+    )
+  `
+
   // Indexes
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_email ON store_customers(email)`
   await sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`
   await sql`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_orders_user ON user_orders(user_id)`

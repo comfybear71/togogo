@@ -4,6 +4,7 @@ import { sql, ensureSchema } from '../_lib/db.js'
 import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
 import { sendEmail, orderConfirmationEmail, newOrderAlertEmail } from '../_lib/email.js'
+import { submitOrder } from '../_lib/suppliers.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -149,7 +150,7 @@ export default async function handler(req, res) {
                 const total = items.reduce((s, i) => s + i.price * i.quantity, 0)
 
                 // Get store name
-                const { rows: storeRows } = await sql`SELECT store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
+                const { rows: storeRows } = await sql`SELECT id, store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
                 const storeName = storeRows[0]?.store_name || storeRows[0]?.subdomain || 'ToGoGo Store'
 
                 // Get store owner email
@@ -171,6 +172,59 @@ export default async function handler(req, res) {
                 await sendEmail({ to: 'sfrench71@gmail.com', ...adminAlert })
 
                 console.log(`[Webhook] Emails sent for order ${orderRef}`)
+
+                // Save store customer (for repeat customer recognition)
+                try {
+                  const storeId = storeRows[0]?.id
+                  if (storeId && customerEmail) {
+                    await sql`
+                      INSERT INTO store_customers (store_id, email, name, total_orders, total_spent, first_order_at, last_order_at)
+                      VALUES (${storeId}, ${customerEmail}, ${customerName}, 1, ${total}, NOW(), NOW())
+                      ON CONFLICT (store_id, email)
+                      DO UPDATE SET total_orders = store_customers.total_orders + 1,
+                        total_spent = store_customers.total_spent + ${total},
+                        last_order_at = NOW(),
+                        name = COALESCE(NULLIF(${customerName}, ''), store_customers.name)
+                    `
+                    console.log(`[Webhook] Store customer saved: ${customerEmail}`)
+                  }
+                } catch (custErr) {
+                  console.error(`[Webhook] Failed to save store customer:`, custErr.message)
+                }
+
+                // Auto-submit to AliExpress
+                try {
+                  const { rows: fullOrders } = await sql`
+                    SELECT id, supplier_product_id, quantity, shipping_address, customer_name, customer_email
+                    FROM user_orders WHERE platform_order_id = ${orderRef} AND supplier = 'AliExpress'
+                  `
+                  for (const order of fullOrders) {
+                    const productId = (order.supplier_product_id || '').replace('ae_', '')
+                    if (!productId) continue
+                    let shippingAddr = {}
+                    try { shippingAddr = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch {}
+                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
+                    const result = await submitOrder({
+                      productId,
+                      skuId: null, // auto-resolved from product details
+                      quantity: order.quantity || 1,
+                      shippingAddress: {
+                        ...shippingAddr,
+                        name: order.customer_name || shippingAddr.name || '',
+                        phone: shippingAddr.phone || '',
+                      },
+                    })
+                    if (result.success) {
+                      await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress'}, updated_at = NOW() WHERE id = ${order.id}`
+                      console.log(`[Webhook] AliExpress order submitted: ${result.orderId}`)
+                    } else {
+                      await sql`UPDATE user_orders SET notes = ${'AliExpress auto-submit failed: ' + result.error + '. Manual submission required.'}, updated_at = NOW() WHERE id = ${order.id}`
+                      console.error(`[Webhook] AliExpress submission failed for ${order.id}: ${result.error}`)
+                    }
+                  }
+                } catch (aeErr) {
+                  console.error(`[Webhook] AliExpress auto-submit error:`, aeErr.message)
+                }
               }
             } catch (emailErr) {
               console.error(`[Webhook] Email notification failed:`, emailErr.message)

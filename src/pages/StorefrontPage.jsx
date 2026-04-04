@@ -152,7 +152,7 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Cart View ──────────────────────────────────────────────────────
   if (view === 'cart') return (
-    <div className={`min-h-screen ${theme.pageBg}`}>
+    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => {}} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <button
@@ -223,7 +223,7 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
-    <div className={`min-h-screen ${theme.pageBg}`}>
+    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
 
       {/* Hero */}
@@ -365,13 +365,15 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
     title: details.title || product.title,
   } : product
 
-  const displayPrice = selectedVariant ? selectedVariant.price : (product.price || 0)
+  // Always use the store's sale_price (product.price) — NOT the AliExpress variant/cost price
+  // Variant selection changes the option but the store price is what customers pay
+  const displayPrice = product.price || 0
   const hasVariants = details?.variants?.length > 1
 
   return (
-    <div className="min-h-screen bg-[#0f172a]">
+    <div className="min-h-screen bg-[#0f172a] overflow-x-hidden">
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={onCartClick} />
-      <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="mx-auto max-w-5xl px-4 py-8 overflow-x-hidden">
         <button
           onClick={onBack}
           className="mb-6 flex items-center gap-1 text-sm text-slate-400 hover:text-white"
@@ -400,33 +402,72 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               </div>
             )}
 
-            {/* Variants (sizes/colors) */}
-            {hasVariants && (
-              <div className="mb-6">
-                <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Options</p>
-                <div className="flex flex-wrap gap-2">
-                  {details.variants.map((v, i) => {
-                    const label = v.skuAttr?.split('#')?.[1] || `Option ${i + 1}`
-                    const isSelected = selectedVariant?.skuId === v.skuId
-                    return (
-                      <button
-                        key={v.skuId}
-                        onClick={() => setSelectedVariant(isSelected ? null : v)}
-                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${
-                          isSelected
-                            ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white'
-                            : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'
-                        }`}
-                      >
-                        {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
-                        <span>{label}</span>
-                        <span className="text-slate-500">${(v.price || 0).toFixed(2)}</span>
-                      </button>
-                    )
-                  })}
+            {/* Variants (sizes/colors) — grouped by property type */}
+            {hasVariants && (() => {
+              // Group variants by property types (e.g., Color, Size)
+              const propGroups = {}
+              details.variants.forEach(v => {
+                (v.properties || []).forEach(p => {
+                  if (p.name && p.value) {
+                    if (!propGroups[p.name]) propGroups[p.name] = new Set()
+                    propGroups[p.name].add(p.value)
+                  }
+                })
+              })
+              const groupNames = Object.keys(propGroups)
+
+              // If we can't parse properties, fall back to flat list
+              if (groupNames.length === 0) {
+                return (
+                  <div className="mb-6">
+                    <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Options</p>
+                    <div className="flex flex-wrap gap-2 overflow-x-auto">
+                      {details.variants.map((v, i) => {
+                        const label = v.label || `Option ${i + 1}`
+                        const isSelected = selectedVariant?.skuId === v.skuId
+                        return (
+                          <button key={v.skuId} onClick={() => setSelectedVariant(isSelected ? null : v)}
+                            className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
+                            {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
+                            <span>{label}</span>
+                            {v.price > 0 && <span className="text-slate-500">${(v.price || 0).toFixed(2)}</span>}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="mb-6 space-y-4">
+                  {groupNames.map(groupName => (
+                    <div key={groupName}>
+                      <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">{groupName}</p>
+                      <div className="flex flex-wrap gap-2 overflow-x-auto">
+                        {[...propGroups[groupName]].map(val => {
+                          // Find a variant that has this property value
+                          const matchingVariant = details.variants.find(v =>
+                            (v.properties || []).some(p => p.name === groupName && p.value === val)
+                          )
+                          const img = matchingVariant?.properties?.find(p => p.name === groupName && p.value === val)?.image
+                          const isSelected = selectedVariant?.properties?.some(p => p.name === groupName && p.value === val)
+                          return (
+                            <button key={val} onClick={() => {
+                              if (matchingVariant) setSelectedVariant(isSelected ? null : matchingVariant)
+                            }}
+                              className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
+                              {img && <img src={img} alt="" className="h-6 w-6 rounded object-cover" />}
+                              <span>{val}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Shipping */}
             <div className="flex gap-3 mb-6">
@@ -478,7 +519,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
             {details.description.includes('<') ? (
               <div
-                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full"
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto overflow-x-hidden break-words"
                 dangerouslySetInnerHTML={{ __html: details.description }}
               />
             ) : (
