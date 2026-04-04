@@ -74,7 +74,7 @@ export default function AdminRoute({ children }) {
   }
 
   // Still loading auth state
-  if (authLoading || checking) {
+  if (checking) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
