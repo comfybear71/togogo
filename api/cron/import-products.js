@@ -27,6 +27,13 @@ export default async function handler(req, res) {
       return res.json({ success: false, message: 'No active stores' })
     }
 
+    // ?reset=true — clear all products and re-import with correct pricing
+    if (req.query.reset === 'true') {
+      const { rows: delCount } = await sql`SELECT COUNT(*) as count FROM user_products`
+      await sql`DELETE FROM user_products`
+      console.log(`[Cron] RESET: Deleted ${delCount[0].count} products for re-import with new pricing`)
+    }
+
     // Get current product count
     const { rows: countRows } = await sql`SELECT COUNT(DISTINCT supplier_product_id) as count FROM user_products`
     const currentCount = parseInt(countRows[0].count)
