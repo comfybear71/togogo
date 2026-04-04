@@ -234,13 +234,24 @@ export default function ProfilePage() {
                             </p>
                             <p className="text-[10px] text-zinc-600">{step.desc}</p>
                           </div>
-                          {isNext && step.key === 'stripe_connect' && (
+                          {step.key === 'stripe_connect' && !done && (
                             <button
                               onClick={() => navigate('/setup-payments')}
-                              className="px-3 py-1.5 rounded-lg bg-[#06D6A0] text-[10px] font-bold text-white flex-shrink-0 hover:bg-[#05b88a] transition-colors"
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold text-white flex-shrink-0 transition-colors ${
+                                stats?.stripeConnectStatus === 'action_required' ? 'bg-[#FFD23F] text-black hover:bg-[#f0c430]'
+                                : stats?.stripeConnectStatus === 'onboarding' ? 'bg-[#FF6B35] hover:bg-[#e85d2c]'
+                                : 'bg-[#06D6A0] hover:bg-[#05b88a]'
+                              }`}
                             >
-                              Connect
+                              {stats?.stripeConnectStatus === 'action_required' ? 'Action Required'
+                                : stats?.stripeConnectStatus === 'onboarding' ? 'Continue Setup'
+                                : 'Connect'}
                             </button>
+                          )}
+                          {step.key === 'stripe_connect' && done && (
+                            <span className="px-3 py-1.5 rounded-lg bg-[#06D6A0]/10 text-[10px] font-bold text-[#06D6A0] flex-shrink-0">
+                              Connected
+                            </span>
                           )}
                           {isNext && step.key === 'platform' && (
                             <Link to="/launch-store" className="px-3 py-1.5 rounded-lg bg-[#FF6B35] text-[10px] font-bold text-white flex-shrink-0">
@@ -257,6 +268,41 @@ export default function ProfilePage() {
                     })}
                   </div>
                 </div>
+
+                {/* Stripe Connect Status */}
+                {stats?.stripeConnectStatus && stats.stripeConnectStatus !== 'not_connected' && (
+                  <div className="rounded-2xl bg-[#111] border border-white/[0.06] p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-xs font-semibold text-white flex items-center gap-2">
+                        <CreditCard className="h-3.5 w-3.5 text-[#06D6A0]" />
+                        Payment Gateway
+                      </h3>
+                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                        stats.stripeConnectStatus === 'active' ? 'bg-[#06D6A0]/10 text-[#06D6A0]'
+                        : stats.stripeConnectStatus === 'action_required' ? 'bg-[#FFD23F]/10 text-[#FFD23F]'
+                        : 'bg-[#FF6B35]/10 text-[#FF6B35]'
+                      }`}>
+                        {stats.stripeConnectStatus === 'active' ? 'Active'
+                          : stats.stripeConnectStatus === 'action_required' ? 'Action Required'
+                          : stats.stripeConnectStatus === 'pending_verification' ? 'Pending'
+                          : 'Setup Incomplete'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-500">
+                      {stats.stripeConnectStatus === 'active'
+                        ? 'Stripe is connected. You will receive payments when customers buy from your store.'
+                        : 'Complete your Stripe setup to start receiving payments.'}
+                    </p>
+                    {stats.stripeConnectStatus !== 'active' && (
+                      <button
+                        onClick={() => navigate('/setup-payments')}
+                        className="mt-3 w-full py-2 rounded-lg bg-[#06D6A0] text-xs font-bold text-white hover:bg-[#05b88a] transition-colors"
+                      >
+                        Complete Payment Setup
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Connected Platforms */}
                 {activeConnections.length > 0 && (
