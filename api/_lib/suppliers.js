@@ -242,13 +242,20 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
         logistics_address: address,
         product_items: productItems,
       }),
-      // Also send as flat params in case API version expects them
+      // Also send as flat params — API validates these at top level
       ae_product_id: String(productId),
       product_id: String(productId),
       product_url: `https://www.aliexpress.com/item/${productId}.html`,
       logistics_address: JSON.stringify(address),
       product_count: String(quantity || 1),
       sku_attr: resolvedSkuAttr,
+      ae_sku_info: JSON.stringify([{
+        sku_id: resolvedSkuAttr,
+        product_id: String(productId),
+        count: quantity || 1,
+      }]),
+      sku_info: JSON.stringify({ sku_attr: resolvedSkuAttr }),
+      order_amount: String(orderAmount || '0'),
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
