@@ -48,7 +48,7 @@ export default async function handler(req, res) {
              sale_price, category, total_sold, supplier_product_id, created_at
       FROM user_products
       WHERE user_id = ${store.owner_id} AND is_active = true
-      ORDER BY created_at DESC
+      ORDER BY RANDOM()
     `
 
     let products = ownerProducts.map((p) => {
