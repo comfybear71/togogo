@@ -235,7 +235,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
         full_name: fullName,
         mobile_no: phone,
         phone_country: countryCode === 'AU' ? '+61' : '+1',
-        province: shippingAddress.state || '',
+        province: mapAUState(shippingAddress.state, countryCode) || shippingAddress.state || '',
         zip: shippingAddress.zip || '',
       },
       product_items: [{
@@ -247,7 +247,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       }],
     }
 
-    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, ship=${shippingMethod}, to=${orderRequest.logistics_address.full_name} ${orderRequest.logistics_address.city} ${orderRequest.logistics_address.country}`)
+    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, ship=${shippingMethod}, to=${orderRequest.logistics_address.full_name}, ${orderRequest.logistics_address.address}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${orderRequest.logistics_address.zip}, ${orderRequest.logistics_address.country}`)
 
     const params = {
       param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
@@ -282,6 +282,17 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 // ============================================
 // DS ORDER TRACKING — get order status and tracking
 // ============================================
+
+// Map AU state abbreviations to full names (AliExpress may require full names)
+function mapAUState(state, country) {
+  if (!state || country !== 'AU') return state || ''
+  const map = {
+    'NT': 'Northern Territory', 'NSW': 'New South Wales', 'VIC': 'Victoria',
+    'QLD': 'Queensland', 'SA': 'South Australia', 'WA': 'Western Australia',
+    'TAS': 'Tasmania', 'ACT': 'Australian Capital Territory',
+  }
+  return map[state.toUpperCase()] || state
+}
 
 // Map common country names to 2-letter ISO codes
 function mapCountryToISO(country) {
