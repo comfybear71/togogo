@@ -270,7 +270,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
     return {
       success: true,
-      orderId: result.order_id || result.ae_order_id,
+      orderId: result.order_list?.number?.[0] || result.order_id || result.ae_order_id,
       orderData: result,
     }
   } catch (err) {
