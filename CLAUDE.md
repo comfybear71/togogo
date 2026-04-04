@@ -47,7 +47,7 @@ If the user asks you to:
 
 ## Project Overview
 
-**ToGoGo** is a dropshipping & marketplace PWA platform. Store owners sign up, pay $19.99 AUD/month, get a `subdomain.togogo.me` storefront auto-provisioned. Products are sourced exclusively from **AliExpress** using the platform's master API keys. Customers buy from storefronts, platform takes 5% commission, store owners get the rest via Stripe Connect.
+**ToGoGo** is a dropshipping & marketplace PWA platform. Store owners sign up, pay $19.99 AUD/month, get a `subdomain.togogo.me` storefront auto-provisioned. Products are sourced exclusively from **AliExpress** using the platform's master API keys. Customers buy from storefronts, platform takes 30% of profit (sale_price - supplier_cost) as commission, store owners get the rest via Stripe Connect. Orders are auto-created on AliExpress with customer shipping address — admin pays in bulk.
 
 **Live site:** https://togogo.me
 **Storefronts:** https://stu.togogo.me, https://jum.togogo.me, https://stuie.togogo.me, https://annies-shop.togogo.me
