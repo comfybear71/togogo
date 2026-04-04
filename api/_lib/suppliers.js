@@ -408,8 +408,8 @@ function normaliseProduct(p) {
   const originalPrice = parseFloat(p.target_original_price || p.original_price || '0')
   // Use the HIGHER price as cost base — feed sale prices are often fake promos
   const cost = Math.max(salePrice, originalPrice) || salePrice || originalPrice
-  // 3.5x markup ensures profit after AliExpress actual price + currency conversion
-  const suggestedPrice = Math.ceil(cost * 3.5 * 100) / 100
+  // 1.5x markup (50% on cost) — fair customer price, everyone profits
+  const suggestedPrice = Math.ceil(cost * 1.5 * 100) / 100
 
   const title = p.product_title || ''
   const image = p.product_main_image_url || p.product_main_image || ''
