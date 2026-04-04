@@ -18,7 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function MarketingPage() {
-  const token = useAuthStore((s) => s.token);
+  const token = localStorage.getItem('togogo-token');
   const [loading, setLoading] = useState(true);
 
   // Push notification state

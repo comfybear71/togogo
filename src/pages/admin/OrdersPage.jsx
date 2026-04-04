@@ -37,7 +37,7 @@ const disputeStatusColors = {
 };
 
 export default function OrdersPage() {
-  const token = useAuthStore((s) => s.token);
+  const token = localStorage.getItem('togogo-token');
   const [orders, setOrders] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [financials, setFinancials] = useState({ total_fees: 0, total_payouts: 0, platform_balance: 0 });

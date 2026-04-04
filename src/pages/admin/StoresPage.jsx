@@ -40,7 +40,7 @@ function getAdminHeaders(token) {
 }
 
 export default function StoresPage() {
-  const { token } = useAuthStore();
+  const token = localStorage.getItem('togogo-token');
   const [tab, setTab] = useState('stores');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
