@@ -539,7 +539,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             {details.description.includes('<') ? (
               <div
                 className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words"
-                dangerouslySetInnerHTML={{ __html: details.description }}
+                dangerouslySetInnerHTML={{ __html: fixDescriptionImages(details.description) }}
               />
             ) : (
               <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
@@ -715,6 +715,26 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
 }
 
 // ─── Product Image Gallery — shows all images with thumbnails ──────────
+// Fix AliExpress description HTML: lazy-loaded images, protocol-relative URLs
+function fixDescriptionImages(html) {
+  return html
+    // Move data-src to src (AliExpress lazy loading)
+    .replace(/<img([^>]*?)data-src="([^"]+)"([^>]*?)>/gi, (match, before, url, after) => {
+      const fixedUrl = url.startsWith('//') ? 'https:' + url : url
+      // Remove any existing empty/placeholder src
+      const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
+      return `<img${cleaned} src="${fixedUrl}">`
+    })
+    // Fix protocol-relative URLs in remaining src attributes
+    .replace(/src="\/\//g, 'src="https://')
+    // Fix images with empty src that have data-lazy-src or similar
+    .replace(/<img([^>]*?)data-lazy-src="([^"]+)"([^>]*?)>/gi, (match, before, url, after) => {
+      const fixedUrl = url.startsWith('//') ? 'https:' + url : url
+      const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
+      return `<img${cleaned} src="${fixedUrl}">`
+    })
+}
+
 function ProductImageGallery({ product }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
   // Safely handle images — could be array, string, or null from DB
