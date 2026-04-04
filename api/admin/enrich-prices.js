@@ -39,31 +39,31 @@ export default async function handler(req, res) {
         const details = await getProductDetails(aeId)
         if (!details) continue
 
-        // Find cheapest shipping to AU
+        // Find cheapest shipping to AU (stored for future dynamic shipping pricing)
         const shippingOptions = details.shipping || []
         const cheapestShipping = shippingOptions.length > 0
           ? Math.min(...shippingOptions.map(s => s.shippingFee || 0))
           : 0
         const freeShipping = cheapestShipping === 0
 
-        // Real cost = product price + shipping + ~13% tax (AU GST + AE fees)
+        // Product price = (API cost + 15% tax) × 1.5 markup
+        // Shipping is SEPARATE (A$6 flat at checkout, goes to ToGoGo)
         const productCost = details.cost || parseFloat(product.supplier_cost) || 0
-        const taxEstimate = productCost * 0.13
-        const totalRealCost = productCost + cheapestShipping + taxEstimate
+        const taxEstimate = productCost * 0.15
+        const costWithTax = productCost + taxEstimate
+        const newSalePrice = Math.ceil(costWithTax * 1.5 * 100) / 100
 
-        // Store price = real cost × 1.5 (50% markup)
-        const newSalePrice = Math.ceil(totalRealCost * 1.5 * 100) / 100
-
-        // Update ALL products with this supplier_product_id (across all stores)
+        // supplier_cost = real product cost (without shipping, without markup)
+        // sale_price = what customer pays for the product (+ A$6 shipping at checkout)
         await sql`
           UPDATE user_products
-          SET supplier_cost = ${totalRealCost},
+          SET supplier_cost = ${productCost},
               sale_price = ${newSalePrice},
               updated_at = NOW()
           WHERE supplier_product_id = ${product.supplier_product_id}
         `
 
-        console.log(`[Enrich] ${aeId}: cost=$${productCost.toFixed(2)} + ship=$${cheapestShipping.toFixed(2)} + tax=$${taxEstimate.toFixed(2)} = $${totalRealCost.toFixed(2)} → sale=$${newSalePrice.toFixed(2)}${freeShipping ? ' (FREE SHIP)' : ''}`)
+        console.log(`[Enrich] ${aeId}: cost=$${productCost.toFixed(2)} + tax=$${taxEstimate.toFixed(2)} = $${costWithTax.toFixed(2)} × 1.5 → sale=$${newSalePrice.toFixed(2)} | AE ship=$${cheapestShipping.toFixed(2)}${freeShipping ? ' (FREE)' : ''}`)
         updated++
       } catch (err) {
         console.error(`[Enrich] Error for ${aeId}:`, err.message)
