@@ -102,6 +102,7 @@ export default async function handler(req, res) {
       mode: 'payment',
       line_items: lineItems,
       customer_email: customer.email,
+      phone_number_collection: { enabled: true },
       shipping_address_collection: {
         allowed_countries: ['AU', 'US', 'GB', 'NZ', 'CA'],
       },
@@ -158,7 +159,7 @@ export default async function handler(req, res) {
             ${commission}, ${commissionRate}, ${qty},
             'togogo-store', ${orderRef},
             ${customer.name}, ${customer.email},
-            ${JSON.stringify(customer.address || {})},
+            ${JSON.stringify({ ...customer.address, phone: customer.phone || '' })},
             'pending_payment',
             ${`Stripe session: ${session.id}`},
             ${session.id}

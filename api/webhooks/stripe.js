@@ -219,13 +219,13 @@ export default async function handler(req, res) {
                         const sa = stripeSession.shipping_details
                         shippingAddr = {
                           ...shippingAddr,
-                          name: sa.name || shippingAddr.name || order.customer_name,
+                          name: order.customer_name || sa.name || shippingAddr.name || '',
                           line1: sa.address.line1 || shippingAddr.line1 || '',
                           city: sa.address.city || shippingAddr.city || '',
                           state: sa.address.state || shippingAddr.state || '',
                           zip: sa.address.postal_code || shippingAddr.zip || '',
                           country: sa.address.country || shippingAddr.country || 'AU',
-                          phone: shippingAddr.phone || '',
+                          phone: stripeSession.customer_details?.phone || shippingAddr.phone || '',
                         }
                         console.log(`[Webhook] Stripe shipping: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
                       }
