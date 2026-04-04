@@ -1,107 +1,95 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-04
-**Session:** Rebuild from scratch after destructive Claude session
-**Branch:** claude/ipad-dev-prompt-2C4eB (PRODUCTION on Vercel)
+**Last Updated:** 2026-04-04 (Session 2 — Admin fixes)
+**Session:** Fix admin panel auth + orders/stores display
+**Branch:** claude/review-safety-protocol-j8RQJ (PRODUCTION on Vercel)
 
 ---
 
-## What Happened
+## What Was Fixed This Session
 
-A previous Claude session (2026-04-02) went rogue — deleted CLAUDE.md, HANDOFF.md, and 1,798 lines of code. Pushed destructive revert directly to master. Stuart spent 30+ hours rebuilding from 700-900 page session transcripts saved as text documents.
+### Root Causes Found:
+1. **Admin Orders/Stores showed 0 items** — Two bugs:
+   - Orders page used `JOIN` instead of `LEFT JOIN` on users table (orders with missing user_id were excluded)
+   - Orders & Stores pages read JWT token from Zustand store (`useAuthStore`) which was null/stale on page load. Dashboard & Users pages read from `localStorage` directly and worked fine.
+2. **AdminRoute black screen** — After fixing auth, a stale `authLoading` reference (from removed Zustand import) caused a ReferenceError crash on all admin pages.
+3. **Admin access from profile** — AdminRoute now verifies admin access via API call (checks DB role) instead of relying on Zustand store's `user.role`.
 
-This session (2026-04-04) rebuilt:
-- AliExpress integration from scratch (DS API, not Affiliate)
-- Removed all non-AliExpress suppliers (CJ, Printful, Printify, Gooten)
-- Removed all curated/sample/fake products
-- Fixed Stripe Connect (embedded onboarding, Custom accounts)
-- Built storefront checkout with destination charges
-- Created cron job for automated product imports
-- Restored admin products page with pagination
-- Fixed auth (DB role check instead of JWT token role)
-- Fixed storefront dark theme
+### Changes Made:
+- `api/admin/orders.js` — Changed `JOIN` to `LEFT JOIN`, added error logging
+- `api/admin/stores.js` — Added `ensureSchema()`, import fix
+- `api/admin/stats.js` — Added error logging to all catch blocks
+- `api/admin/debug.js` — NEW: Debug endpoint for raw DB queries
+- `src/pages/admin/OrdersPage.jsx` — Read token from localStorage instead of Zustand
+- `src/pages/admin/StoresPage.jsx` — Read token from localStorage instead of Zustand
+- `src/components/admin/AdminRoute.jsx` — Verify admin via API call, removed Zustand dependency
+- `src/pages/ProfilePage.jsx` — Added Admin tab (Shield icon) for admin users
 
 ## Current State
 
-### Working Today:
-- 1,400+ AliExpress products in database (growing via cron every 6hrs)
-- 4 active stores: stu, jum, stuie, annies-shop (all with 250+ products each)
-- Admin panel: all 7 pages functional, products page with pagination
-- Storefront: dark theme, product grid, image gallery, categories with counts, cart, checkout
-- Stripe Connect: onboard/status/dashboard endpoints built
-- Stripe Checkout: destination charges with Connect payment splits built
-- Cron: imports ~100 new products every 6 hours (vercel.json configured)
-- CLAUDE.md + HANDOFF.md restored with MasterHQ safety header
-- AliExpress OAuth callback endpoint ready at /api/platforms/callback/aliexpress
+### All Working:
+- 3,192 AliExpress products in database (growing via cron every 6hrs)
+- 4 active stores: stu, jum, stuie, annies-shop (all with ~798 products each)
+- Admin panel: ALL 7 pages functional (Dashboard, Users, Products, Orders, Stores, Marketing, Settings)
+- Admin Orders: 5 orders showing, $6.63 fees collected
+- Admin Stores: 4 stores showing, all Active
+- Admin Users: 6 users with roles, stores, revenue
+- Admin Products: 3,192 products with pagination (64 pages)
+- Storefront: dark theme, product grid, image gallery, categories, cart, checkout
+- Stripe Connect: 4 accounts (stu=active, jum=active, stuie=action_required, annies-shop=onboarding)
+- Stripe Checkout: destination charges with Connect payment splits
+- Email notifications: built with Resend (domain verified)
+- Profile page: Admin tab for admin users, links to /admin
+- Cron: imports products every 6 hours (vercel.json configured)
+- DS APIs: product details, order submit, order tracking endpoints built
 
 ### Known Issues:
-1. Admin products "Import from AliExpress" button fails auth (use URL with ?secret= instead)
+1. Storefront requires Ctrl+Shift+R on cold start (service worker caching)
 2. Storefront theme hardcoded to midnight (theme_id column exists but UI not built)
 3. No infinite scroll on storefronts yet
-4. No email notifications
-5. No order tracking/fulfillment
+4. Email notifications built but not tested (Resend domain verified)
+5. No order tracking/fulfillment pipeline
 6. Store owner can't manage their own products yet
+7. Pending_payment orders need auto-cleanup (webhook for session.expired built)
 
 ### Database:
-- 200 products imported (50 per store × 4 stores) — cron adding more
-- sfrench71@gmail.com set to admin role
-- user_stores has stripe_connect_id + stripe_connect_status columns
-- user_orders has stripe_checkout_session + stripe_payment_intent columns
+- 3,192 products (798 per store × 4 stores)
+- 5 orders (2 Stuart, 3 Jum)
+- 6 users (1 admin, 3 subscribers, 2 buyers/test)
+- sfrench71@gmail.com = admin role
+- All 4 stores have stripe_connect_id
 
 ### Environment:
+- Production branch: claude/review-safety-protocol-j8RQJ
 - All API keys confirmed working in Vercel
-- AliExpress DS APIs: feedname.get ✅, recommend.feed.get ✅
-- AliExpress Affiliate APIs: ALL DENIED (app lacks permission)
+- AliExpress DS APIs: feedname.get, recommend.feed.get, ds.product.get
 - Stripe Connect: Custom accounts, embedded onboarding
+- Resend: togogo.me domain verified, DNS configured
 
 ## AliExpress OAuth Status
 
 - App: ToGoGo, AppKey: 529066, Category: Drop Shipping, Status: Online
-- DS APIs working: feedname.get ✅, recommend.feed.get ✅
-- OAuth authorization FAILED: `appkey不存在` (appkey does not exist) error
-- Tried: `https://oauth.aliexpress.com/authorize?response_type=code&client_id=529066&redirect_uri=...`
-- Possible issue: DS apps may use a different OAuth flow or need activation
+- DS APIs working: feedname.get, recommend.feed.get, ds.product.get
+- OAuth authorization FAILED: `appkey不存在` error
 - Callback endpoint READY at: /api/platforms/callback/aliexpress
-- **NEXT STEP:** Contact AliExpress support or check DropShippers API Developer docs
-  for the correct OAuth URL format for Drop Shipping category apps
-- Once OAuth works: ds.order.create, ds.order.get, ds.product.get all unlock
-- Stuart has valid ABN for business verification
+- Once OAuth works: ds.order.create, ds.order.get unlock
 
 ## Next Session Priorities
 
-1. **AliExpress OAuth** — resolve the appkey error, get access_token for order APIs
-2. **Test Stripe Connect** — have a store owner complete onboarding
-3. **Test checkout** — place a test order, verify payment split
-4. **Manual order management** — admin can update order status, add tracking numbers
-5. **Infinite scroll** — Temu-style product feed on storefronts
-6. **Store owner product management** — let owners curate their catalog
-7. **Email notifications** — order confirmations, welcome emails
-8. **Dev branch workflow** — stop pushing directly to production
+1. **Test email notifications** — place a test order, verify emails sent
+2. **AliExpress OAuth** — resolve the appkey error, get access_token for order APIs
+3. **Infinite scroll** — Temu-style product feed on storefronts
+4. **Store owner product management** — let owners curate their catalog
+5. **Order tracking/fulfillment** — admin can update order status, add tracking
+6. **Fix service worker caching** — eliminate need for Ctrl+Shift+R
+7. **Store themes** — let owners choose from available themes
 
 ## Important URLs
 
 - Main site: https://togogo.me
 - Admin: https://togogo.me/admin
-- Test AliExpress: https://togogo.me/api/test-aliexpress
+- Profile: https://togogo.me/profile
+- Debug endpoint: https://togogo.me/api/admin/debug?secret=JWT_SECRET
 - Manual cron: https://togogo.me/api/cron/import-products?secret=JWT_SECRET
 - Fix admin role: https://togogo.me/api/admin/fix-role?secret=JWT_SECRET
-- Check products: https://togogo.me/api/admin/check-products?secret=JWT_SECRET
-
-## Files Changed This Session
-
-- `api/_lib/suppliers.js` — Complete rewrite for AliExpress DS API
-- `api/_lib/db.js` — Added stripe_connect, theme_id, checkout columns
-- `api/storefront/store.js` — AliExpress fallback + theme from DB
-- `api/storefront/checkout.js` — NEW: Stripe Checkout with Connect splits
-- `api/connect/onboard.js` — NEW: Stripe Connect embedded onboarding
-- `api/connect/status.js` — NEW: Connect account status
-- `api/connect/dashboard.js` — NEW: Embedded payments dashboard
-- `api/cron/import-products.js` — NEW: Automated product imports
-- `api/admin/import-products.js` — NEW: Manual product import
-- `api/admin/fix-role.js` — NEW: Admin role fix + import trigger
-- `api/webhooks/stripe.js` — Added account.updated + storefront checkout
-- `src/pages/StorefrontPage.jsx` — Dark theme, image gallery, sign-in
-- `src/pages/SetupPaymentsPage.jsx` — NEW: Stripe Connect onboarding page
-- `src/pages/admin/ProductsPage.jsx` — Pagination, DB auth, import button
-- `vercel.json` — Added cron schedule
