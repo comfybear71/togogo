@@ -70,7 +70,7 @@ export default function ProfilePage() {
       return
     }
     // Check admin role via API
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('togogo-token')
     if (token) {
       fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } })
         .then(r => { if (r.ok) setIsAdmin(true) })
