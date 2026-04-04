@@ -4,6 +4,7 @@ import { sql, ensureSchema } from '../_lib/db.js'
 import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
 import { sendEmail, orderConfirmationEmail, newOrderAlertEmail } from '../_lib/email.js'
+import { submitOrder } from '../_lib/suppliers.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -121,19 +122,65 @@ export default async function handler(req, res) {
         } else if (session.metadata?.togogo_order_ref) {
           // Storefront checkout completed — confirm the order
           const orderRef = session.metadata.togogo_order_ref
+          const storeUserId = session.metadata.togogo_store_user_id
           const paymentIntent = session.payment_intent
+          const shippingDetails = session.shipping_details || session.customer_details || {}
           console.log(`[Webhook] Storefront checkout completed: ${orderRef} (payment: ${paymentIntent})`)
 
           try {
+            // Update order with payment intent and shipping address from Stripe
+            const shippingAddress = shippingDetails.address ? JSON.stringify({
+              name: shippingDetails.name || '',
+              line1: shippingDetails.address.line1 || '',
+              line2: shippingDetails.address.line2 || '',
+              city: shippingDetails.address.city || '',
+              state: shippingDetails.address.state || '',
+              postcode: shippingDetails.address.postal_code || '',
+              country: shippingDetails.address.country || 'AU',
+            }) : null
+
             await sql`
               UPDATE user_orders
               SET status = 'pending',
                   stripe_payment_intent = ${paymentIntent},
+                  shipping_address = COALESCE(${shippingAddress}::jsonb, shipping_address),
                   notes = ${'Payment confirmed via Stripe'},
                   updated_at = NOW()
               WHERE platform_order_id = ${orderRef} AND status = 'pending_payment'
             `
             console.log(`[Webhook] Order ${orderRef} confirmed`)
+
+            // Save/update store customer
+            try {
+              const { rows: storeRows } = await sql`SELECT id FROM user_stores WHERE user_id = ${storeUserId}`
+              const storeId = storeRows[0]?.id
+              const custEmail = session.customer_details?.email || session.customer_email
+              const custName = shippingDetails.name || session.customer_details?.name || ''
+
+              if (storeId && custEmail) {
+                const { rows: orderTotals } = await sql`
+                  SELECT COALESCE(SUM(sale_price), 0)::numeric as total
+                  FROM user_orders WHERE platform_order_id = ${orderRef}
+                `
+                const orderTotal = parseFloat(orderTotals[0]?.total) || 0
+
+                await sql`
+                  INSERT INTO store_customers (store_id, email, name, phone, order_count, total_spent, last_order_at)
+                  VALUES (${storeId}, ${custEmail}, ${custName}, ${session.customer_details?.phone || ''},
+                          1, ${orderTotal}, NOW())
+                  ON CONFLICT (store_id, email) DO UPDATE SET
+                    name = COALESCE(NULLIF(${custName}, ''), store_customers.name),
+                    phone = COALESCE(NULLIF(${session.customer_details?.phone || ''}, ''), store_customers.phone),
+                    order_count = store_customers.order_count + 1,
+                    total_spent = store_customers.total_spent + ${orderTotal},
+                    last_order_at = NOW(),
+                    updated_at = NOW()
+                `
+                console.log(`[Webhook] Store customer saved: ${custEmail} for store ${storeId}`)
+              }
+            } catch (custErr) {
+              console.error(`[Webhook] Failed to save store customer:`, custErr.message)
+            }
 
             // Send email notifications
             try {
@@ -174,6 +221,63 @@ export default async function handler(req, res) {
               }
             } catch (emailErr) {
               console.error(`[Webhook] Email notification failed:`, emailErr.message)
+            }
+
+            // Auto-submit order to AliExpress
+            try {
+              const { rows: orderRows } = await sql`
+                SELECT id, supplier_product_id, quantity, customer_name, shipping_address
+                FROM user_orders WHERE platform_order_id = ${orderRef}
+              `
+
+              for (const order of orderRows) {
+                if (!order.supplier_product_id) {
+                  console.log(`[Webhook] Order ${order.id} has no supplier_product_id, skipping AliExpress submission`)
+                  continue
+                }
+
+                const aeProductId = order.supplier_product_id.replace('ae_', '')
+                let address = {}
+                try { address = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch { /* */ }
+
+                console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${aeProductId})`)
+
+                const result = await submitOrder({
+                  productId: aeProductId,
+                  quantity: order.quantity || 1,
+                  shippingAddress: {
+                    name: order.customer_name,
+                    country: address.country || 'AU',
+                    state: address.state || '',
+                    city: address.city || '',
+                    line1: address.line1 || address.address || '',
+                    zip: address.zip || address.postcode || '',
+                    phone: address.phone || '',
+                  },
+                })
+
+                if (result.success) {
+                  await sql`
+                    UPDATE user_orders
+                    SET supplier_order_id = ${result.orderId},
+                        status = 'processing',
+                        notes = ${'Submitted to AliExpress — order ID: ' + result.orderId},
+                        updated_at = NOW()
+                    WHERE id = ${order.id}
+                  `
+                  console.log(`[Webhook] Order ${order.id} -> AliExpress order ${result.orderId}`)
+                } else {
+                  console.error(`[Webhook] AliExpress submission failed for ${order.id}: ${result.error}`)
+                  await sql`
+                    UPDATE user_orders
+                    SET notes = ${'AliExpress auto-submit failed: ' + (result.error || 'Unknown error') + '. Manual submission required.'},
+                        updated_at = NOW()
+                    WHERE id = ${order.id}
+                  `
+                }
+              }
+            } catch (aeErr) {
+              console.error(`[Webhook] AliExpress auto-submit error:`, aeErr.message)
             }
           } catch (err) {
             console.error(`[Webhook] Failed to confirm order ${orderRef}:`, err.message)

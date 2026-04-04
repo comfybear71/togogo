@@ -21,17 +21,17 @@ export default async function handler(req, res) {
 
   try {
     const [usersResult, productsResult, ordersResult, revenueResult, disputesResult, subRevenueResult, storesResult, commissionResult, allTimeResult] = await Promise.all([
-      sql`SELECT COUNT(*)::int AS count FROM users`.catch(() => ({ rows: [{ count: 0 }] })),
-      sql`SELECT COUNT(*)::int AS count FROM user_products WHERE is_active = true`.catch(() => ({ rows: [{ count: 0 }] })),
-      sql`SELECT COUNT(*)::int AS count FROM user_orders WHERE created_at >= CURRENT_DATE`.catch(() => ({ rows: [{ count: 0 }] })),
-      sql`SELECT COALESCE(SUM(sale_price), 0)::numeric AS total FROM user_orders WHERE created_at >= CURRENT_DATE`.catch(() => ({ rows: [{ total: 0 }] })),
-      sql`SELECT COUNT(*)::int AS count FROM user_orders WHERE status = 'pending'`.catch(() => ({ rows: [{ count: 0 }] })),
+      sql`SELECT COUNT(*)::int AS count FROM users`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ count: 0 }] } }),
+      sql`SELECT COUNT(*)::int AS count FROM user_products WHERE is_active = true`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ count: 0 }] } }),
+      sql`SELECT COUNT(*)::int AS count FROM user_orders WHERE created_at >= CURRENT_DATE`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ count: 0 }] } }),
+      sql`SELECT COALESCE(SUM(sale_price), 0)::numeric AS total FROM user_orders WHERE created_at >= CURRENT_DATE`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ total: 0 }] } }),
+      sql`SELECT COUNT(*)::int AS count FROM user_orders WHERE status = 'pending'`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ count: 0 }] } }),
       // Total active subscription revenue (monthly recurring)
-      sql`SELECT COALESCE(SUM(price_per_month), 0)::numeric AS total FROM subscriptions WHERE status = 'active'`.catch(() => ({ rows: [{ total: 0 }] })),
+      sql`SELECT COALESCE(SUM(price_per_month), 0)::numeric AS total FROM subscriptions WHERE status = 'active'`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ total: 0 }] } }),
       // Total stores (all statuses except deleted)
-      sql`SELECT COUNT(*)::int AS count FROM user_stores WHERE status != 'deleted'`.catch(() => ({ rows: [{ count: 0 }] })),
+      sql`SELECT COUNT(*)::int AS count FROM user_stores WHERE status != 'deleted'`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ count: 0 }] } }),
       // ToGoGo commission earned today
-      sql`SELECT COALESCE(SUM(commission), 0)::numeric AS today, COALESCE(SUM(CASE WHEN commission = 0 THEN sale_price * COALESCE((SELECT value::numeric FROM admin_settings WHERE key = 'platform_fee_percent'), 5) / 100 ELSE commission END), 0)::numeric AS today_with_fallback FROM user_orders WHERE created_at >= CURRENT_DATE AND status != 'cancelled'`.catch(() => ({ rows: [{ today: 0, today_with_fallback: 0 }] })),
+      sql`SELECT COALESCE(SUM(commission), 0)::numeric AS today, COALESCE(SUM(CASE WHEN commission = 0 THEN sale_price * COALESCE((SELECT value::numeric FROM admin_settings WHERE key = 'platform_fee_percent'), 5) / 100 ELSE commission END), 0)::numeric AS today_with_fallback FROM user_orders WHERE created_at >= CURRENT_DATE AND status != 'cancelled'`.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ today: 0, today_with_fallback: 0 }] } }),
       // All-time totals for ToGoGo
       sql`
         SELECT
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
           COALESCE(SUM(profit), 0)::numeric AS total_client_profit,
           COUNT(*)::int AS total_orders
         FROM user_orders WHERE status != 'cancelled'
-      `.catch(() => ({ rows: [{ total_sales: 0, total_commission: 0, total_client_profit: 0, total_orders: 0 }] })),
+      `.catch(e => { console.error('Stats query failed:', e.message); return { rows: [{ total_sales: 0, total_commission: 0, total_client_profit: 0, total_orders: 0 }] } }),
     ])
 
     const orderRevenue = parseFloat(revenueResult.rows[0]?.total) || 0
