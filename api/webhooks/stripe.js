@@ -3,6 +3,7 @@
 import { sql, ensureSchema } from '../_lib/db.js'
 import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
+import { sendEmail, orderConfirmationEmail, newOrderAlertEmail } from '../_lib/email.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -133,6 +134,47 @@ export default async function handler(req, res) {
               WHERE platform_order_id = ${orderRef} AND status = 'pending_payment'
             `
             console.log(`[Webhook] Order ${orderRef} confirmed`)
+
+            // Send email notifications
+            try {
+              const { rows: orderItems } = await sql`
+                SELECT product_title, sale_price, quantity, customer_name, customer_email, user_id
+                FROM user_orders WHERE platform_order_id = ${orderRef}
+              `
+              if (orderItems.length > 0) {
+                const customerName = orderItems[0].customer_name
+                const customerEmail = orderItems[0].customer_email
+                const storeUserId = orderItems[0].user_id
+                const items = orderItems.map(o => ({ title: o.product_title, price: parseFloat(o.sale_price), quantity: o.quantity || 1 }))
+                const total = items.reduce((s, i) => s + i.price * i.quantity, 0)
+
+                // Get store name
+                const { rows: storeRows } = await sql`SELECT store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
+                const storeName = storeRows[0]?.store_name || storeRows[0]?.subdomain || 'ToGoGo Store'
+
+                // Get store owner email
+                const { rows: ownerRows } = await sql`SELECT email FROM users WHERE id = ${storeUserId}`
+                const ownerEmail = ownerRows[0]?.email
+
+                // 1. Email customer — order confirmation
+                const custEmail = orderConfirmationEmail({ orderRef, items, total, storeName, customerName })
+                await sendEmail({ to: customerEmail, ...custEmail })
+
+                // 2. Email store owner — new order alert
+                if (ownerEmail) {
+                  const ownerAlert = newOrderAlertEmail({ orderRef, items, total, storeName, customerName, customerEmail, isAdmin: false })
+                  await sendEmail({ to: ownerEmail, ...ownerAlert })
+                }
+
+                // 3. Email admin — new order alert
+                const adminAlert = newOrderAlertEmail({ orderRef, items, total, storeName, customerName, customerEmail, isAdmin: true })
+                await sendEmail({ to: 'sfrench71@gmail.com', ...adminAlert })
+
+                console.log(`[Webhook] Emails sent for order ${orderRef}`)
+              }
+            } catch (emailErr) {
+              console.error(`[Webhook] Email notification failed:`, emailErr.message)
+            }
           } catch (err) {
             console.error(`[Webhook] Failed to confirm order ${orderRef}:`, err.message)
           }
@@ -394,6 +436,20 @@ export default async function handler(req, res) {
           console.log(`Connect account ${account.id} status updated to: ${status}`)
         } catch (err) {
           console.error('Failed to update connect status:', err.message)
+        }
+        break
+      }
+
+      // Checkout expired — customer abandoned payment
+      case 'checkout.session.expired': {
+        const session = event.data.object
+        const orderRef = session.metadata?.togogo_order_ref
+        if (orderRef) {
+          console.log(`[Webhook] Checkout expired: ${orderRef}`)
+          await sql`
+            UPDATE user_orders SET status = 'cancelled', notes = ${'Payment expired — customer did not complete checkout'}, updated_at = NOW()
+            WHERE platform_order_id = ${orderRef} AND status = 'pending_payment'
+          `.catch(err => console.error('Failed to cancel expired order:', err.message))
         }
         break
       }

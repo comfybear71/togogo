@@ -1,10 +1,16 @@
 // Admin marketing API — promo codes and banners stored in admin_settings
 import { sql, ensureSchema } from '../_lib/db.js'
-import { requireAdminOrSetup } from '../_lib/auth.js'
+import { getCurrentUser } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
   try {
-    await requireAdminOrSetup(req)
+  const setupSecret = req.headers["x-setup-secret"] || req.query.secret
+  if (setupSecret && setupSecret === process.env.JWT_SECRET) { /* OK */ } else {
+    const tokenUser = await getCurrentUser(req)
+    if (!tokenUser) return res.status(401).json({ error: "Authentication required" })
+    const { rows: roleRows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
+    if (!roleRows[0] || roleRows[0].role !== "admin") return res.status(403).json({ error: "Admin access required" })
+  }
   } catch (err) {
     return res.status(err?.status || 401).json({ error: err?.message || 'Authentication failed' })
   }
