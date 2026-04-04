@@ -157,7 +157,7 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Cart View ──────────────────────────────────────────────────────
   if (view === 'cart') return (
-    <div className={`min-h-screen ${theme.pageBg}`}>
+    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => {}} />
       <div className="mx-auto max-w-2xl px-4 py-8">
         <button
@@ -210,7 +210,7 @@ export default function StorefrontPage({ subdomain }) {
             <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
               <div className={`flex justify-between text-lg font-bold ${theme.textPrimary} mb-4`}>
                 <span>Total</span>
-                <span>${cart.total.toFixed(2)}</span>
+                <span>A${cart.total.toFixed(2)}</span>
               </div>
               <button
                 onClick={() => setView('checkout')}
@@ -242,24 +242,24 @@ export default function StorefrontPage({ subdomain }) {
 
       <div className="mx-auto max-w-7xl px-4 py-8">
         {/* Search + Filters */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative flex-1">
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center overflow-hidden">
+          <div className="relative flex-1 min-w-0">
             <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.textMuted}`} />
             <input
               type="text"
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
-              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight }}
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
+              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight, fontSize: '16px' }}
             />
           </div>
           {storeData.categories.length > 0 && (
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className={`rounded-xl border px-4 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
-              style={{ borderColor: theme.accentLight }}
+              className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
+              style={{ borderColor: theme.accentLight, fontSize: '16px' }}
             >
               <option value="">All Categories ({storeData.products.length})</option>
               {storeData.categories.map((c) => (
@@ -309,7 +309,7 @@ export default function StorefrontPage({ subdomain }) {
                   <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
                   <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
                   <div className="flex items-center justify-between">
-                    <p className={`text-lg font-bold ${theme.textPrimary}`}>${product.price.toFixed(2)}</p>
+                    <p className={`text-lg font-bold ${theme.textPrimary}`}>A${(product.price || 0).toFixed(2)}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); cart.add(product) }}
                       className="rounded-lg p-2 transition-colors hover:text-white"
@@ -343,6 +343,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   const [details, setDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(true)
   const [selectedVariant, setSelectedVariant] = useState(null)
+  const [selectedProps, setSelectedProps] = useState({}) // e.g. { Color: "Beige", Size: "S" }
 
   useEffect(() => {
     // Use the supplier product ID (AliExpress ID) for fetching details
@@ -362,15 +363,18 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
       .finally(() => setLoadingDetails(false))
   }, [product.id])
 
-  // Merge details with basic product data
+  // Merge details with basic product data — safely handle images
+  const safeImages = (arr) => Array.isArray(arr) ? arr : typeof arr === 'string' ? arr.replace(/[{}]/g, '').split(',').filter(Boolean) : []
   const displayProduct = details ? {
     ...product,
-    images: details.images?.length > 0 ? details.images : product.images,
+    images: safeImages(details.images).length > 0 ? safeImages(details.images) : safeImages(product.images),
     description: details.description || product.description,
     title: details.title || product.title,
   } : product
 
-  const displayPrice = selectedVariant ? selectedVariant.price : (product.price || 0)
+  // Always use the store's sale_price (product.price) — NOT the AliExpress variant/cost price
+  // Variant selection changes the option but the store price is what customers pay
+  const displayPrice = product.price || 0
   const hasVariants = details?.variants?.length > 1
 
   return (
@@ -383,9 +387,11 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
         >
           <ChevronLeft className="h-4 w-4" /> Back to products
         </button>
-        <div className="grid gap-8 md:grid-cols-2">
+        <div className="grid gap-8 md:grid-cols-2 overflow-hidden">
           {/* Image Gallery */}
-          <ProductImageGallery product={displayProduct} />
+          <div className="min-w-0">
+            <ProductImageGallery product={displayProduct} />
+          </div>
 
           {/* Product Info */}
           <div>
@@ -405,41 +411,97 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               </div>
             )}
 
-            {/* Variants (sizes/colors) */}
-            {hasVariants && (
-              <div className="mb-6">
-                <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Options</p>
-                <div className="flex flex-wrap gap-2">
-                  {details.variants.map((v, i) => {
-                    const label = v.skuAttr?.split('#')?.[1] || `Option ${i + 1}`
-                    const isSelected = selectedVariant?.skuId === v.skuId
-                    return (
-                      <button
-                        key={v.skuId}
-                        onClick={() => setSelectedVariant(isSelected ? null : v)}
-                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${
-                          isSelected
-                            ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white'
-                            : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'
-                        }`}
-                      >
-                        {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
-                        <span>{label}</span>
-                        <span className="text-slate-500">${v.price.toFixed(2)}</span>
-                      </button>
-                    )
-                  })}
+            {/* Variants (sizes/colors) — grouped by property type */}
+            {hasVariants && (() => {
+              // Group variants by property types (e.g., Color, Size)
+              const propGroups = {}
+              details.variants.forEach(v => {
+                (v.properties || []).forEach(p => {
+                  if (p.name && p.value) {
+                    if (!propGroups[p.name]) propGroups[p.name] = new Set()
+                    propGroups[p.name].add(p.value)
+                  }
+                })
+              })
+              const groupNames = Object.keys(propGroups)
+
+              // Helper: update one property, keep others, then find best matching variant
+              const handleSelect = (groupName, val) => {
+                const next = { ...selectedProps }
+                if (next[groupName] === val) {
+                  delete next[groupName] // deselect
+                } else {
+                  next[groupName] = val
+                }
+                setSelectedProps(next)
+                // Find the variant that matches ALL selected properties
+                const match = details.variants.find(v => {
+                  const vProps = v.properties || []
+                  return Object.entries(next).every(([k, vv]) =>
+                    vProps.some(p => p.name === k && p.value === vv)
+                  )
+                })
+                setSelectedVariant(match || null)
+              }
+
+              // If we can't parse properties, fall back to flat list
+              if (groupNames.length === 0) {
+                return (
+                  <div className="mb-6">
+                    <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Options</p>
+                    <div className="flex flex-wrap gap-2 overflow-x-auto">
+                      {details.variants.map((v, i) => {
+                        const label = v.label || `Option ${i + 1}`
+                        const isSelected = selectedVariant?.skuId === v.skuId
+                        return (
+                          <button key={v.skuId} onClick={() => setSelectedVariant(isSelected ? null : v)}
+                            className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
+                            {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
+                            <span>{label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <div className="mb-6 space-y-4">
+                  {groupNames.map(groupName => (
+                    <div key={groupName}>
+                      <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">{groupName}</p>
+                      <div className="flex flex-wrap gap-2 overflow-x-auto">
+                        {[...propGroups[groupName]].map(val => {
+                          const img = details.variants.find(v =>
+                            (v.properties || []).some(p => p.name === groupName && p.value === val && p.image)
+                          )?.properties?.find(p => p.name === groupName && p.value === val)?.image
+                          const isSelected = selectedProps[groupName] === val
+                          return (
+                            <button key={val} onClick={() => handleSelect(groupName, val)}
+                              className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
+                              {img && <img src={img} alt="" className="h-6 w-6 rounded object-cover" />}
+                              <span>{val}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* Shipping */}
-            <div className="flex gap-3 mb-6">
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
+            <div className="flex flex-wrap gap-2 mb-6">
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-emerald-400 bg-emerald-500/10">
                 <Truck className="h-4 w-4" /> Free Shipping
               </div>
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection
+              </div>
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
+                Price includes GST
               </div>
             </div>
 
@@ -472,7 +534,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
               style={{ backgroundColor: theme.accent }}
             >
-              Add to Cart — ${displayPrice.toFixed(2)}
+              Add to Cart — A${displayPrice.toFixed(2)}
             </button>
           </div>
         </div>
@@ -483,8 +545,8 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
             {details.description.includes('<') ? (
               <div
-                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full"
-                dangerouslySetInnerHTML={{ __html: details.description }}
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words [&_*]:!text-slate-300 [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_strong]:!text-white [&_b]:!text-white"
+                dangerouslySetInnerHTML={{ __html: fixDescriptionImages(details.description) }}
               />
             ) : (
               <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
@@ -592,7 +654,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
     }
   }
 
-  const inputClass = `rounded-lg border px-3 py-2.5 text-sm ${theme.cardBg} ${theme.textPrimary} focus:outline-none`
+  const inputClass = `rounded-lg border px-3 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`
 
   return (
     <div className={`min-h-screen ${theme.pageBg}`}>
@@ -611,14 +673,34 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
           <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
             <h2 className={`text-sm font-semibold ${theme.textPrimary} mb-3`}>Order Summary</h2>
             {cart.items.map((item) => (
-              <div key={item.id} className="flex justify-between py-2 text-sm">
-                <span className={theme.textSecondary}>{item.title} x{item.quantity}</span>
-                <span className={`font-medium ${theme.textPrimary}`}>${(item.price * item.quantity).toFixed(2)}</span>
+              <div key={item.id} className="flex items-center gap-3 py-3 border-b border-white/[0.06] last:border-0">
+                <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                  {item.image ? (
+                    <img src={item.image} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-gray-300" /></div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${theme.textPrimary} line-clamp-2`}>{item.title}</p>
+                  <p className={`text-xs ${theme.textMuted}`}>Qty: {item.quantity}</p>
+                </div>
+                <span className={`font-semibold ${theme.textPrimary} text-sm`}>A${(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
-            <div className={`mt-3 border-t pt-3 flex justify-between text-base font-bold ${theme.textPrimary}`} style={{ borderColor: theme.accentLight }}>
-              <span>Total</span>
-              <span>${cart.total.toFixed(2)}</span>
+            <div className={`mt-3 border-t pt-3 space-y-2`} style={{ borderColor: theme.accentLight }}>
+              <div className={`flex justify-between text-sm ${theme.textSecondary}`}>
+                <span>Subtotal</span>
+                <span>A${cart.total.toFixed(2)}</span>
+              </div>
+              <div className={`flex justify-between text-sm text-emerald-400`}>
+                <span>Shipping</span>
+                <span>A$6.00</span>
+              </div>
+              <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
+                <span>Total</span>
+                <span>A${(cart.total + 6).toFixed(2)}</span>
+              </div>
             </div>
           </div>
 
@@ -656,7 +738,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             className="w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
-            {submitting ? 'Placing Order...' : `Place Order — $${cart.total.toFixed(2)}`}
+            {submitting ? 'Placing Order...' : `Place Order — A$${(cart.total + 6).toFixed(2)}`}
           </button>
 
           <p className={`text-center text-xs ${theme.textMuted}`}>
@@ -669,10 +751,34 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
 }
 
 // ─── Product Image Gallery — shows all images with thumbnails ──────────
+// Fix AliExpress description HTML: lazy-loaded images, protocol-relative URLs
+function fixDescriptionImages(html) {
+  return html
+    // Move data-src to src (AliExpress lazy loading)
+    .replace(/<img([^>]*?)data-src="([^"]+)"([^>]*?)>/gi, (match, before, url, after) => {
+      const fixedUrl = url.startsWith('//') ? 'https:' + url : url
+      // Remove any existing empty/placeholder src
+      const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
+      return `<img${cleaned} src="${fixedUrl}">`
+    })
+    // Fix protocol-relative URLs in remaining src attributes
+    .replace(/src="\/\//g, 'src="https://')
+    // Fix images with empty src that have data-lazy-src or similar
+    .replace(/<img([^>]*?)data-lazy-src="([^"]+)"([^>]*?)>/gi, (match, before, url, after) => {
+      const fixedUrl = url.startsWith('//') ? 'https:' + url : url
+      const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
+      return `<img${cleaned} src="${fixedUrl}">`
+    })
+}
+
 function ProductImageGallery({ product }) {
   const [selectedIdx, setSelectedIdx] = useState(0)
-  const images = (product.images && product.images.length > 0)
-    ? [...new Set(product.images)].filter(Boolean) // deduplicate
+  // Safely handle images — could be array, string, or null from DB
+  const rawImages = Array.isArray(product.images) ? product.images
+    : typeof product.images === 'string' ? product.images.replace(/[{}]/g, '').split(',').filter(Boolean)
+    : []
+  const images = rawImages.length > 0
+    ? [...new Set(rawImages)].filter(Boolean)
     : product.image ? [product.image] : []
 
   if (images.length === 0) {
@@ -684,13 +790,14 @@ function ProductImageGallery({ product }) {
   }
 
   return (
-    <div>
+    <div className="w-full min-w-0 max-w-full">
       {/* Main image */}
-      <div className="aspect-square overflow-hidden rounded-2xl bg-[#1e293b] mb-3">
+      <div className="aspect-square overflow-hidden rounded-2xl bg-[#1e293b] mb-3 w-full">
         <img
           src={images[selectedIdx] || images[0]}
           alt={product.title}
           className="h-full w-full object-contain"
+          onError={(e) => { e.target.style.display = 'none' }}
         />
       </div>
       {/* Thumbnails */}

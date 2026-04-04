@@ -16,6 +16,7 @@ export default function MyShopPage() {
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
   const token = useAuthStore(s => s.token)
+  const authLoading = useAuthStore(s => s.loading)
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -27,13 +28,20 @@ export default function MyShopPage() {
   const [storeSubdomain, setStoreSubdomain] = useState(null)
   const [commissionRate, setCommissionRate] = useState(0.05)
 
+  // Initialize auth on cold start
   useEffect(() => {
-    if (user && token) {
-      fetchProducts()
-      fetchStoreInfo()
-      fetchCommission()
+    if (authLoading) {
+      useAuthStore.getState().initialize?.()
     }
-  }, [user, token])
+  }, [])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) { navigate('/auth?redirect=/my-shop'); return }
+    fetchProducts()
+    fetchStoreInfo()
+    fetchCommission()
+  }, [user, authLoading])
 
   async function fetchCommission() {
     try {

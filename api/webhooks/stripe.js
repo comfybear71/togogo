@@ -196,7 +196,7 @@ export default async function handler(req, res) {
                 const total = items.reduce((s, i) => s + i.price * i.quantity, 0)
 
                 // Get store name
-                const { rows: storeRows } = await sql`SELECT store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
+                const { rows: storeRows } = await sql`SELECT id, store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
                 const storeName = storeRows[0]?.store_name || storeRows[0]?.subdomain || 'ToGoGo Store'
 
                 // Get store owner email
@@ -218,6 +218,88 @@ export default async function handler(req, res) {
                 await sendEmail({ to: 'sfrench71@gmail.com', ...adminAlert })
 
                 console.log(`[Webhook] Emails sent for order ${orderRef}`)
+
+                // Save store customer (for repeat customer recognition)
+                try {
+                  const storeId = storeRows[0]?.id
+                  if (storeId && customerEmail) {
+                    await sql`
+                      INSERT INTO store_customers (store_id, email, name, total_orders, total_spent, first_order_at, last_order_at)
+                      VALUES (${storeId}, ${customerEmail}, ${customerName}, 1, ${total}, NOW(), NOW())
+                      ON CONFLICT (store_id, email)
+                      DO UPDATE SET total_orders = store_customers.total_orders + 1,
+                        total_spent = store_customers.total_spent + ${total},
+                        last_order_at = NOW(),
+                        name = COALESCE(NULLIF(${customerName}, ''), store_customers.name)
+                    `
+                    console.log(`[Webhook] Store customer saved: ${customerEmail}`)
+                  }
+                } catch (custErr) {
+                  console.error(`[Webhook] Failed to save store customer:`, custErr.message)
+                }
+
+                // Auto-submit to AliExpress
+                try {
+                  const { rows: fullOrders } = await sql`
+                    SELECT id, supplier_product_id, quantity, shipping_address, customer_name, customer_email,
+                           supplier_cost, sale_price, stripe_checkout_session
+                    FROM user_orders WHERE platform_order_id = ${orderRef} AND supplier = 'AliExpress'
+                  `
+                  for (const order of fullOrders) {
+                    const productId = (order.supplier_product_id || '').replace('ae_', '')
+                    if (!productId || productId.includes('-')) {
+                      console.error(`[Webhook] Skipping AliExpress submit for order ${order.id}: no valid supplier_product_id (got: ${order.supplier_product_id || 'empty'})`)
+                      continue
+                    }
+                    const orderAmount = parseFloat(order.supplier_cost || order.sale_price || 0)
+                    let shippingAddr = {}
+                    try { shippingAddr = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch {}
+
+                    // Also try to get shipping address from Stripe session (more complete)
+                    try {
+                      const stripeSession = await stripe.checkout.sessions.retrieve(
+                        order.stripe_checkout_session || '',
+                        { expand: ['shipping_details'] }
+                      )
+                      if (stripeSession?.shipping_details?.address) {
+                        const sa = stripeSession.shipping_details
+                        shippingAddr = {
+                          ...shippingAddr,
+                          name: order.customer_name || sa.name || shippingAddr.name || '',
+                          line1: sa.address.line1 || shippingAddr.line1 || '',
+                          city: sa.address.city || shippingAddr.city || '',
+                          state: sa.address.state || shippingAddr.state || '',
+                          zip: sa.address.postal_code || shippingAddr.zip || '',
+                          country: sa.address.country || shippingAddr.country || 'AU',
+                          phone: stripeSession.customer_details?.phone || shippingAddr.phone || '',
+                        }
+                        console.log(`[Webhook] Stripe shipping: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
+                      }
+                    } catch { /* non-critical */ }
+
+                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
+                    const result = await submitOrder({
+                      productId,
+                      skuId: null, // auto-resolved from product details
+                      quantity: order.quantity || 1,
+                      orderAmount,
+                      shippingAddress: {
+                        ...shippingAddr,
+                        name: order.customer_name || shippingAddr.name || '',
+                        phone: shippingAddr.phone || '',
+                      },
+                    })
+                    if (result.success) {
+                      await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress'}, updated_at = NOW() WHERE id = ${order.id}`
+                      console.log(`[Webhook] AliExpress order submitted: ${result.orderId}`)
+                    } else {
+                      await sql`UPDATE user_orders SET notes = ${'AliExpress auto-submit failed: ' + result.error + '. Manual submission required.'}, updated_at = NOW() WHERE id = ${order.id}`
+                      console.error(`[Webhook] AliExpress submission failed for ${order.id}: ${result.error}`)
+                    }
+                  }
+                } catch (aeErr) {
+                  console.error(`[Webhook] AliExpress auto-submit error:`, aeErr.message)
+                }
               }
             } catch (emailErr) {
               console.error(`[Webhook] Email notification failed:`, emailErr.message)

@@ -62,10 +62,19 @@ export default function ProfilePage() {
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [storeSubTab, setStoreSubTab] = useState('overview')
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     if (!user) {
       navigate('/auth')
+      return
+    }
+    // Check admin role via API
+    const token = localStorage.getItem('togogo-token')
+    if (token) {
+      fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => { if (r.ok) setIsAdmin(true) })
+        .catch(() => {})
     }
   }, [user, navigate])
 

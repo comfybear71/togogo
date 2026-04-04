@@ -194,6 +194,15 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_connected'` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
+  // Fix store_customers table — previous session created it with wrong columns (had password_hash)
+  try {
+    const { rows } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'store_customers' AND column_name = 'password_hash'`
+    if (rows.length > 0) {
+      await sql`DROP TABLE IF EXISTS store_customers CASCADE`
+      console.log('[Schema] Dropped broken store_customers table (had password_hash column)')
+    }
+  } catch (e) { console.error('[Schema] store_customers migration check:', e.message) }
+
   // Migration: expand subscription status to include 'past_due'
   try { await sql`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check` } catch { /* */ }
   try { await sql`ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (status IN ('active', 'past_due', 'cancelled', 'expired'))` } catch { /* */ }
@@ -267,6 +276,8 @@ export async function initializeSchema() {
   `
 
   // Indexes
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_email ON store_customers(email)`
   await sql`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`
   await sql`CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_orders_user ON user_orders(user_id)`

@@ -70,8 +70,27 @@ export default function HomePage() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 h-[400px] w-[400px] rounded-full opacity-[0.04]" style={{ background: 'radial-gradient(circle, #FFD23F 0%, transparent 70%)', animation: 'orb-drift 18s ease-in-out 2s infinite' }} />
       </div>
 
+      {/* Top bar — Sign In / Profile */}
+      <div className="relative z-10 flex justify-end px-5 pt-4">
+        {user ? (
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-white/[0.06] border border-white/[0.08] rounded-full hover:bg-white/[0.1] transition-colors"
+          >
+            My Account
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate('/auth')}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#FF6B35] rounded-full hover:bg-[#e85d2c] transition-colors"
+          >
+            Sign In
+          </button>
+        )}
+      </div>
+
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center" style={{ paddingTop: '8vh', paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}>
+      <div className="relative z-10 flex flex-col items-center" style={{ paddingTop: '4vh', paddingBottom: '40px', paddingLeft: '20px', paddingRight: '20px' }}>
 
         {/* Dots */}
         <div className="flex items-center justify-center gap-4" style={{ marginBottom: '24px' }}>

@@ -151,13 +151,25 @@ export async function getProductDetails(productId) {
       category: baseInfo.category_id || '',
       categoryName: baseInfo.product_category_name || '',
       // SKU variants (sizes, colors, etc.)
-      variants: skuInfo.map(sku => ({
-        skuId: sku.id,
-        skuAttr: sku.sku_attr || '',
-        price: parseFloat(sku.offer_sale_price || sku.sku_price || '0'),
-        stock: sku.sku_stock ? parseInt(sku.sku_stock) : null,
-        image: sku.ae_sku_property_dtos?.ae_sku_property_d_t_o?.[0]?.sku_image || '',
-      })),
+      variants: skuInfo.map(sku => {
+        const props = sku.ae_sku_property_dtos?.ae_sku_property_d_t_o || []
+        // Build human-readable label from property values
+        const labelParts = props.map(p => p.property_value_definition_name || p.sku_property_value || '').filter(Boolean)
+        const image = props.find(p => p.sku_image)?.sku_image || ''
+        return {
+          skuId: sku.id,
+          skuAttr: sku.sku_attr || '',
+          label: labelParts.join(' / ') || '',
+          properties: props.map(p => ({
+            name: p.sku_property_name || '',
+            value: p.property_value_definition_name || p.sku_property_value || '',
+            image: p.sku_image || '',
+          })),
+          price: parseFloat(sku.offer_sale_price || sku.sku_price || '0'),
+          stock: sku.sku_stock ? parseInt(sku.sku_stock) : null,
+          image,
+        }
+      }),
       // Shipping options
       shipping: shippingInfo.map(s => ({
         company: s.logistics_company || '',
@@ -185,7 +197,7 @@ export async function getProductDetails(productId) {
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
-export async function submitOrder({ productId, skuId, quantity, shippingAddress }) {
+export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount }) {
   try {
     // First, get product details to find the correct SKU if not provided
     let aeSkuId = skuId || ''
@@ -229,10 +241,12 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
 
-    const result = data?.aliexpress_ds_member_orderdata_submit_response?.result
+    // Response can be in different formats depending on API version
+    const result = data?.aliexpress_trade_buy_placeorder_response?.result
+      || data?.result
     if (!result) {
-      console.error('[AliExpress] Order submit failed:', JSON.stringify(data).slice(0, 500))
-      return { success: false, error: 'No result from AliExpress' }
+      console.error('[AliExpress] Order placement failed:', JSON.stringify(data).slice(0, 500))
+      return { success: false, error: 'No result from AliExpress: ' + JSON.stringify(data).slice(0, 200) }
     }
 
     if (result.is_success === false) {
@@ -242,7 +256,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
     return {
       success: true,
-      orderId: result.order_id || result.ae_order_id,
+      orderId: result.order_list?.number?.[0] || result.order_id || result.ae_order_id,
       orderData: result,
     }
   } catch (err) {
@@ -254,6 +268,35 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
 // ============================================
 // DS ORDER TRACKING — get order status and tracking
 // ============================================
+
+// Map AU state abbreviations to full names (AliExpress may require full names)
+function mapAUState(state, country) {
+  if (!state || country !== 'AU') return state || ''
+  const map = {
+    'NT': 'Northern Territory', 'NSW': 'New South Wales', 'VIC': 'Victoria',
+    'QLD': 'Queensland', 'SA': 'South Australia', 'WA': 'Western Australia',
+    'TAS': 'Tasmania', 'ACT': 'Australian Capital Territory',
+  }
+  return map[state.toUpperCase()] || state
+}
+
+// Map common country names to 2-letter ISO codes
+function mapCountryToISO(country) {
+  if (!country || country.length === 2) return (country || 'AU').toUpperCase()
+  const map = {
+    'australia': 'AU', 'united states': 'US', 'usa': 'US', 'united kingdom': 'GB',
+    'uk': 'GB', 'canada': 'CA', 'new zealand': 'NZ', 'germany': 'DE',
+    'france': 'FR', 'italy': 'IT', 'spain': 'ES', 'japan': 'JP',
+    'china': 'CN', 'india': 'IN', 'brazil': 'BR', 'mexico': 'MX',
+    'south korea': 'KR', 'singapore': 'SG', 'malaysia': 'MY',
+    'indonesia': 'ID', 'thailand': 'TH', 'philippines': 'PH',
+    'vietnam': 'VN', 'ireland': 'IE', 'netherlands': 'NL',
+    'sweden': 'SE', 'norway': 'NO', 'denmark': 'DK', 'finland': 'FI',
+    'poland': 'PL', 'austria': 'AT', 'switzerland': 'CH',
+    'belgium': 'BE', 'portugal': 'PT', 'russia': 'RU',
+  }
+  return map[country.toLowerCase()] || country.slice(0, 2).toUpperCase()
+}
 
 export async function getOrderTracking(orderId) {
   try {
@@ -320,6 +363,7 @@ async function fetchFeedProducts(feedName, page = 1, pageSize = 50) {
   try {
     const data = await callAPI('aliexpress.ds.recommend.feed.get', {
       feed_name: feedName,
+      country: 'AU',
       target_currency: 'AUD',
       target_language: 'EN',
       page_no: String(page),
@@ -347,9 +391,14 @@ async function fetchFeedProducts(feedName, page = 1, pageSize = 50) {
 // ============================================
 
 function normaliseProduct(p) {
-  const cost = parseFloat(p.target_sale_price || p.app_sale_price || p.target_original_price || '0')
+  const salePrice = parseFloat(p.target_sale_price || p.app_sale_price || '0')
   const originalPrice = parseFloat(p.target_original_price || p.original_price || '0')
-  const suggestedPrice = Math.ceil(cost * 2.5 * 100) / 100
+  // Use the SALE price (what people actually pay), not the inflated "was" price
+  const cost = salePrice || originalPrice
+  // Add 15% tax estimate (AU GST 10% + AE platform fees ~5%)
+  const costWithTax = cost * 1.15
+  // 1.5x markup on cost+tax — this is the price shown on screen
+  const suggestedPrice = Math.ceil(costWithTax * 1.5 * 100) / 100
 
   const title = p.product_title || ''
   const image = p.product_main_image_url || p.product_main_image || ''
@@ -375,6 +424,7 @@ function normaliseProduct(p) {
     suggestedPrice,
     suggestedMargin: Math.round((suggestedPrice - cost) * 100) / 100,
     deliveryDays: p.ship_to_days || 14,
+    freeShipping: !!(p.logistics_type === 'free' || p.ship_to_days),
     supplier: 'AliExpress',
     supplierLogo: '🛒',
     sourceUrl: p.product_detail_url || p.promotion_link || `https://www.aliexpress.com/item/${p.product_id}.html`,
