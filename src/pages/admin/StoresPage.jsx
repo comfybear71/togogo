@@ -14,8 +14,6 @@ import {
   Plus,
   Loader2,
 } from 'lucide-react';
-import { useAuthStore } from '../../stores/authStore';
-
 const statusConfig = {
   active: { color: 'bg-[#06D6A0]/10 text-[#06D6A0]', icon: CheckCircle },
   provisioning: { color: 'bg-[#FFD23F]/10 text-[#FFD23F]', icon: Clock },
@@ -31,8 +29,9 @@ const domainStatusConfig = {
   transferred: 'bg-blue-500/10 text-blue-400',
 };
 
-// Build auth headers: prefer JWT token, fall back to setup secret
-function getAdminHeaders(token) {
+// Build auth headers: get token from localStorage (same as working admin pages)
+function getAdminHeaders() {
+  const token = localStorage.getItem('togogo-token');
   if (token) return { Authorization: `Bearer ${token}` };
   const secret = sessionStorage.getItem('togogo-setup-secret');
   if (secret) return { 'x-setup-secret': secret };
@@ -40,7 +39,6 @@ function getAdminHeaders(token) {
 }
 
 export default function StoresPage() {
-  const token = localStorage.getItem('togogo-token');
   const [tab, setTab] = useState('stores');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -68,7 +66,7 @@ export default function StoresPage() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
 
       const res = await fetch(`${apiBase}/api/admin/stores?${params}`, {
-        headers: getAdminHeaders(token),
+        headers: getAdminHeaders(),
       });
 
       if (!res.ok) throw new Error('Failed to fetch');
@@ -97,7 +95,7 @@ export default function StoresPage() {
     try {
       const res = await fetch(`${apiBase}/api/store-provision/delete-subdomain?storeId=${store.id}`, {
         method: 'DELETE',
-        headers: getAdminHeaders(token),
+        headers: getAdminHeaders(),
       });
 
       if (!res.ok) {
@@ -121,7 +119,7 @@ export default function StoresPage() {
     setUsersError(null);
     try {
       const res = await fetch(`${apiBase}/api/admin/users?limit=200`, {
-        headers: getAdminHeaders(token),
+        headers: getAdminHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
@@ -147,7 +145,7 @@ export default function StoresPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAdminHeaders(token),
+          ...getAdminHeaders(),
         },
         body: JSON.stringify({
           userId: provisionForm.userId || undefined,

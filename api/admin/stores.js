@@ -1,4 +1,4 @@
-import { sql } from '../_lib/db.js'
+import { sql, ensureSchema } from '../_lib/db.js'
 import { getCurrentUser } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -10,6 +10,8 @@ export default async function handler(req, res) {
     const { rows: roleRows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
     if (!roleRows[0] || roleRows[0].role !== "admin") return res.status(403).json({ error: "Admin access required" })
   }
+
+    await ensureSchema()
 
     if (req.method === 'GET') {
       const { search, status } = req.query

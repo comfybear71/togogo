@@ -1,105 +1,256 @@
-// Sync orders with AliExpress — polls for shipping/delivery/cancellation updates
-// Runs every 4 hours via Vercel cron
+// Cron job: sync order statuses from AliExpress
+// Runs periodically to check for shipping updates, cancellations, delivery
+// GET /api/cron/sync-orders?secret=JWT_SECRET
 import { sql, ensureSchema } from '../_lib/db.js'
 import { getOrderTracking } from '../_lib/suppliers.js'
+import { sendEmail } from '../_lib/email.js'
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 export default async function handler(req, res) {
-  // Auth: cron secret or admin
-  const secret = req.headers['x-cron-secret'] || req.query.secret
-  if (secret !== process.env.CRON_SECRET && secret !== process.env.JWT_SECRET) {
+  // Auth: cron secret or JWT secret
+  const secret = req.headers['authorization']?.replace('Bearer ', '') || req.query.secret
+  const validSecret = process.env.CRON_SECRET || process.env.JWT_SECRET
+  if (!secret || secret !== validSecret) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
   await ensureSchema()
 
   try {
-    // Get all orders with AliExpress supplier_order_id that aren't delivered/cancelled/refunded
+    // Get all orders that have been submitted to AliExpress and aren't in a final state
     const { rows: orders } = await sql`
-      SELECT id, supplier_order_id, status, platform_order_id
+      SELECT id, supplier_order_id, status, product_title, customer_name, customer_email,
+             user_id, tracking_number, notes, stripe_payment_intent, sale_price
       FROM user_orders
       WHERE supplier_order_id IS NOT NULL
-        AND supplier_order_id != ''
-        AND status IN ('processing', 'shipped')
-      ORDER BY updated_at ASC
+        AND status IN ('processing', 'shipped', 'pending')
+      ORDER BY created_at DESC
       LIMIT 50
     `
 
     console.log(`[SyncOrders] Checking ${orders.length} active AliExpress orders`)
 
-    let updated = 0
-    let errors = 0
+    const results = {
+      checked: 0,
+      updated: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0,
+      errors: 0,
+    }
 
     for (const order of orders) {
+      results.checked++
+
       try {
         const tracking = await getOrderTracking(order.supplier_order_id)
-        if (!tracking) continue
 
-        const newStatus = mapAliExpressStatus(tracking.orderStatus)
-        if (!newStatus || newStatus === order.status) continue
+        if (!tracking) {
+          console.log(`[SyncOrders] No tracking data for order ${order.id} (AE: ${order.supplier_order_id})`)
+          continue
+        }
 
-        const trackingNumber = tracking.trackingNumber || null
-        const trackingUrl = tracking.trackingUrl || null
-        const logisticsCompany = tracking.logisticsCompany || null
+        const aeStatus = (tracking.status || '').toLowerCase()
+        let newStatus = order.status
+        let notes = order.notes || ''
+        let shouldUpdate = false
 
-        await sql`
-          UPDATE user_orders
-          SET status = ${newStatus},
-              tracking_number = COALESCE(${trackingNumber}, tracking_number),
-              notes = ${`AliExpress status: ${tracking.orderStatus}` + (logisticsCompany ? ` via ${logisticsCompany}` : '')},
-              updated_at = NOW()
-          WHERE id = ${order.id}
-        `
+        // Map AliExpress status to our status
+        if (aeStatus.includes('cancel') || aeStatus === 'cancelled' || aeStatus === 'canceled') {
+          newStatus = 'cancelled'
+          notes = `AliExpress cancelled order: ${tracking.rawData?.cancel_reason || aeStatus}`
+          results.cancelled++
+          shouldUpdate = true
 
-        console.log(`[SyncOrders] Order ${order.platform_order_id}: ${order.status} → ${newStatus}${trackingNumber ? ` (tracking: ${trackingNumber})` : ''}`)
-        updated++
+          // Email admin about cancellation
+          await sendEmail({
+            to: 'sfrench71@gmail.com',
+            subject: `[ALERT] AliExpress Order Cancelled — ${order.product_title}`,
+            html: `
+              <div style="font-family:system-ui;max-width:600px;margin:0 auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px">
+                <h1 style="color:#FF6B35">ToGoGo</h1>
+                <h2 style="color:#ef4444">Order Cancelled by AliExpress</h2>
+                <p>Product: <strong>${order.product_title}</strong></p>
+                <p>Customer: <strong>${order.customer_name}</strong> (${order.customer_email})</p>
+                <p>AliExpress Order: <strong>${order.supplier_order_id}</strong></p>
+                <p>Reason: <strong>${tracking.rawData?.cancel_reason || 'Not specified'}</strong></p>
+                <p>Status: <strong>${aeStatus}</strong></p>
+                <p style="color:#06D6A0;margin-top:16px">Auto-refund has been issued to the customer via Stripe.</p>
+                <a href="https://togogo.me/admin/orders" style="display:inline-block;background:#FF6B35;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;margin-top:12px">View Orders</a>
+              </div>
+            `,
+          })
 
-        // If cancelled by AliExpress, try auto-refund
-        if (newStatus === 'cancelled') {
-          try {
-            const { rows: paymentRows } = await sql`
-              SELECT stripe_payment_intent, sale_price FROM user_orders WHERE id = ${order.id}
-            `
-            const pi = paymentRows[0]?.stripe_payment_intent
-            if (pi) {
-              const Stripe = (await import('stripe')).default
-              const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-              const refund = await stripe.refunds.create({ payment_intent: pi })
+          // Auto-refund via Stripe
+          let refundSuccess = false
+          if (order.stripe_payment_intent) {
+            try {
+              const refund = await stripe.refunds.create({
+                payment_intent: order.stripe_payment_intent,
+                reason: 'requested_by_customer',
+              })
+              console.log(`[SyncOrders] Refund issued for order ${order.id}: ${refund.id} ($${(refund.amount / 100).toFixed(2)})`)
+              refundSuccess = true
+              notes += ` | Refund issued: ${refund.id}`
+
+              // Record refund in DB
               await sql`
-                INSERT INTO refunds (stripe_charge_id, stripe_refund_id, order_id, amount, status)
-                VALUES (${pi}, ${refund.id}, ${order.id}, ${paymentRows[0].sale_price}, 'completed')
-              `
-              await sql`UPDATE user_orders SET status = 'refunded', notes = ${'Auto-refunded: AliExpress cancelled order'}, updated_at = NOW() WHERE id = ${order.id}`
-              console.log(`[SyncOrders] Auto-refunded order ${order.platform_order_id}: ${refund.id}`)
+                INSERT INTO refunds (stripe_charge_id, amount, currency, status)
+                VALUES (${refund.charge || order.stripe_payment_intent}, ${(refund.amount || 0) / 100}, 'aud', 'completed')
+                ON CONFLICT (stripe_charge_id) DO UPDATE SET status = 'completed', updated_at = NOW()
+              `.catch(e => console.error('[SyncOrders] Failed to record refund:', e.message))
+
+              newStatus = 'refunded'
+            } catch (refundErr) {
+              console.error(`[SyncOrders] Refund failed for order ${order.id}:`, refundErr.message)
+              notes += ` | Auto-refund FAILED: ${refundErr.message}`
             }
-          } catch (refundErr) {
-            console.error(`[SyncOrders] Auto-refund failed for ${order.platform_order_id}:`, refundErr.message)
+          } else {
+            console.warn(`[SyncOrders] No stripe_payment_intent for order ${order.id}, cannot auto-refund`)
+            notes += ' | No payment intent found — manual refund required'
+          }
+
+          // Email customer about cancellation + refund
+          await sendEmail({
+            to: order.customer_email,
+            subject: `Order Update — ${order.product_title}`,
+            html: `
+              <div style="font-family:system-ui;max-width:600px;margin:0 auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px">
+                <h1 style="color:#FF6B35">ToGoGo</h1>
+                <h2 style="color:#fff">Order Update</h2>
+                <p>Hi ${order.customer_name},</p>
+                <p>Unfortunately, your order for <strong>${order.product_title}</strong> has been cancelled by the supplier.</p>
+                ${refundSuccess
+                  ? '<p style="color:#06D6A0">A <strong>full refund</strong> has been issued to your original payment method. Please allow 5-10 business days for it to appear.</p>'
+                  : '<p>We are processing your refund. You will receive a full refund within 5-10 business days.</p>'
+                }
+                <p style="color:#94a3b8;font-size:13px;margin-top:16px">We apologise for the inconvenience. If you have any questions, please contact us.</p>
+              </div>
+            `,
+          })
+
+        } else if (aeStatus.includes('ship') || aeStatus === 'shipped' || aeStatus === 'in_transit' || tracking.trackingNumber) {
+          if (order.status !== 'shipped') {
+            newStatus = 'shipped'
+            notes = `Shipped via ${tracking.logisticsCompany || 'carrier'} — tracking: ${tracking.trackingNumber || 'pending'}`
+            results.shipped++
+            shouldUpdate = true
+
+            // Email customer with tracking info
+            if (tracking.trackingNumber && tracking.trackingNumber !== order.tracking_number) {
+              await sendEmail({
+                to: order.customer_email,
+                subject: `Your Order Has Shipped! — ${order.product_title}`,
+                html: `
+                  <div style="font-family:system-ui;max-width:600px;margin:0 auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px">
+                    <h1 style="color:#FF6B35">ToGoGo</h1>
+                    <h2 style="color:#06D6A0">Your Order Has Shipped!</h2>
+                    <p>Hi ${order.customer_name},</p>
+                    <p>Great news — your order is on its way!</p>
+                    <div style="background:#1e293b;border-radius:12px;padding:16px;margin:16px 0">
+                      <p style="margin:4px 0;color:#94a3b8">Product: <strong style="color:#fff">${order.product_title}</strong></p>
+                      <p style="margin:4px 0;color:#94a3b8">Carrier: <strong style="color:#fff">${tracking.logisticsCompany || 'International Shipping'}</strong></p>
+                      <p style="margin:4px 0;color:#94a3b8">Tracking: <strong style="color:#FF6B35">${tracking.trackingNumber}</strong></p>
+                      ${tracking.estimatedDelivery ? `<p style="margin:4px 0;color:#94a3b8">Est. Delivery: <strong style="color:#fff">${tracking.estimatedDelivery}</strong></p>` : ''}
+                    </div>
+                    ${tracking.trackingUrl ? `<a href="${tracking.trackingUrl}" style="display:inline-block;background:#FF6B35;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none">Track Your Package</a>` : ''}
+                  </div>
+                `,
+              })
+            }
+          }
+
+        } else if (aeStatus.includes('deliver') || aeStatus === 'delivered' || aeStatus === 'completed') {
+          newStatus = 'delivered'
+          notes = `Delivered — ${tracking.logisticsCompany || ''}`
+          results.delivered++
+          shouldUpdate = true
+
+          // Trigger payout to store owner now that order is delivered
+          try {
+            const { rows: storeRows } = await sql`
+              SELECT s.stripe_connect_id, s.store_name, u.email as owner_email
+              FROM user_stores s
+              JOIN users u ON u.id = s.user_id
+              WHERE s.user_id = ${order.user_id}
+            `
+            const storeConnect = storeRows[0]
+
+            if (storeConnect?.stripe_connect_id) {
+              // Get available balance for this Connect account
+              const balance = await stripe.balance.retrieve({
+                stripeAccount: storeConnect.stripe_connect_id,
+              })
+
+              const availableAud = balance.available.find(b => b.currency === 'aud')
+              const pendingAud = balance.pending.find(b => b.currency === 'aud')
+              const payoutAmount = (availableAud?.amount || 0)
+
+              if (payoutAmount > 0) {
+                const payout = await stripe.payouts.create(
+                  {
+                    amount: payoutAmount,
+                    currency: 'aud',
+                    description: `ToGoGo order delivered: ${order.product_title}`,
+                  },
+                  { stripeAccount: storeConnect.stripe_connect_id }
+                )
+                console.log(`[SyncOrders] Payout triggered for ${storeConnect.store_name}: $${(payoutAmount / 100).toFixed(2)} (${payout.id})`)
+                notes += ` | Payout: $${(payoutAmount / 100).toFixed(2)} (${payout.id})`
+
+                // Email store owner about payout
+                await sendEmail({
+                  to: storeConnect.owner_email,
+                  subject: `Payment Released — $${(payoutAmount / 100).toFixed(2)} AUD`,
+                  html: `
+                    <div style="font-family:system-ui;max-width:600px;margin:0 auto;background:#0f172a;color:#e2e8f0;padding:32px;border-radius:16px">
+                      <h1 style="color:#FF6B35">ToGoGo</h1>
+                      <h2 style="color:#06D6A0">Payment Released!</h2>
+                      <p>Great news — your customer's order has been delivered and your payment has been released.</p>
+                      <div style="background:#1e293b;border-radius:12px;padding:16px;margin:16px 0">
+                        <p style="margin:4px 0;color:#94a3b8">Product: <strong style="color:#fff">${order.product_title}</strong></p>
+                        <p style="margin:4px 0;color:#94a3b8">Customer: <strong style="color:#fff">${order.customer_name}</strong></p>
+                        <p style="margin:4px 0;color:#94a3b8">Payout: <strong style="color:#06D6A0;font-size:18px">$${(payoutAmount / 100).toFixed(2)} AUD</strong></p>
+                      </div>
+                      <p style="color:#94a3b8;font-size:13px">Funds will arrive in your bank account within 1-2 business days.</p>
+                    </div>
+                  `,
+                })
+              } else {
+                console.log(`[SyncOrders] No available balance to pay out for ${storeConnect.store_name} (pending: $${((pendingAud?.amount || 0) / 100).toFixed(2)})`)
+              }
+            }
+          } catch (payoutErr) {
+            console.error(`[SyncOrders] Payout failed for order ${order.id}:`, payoutErr.message)
+            notes += ` | Payout failed: ${payoutErr.message}`
           }
         }
+
+        if (shouldUpdate) {
+          await sql`
+            UPDATE user_orders
+            SET status = ${newStatus},
+                tracking_number = COALESCE(${tracking.trackingNumber || null}, tracking_number),
+                tracking_url = COALESCE(${tracking.trackingUrl || null}, tracking_url),
+                notes = ${notes},
+                updated_at = NOW()
+            WHERE id = ${order.id}
+          `
+          console.log(`[SyncOrders] Order ${order.id} updated: ${order.status} -> ${newStatus}`)
+        }
       } catch (err) {
-        console.error(`[SyncOrders] Error syncing order ${order.platform_order_id}:`, err.message)
-        errors++
+        console.error(`[SyncOrders] Error checking order ${order.id}:`, err.message)
+        results.errors++
       }
     }
 
-    console.log(`[SyncOrders] Done: ${updated} updated, ${errors} errors out of ${orders.length} orders`)
+    console.log(`[SyncOrders] Done:`, JSON.stringify(results))
+    return res.json({ success: true, ...results })
 
-    return res.json({
-      success: true,
-      checked: orders.length,
-      updated,
-      errors,
-    })
   } catch (err) {
     console.error('[SyncOrders] Fatal error:', err.message)
     return res.status(500).json({ error: err.message })
   }
-}
-
-function mapAliExpressStatus(aeStatus) {
-  if (!aeStatus) return null
-  const s = aeStatus.toUpperCase()
-  if (s.includes('SHIP') || s.includes('IN_TRANSIT')) return 'shipped'
-  if (s.includes('DELIVER') || s.includes('FINISH') || s.includes('COMPLETE')) return 'delivered'
-  if (s.includes('CANCEL') || s.includes('CLOSE')) return 'cancelled'
-  return null
 }

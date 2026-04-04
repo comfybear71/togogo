@@ -199,61 +199,47 @@ export async function getProductDetails(productId) {
 
 export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount }) {
   try {
-    // If no SKU attr provided, fetch product details to get the first/default SKU
-    let resolvedSkuAttr = ''
-    let shippingMethod = 'CAINIAO_STANDARD'
-    if (!skuId) {
+    // First, get product details to find the correct SKU if not provided
+    let aeSkuId = skuId || ''
+    if (!aeSkuId) {
       try {
-        const details = await getProductDetails(productId)
-        if (details?.variants?.length > 0) {
-          resolvedSkuAttr = details.variants[0].skuAttr || ''
-          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr}`)
+        const productData = await callAuthenticatedAPI('aliexpress.ds.product.get', {
+          product_id: String(productId),
+          ship_to_country: shippingAddress.country || 'AU',
+          target_currency: 'AUD',
+        })
+        const productResult = productData?.aliexpress_ds_product_get_response?.result
+        const skuList = productResult?.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
+        if (skuList.length > 0) {
+          // Use the first available SKU
+          aeSkuId = skuList[0].id || skuList[0].sku_id || ''
+          console.log(`[AliExpress] Auto-selected SKU: ${aeSkuId} for product ${productId}`)
         }
-        // Use first available shipping method
-        if (details?.shipping?.length > 0) {
-          shippingMethod = details.shipping[0].serviceName || shippingMethod
-        }
-      } catch (err) {
-        console.error(`[AliExpress] Failed to auto-resolve SKU for ${productId}:`, err.message)
+      } catch (skuErr) {
+        console.warn(`[AliExpress] Could not fetch SKU for product ${productId}:`, skuErr.message)
       }
-    } else {
-      resolvedSkuAttr = skuId
     }
-
-    // aliexpress.trade.buy.placeorder — ACTUALLY places the order on AliExpress
-    // Creates "Awaiting Payment" order. Store owner pays in bulk on AliExpress.
-    const countryCode = mapCountryToISO(shippingAddress.country || 'AU')
-    const fullName = shippingAddress.name || 'Customer'
-    const phone = shippingAddress.phone || '0400000000'
-
-    const orderRequest = {
-      logistics_address: {
-        address: shippingAddress.line1 || shippingAddress.address || 'N/A',
-        city: shippingAddress.city || 'N/A',
-        country: countryCode,
-        contact_person: fullName,
-        full_name: fullName,
-        mobile_no: phone,
-        phone_country: countryCode === 'AU' ? '+61' : '+1',
-        province: mapAUState(shippingAddress.state, countryCode) || shippingAddress.state || '',
-        zip: shippingAddress.zip || '',
-      },
-      product_items: [{
-        product_id: Number(productId),
-        product_count: quantity || 1,
-        sku_attr: resolvedSkuAttr,
-        logistics_service_name: shippingMethod,
-        order_memo: 'ToGoGo dropship order',
-      }],
-    }
-
-    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, ship=${shippingMethod}, to=${orderRequest.logistics_address.full_name}, ${orderRequest.logistics_address.address}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${orderRequest.logistics_address.zip}, ${orderRequest.logistics_address.country}`)
 
     const params = {
-      param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
+      product_id: String(productId),
+      ae_sku_info: JSON.stringify([{
+        sku_id: aeSkuId,
+        count: quantity || 1,
+      }]),
+      logistics_address: JSON.stringify({
+        receiver_country: shippingAddress.country || 'AU',
+        receiver_province: shippingAddress.state || '',
+        receiver_city: shippingAddress.city || '',
+        receiver_address: shippingAddress.line1 || '',
+        receiver_zip: shippingAddress.zip || '',
+        receiver_name: shippingAddress.name || '',
+        receiver_phone: shippingAddress.phone || '0400000000',
+      }),
     }
 
-    const data = await callAuthenticatedAPI('aliexpress.trade.buy.placeorder', params)
+    console.log(`[AliExpress] Submitting order: product=${productId}, sku=${aeSkuId}, qty=${quantity}`)
+
+    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
 
     // Response can be in different formats depending on API version
     const result = data?.aliexpress_trade_buy_placeorder_response?.result
@@ -756,3 +742,440 @@ export const ALL_SUPPLIERS = [
   { value: '', label: 'All Suppliers' },
   { value: 'AliExpress', label: '🛒 AliExpress', type: 'general' },
 ]
+
+// ============================================
+// SUPPLIER ORDER PLACEMENT
+// ============================================
+
+/**
+ * Place an order with CJ Dropshipping
+ * API docs: https://developers.cjdropshipping.com/api2.0/v1/shopping/order/createOrder
+ */
+export async function placeCJOrder({ productId, quantity, shippingAddress }) {
+  const token = await getCJAccessToken()
+  if (!token) return { success: false, error: 'CJ auth failed — no API key or token' }
+
+  try {
+    // Strip the cj_ prefix if present
+    const cjProductId = productId.replace(/^cj_/, '')
+
+    const orderPayload = {
+      orderNumber: `TG-${Date.now().toString(36).toUpperCase()}`,
+      shippingZip: shippingAddress.zip || shippingAddress.postcode || '',
+      shippingCountryCode: shippingAddress.country_code || 'AU',
+      shippingCountry: shippingAddress.country || 'Australia',
+      shippingProvince: shippingAddress.state || shippingAddress.province || '',
+      shippingCity: shippingAddress.city || '',
+      shippingAddress: shippingAddress.line1 || shippingAddress.address || '',
+      shippingCustomerName: shippingAddress.name || '',
+      shippingPhone: shippingAddress.phone || '',
+      products: [{
+        vid: cjProductId,
+        quantity: quantity || 1,
+      }],
+    }
+
+    const response = await fetch('https://developers.cjdropshipping.com/api2.0/v1/shopping/order/createOrder', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'CJ-Access-Token': token,
+      },
+      body: JSON.stringify(orderPayload),
+    })
+
+    const data = await response.json()
+    if (data.code === 200 && data.data) {
+      return {
+        success: true,
+        supplier_order_id: data.data.orderId || data.data.orderNum || data.data,
+        status: 'processing',
+      }
+    }
+    return { success: false, error: data.message || `CJ order failed (code ${data.code})` }
+  } catch (err) {
+    console.error('CJ place order error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Place an order with Printful
+ * API docs: https://developers.printful.com/docs/#tag/Orders/operation/createOrder
+ */
+export async function placePrintfulOrder({ productId, quantity, shippingAddress }) {
+  const apiKey = process.env.PRINTFUL_API_KEY
+  if (!apiKey) return { success: false, error: 'Printful API key not configured' }
+
+  try {
+    const pfProductId = productId.replace(/^pf_/, '')
+
+    const orderPayload = {
+      recipient: {
+        name: shippingAddress.name || '',
+        address1: shippingAddress.line1 || shippingAddress.address || '',
+        city: shippingAddress.city || '',
+        state_code: shippingAddress.state || '',
+        country_code: shippingAddress.country_code || 'AU',
+        zip: shippingAddress.zip || shippingAddress.postcode || '',
+        phone: shippingAddress.phone || '',
+        email: shippingAddress.email || '',
+      },
+      items: [{
+        sync_variant_id: pfProductId,
+        quantity: quantity || 1,
+      }],
+    }
+
+    const response = await fetch('https://api.printful.com/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(orderPayload),
+    })
+
+    const data = await response.json()
+    if (response.ok && data.result) {
+      return {
+        success: true,
+        supplier_order_id: String(data.result.id),
+        status: data.result.status || 'pending',
+      }
+    }
+    return { success: false, error: data.result?.message || data.error?.message || 'Printful order failed' }
+  } catch (err) {
+    console.error('Printful place order error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Place an order with Printify
+ * API docs: https://developers.printify.com/#create-a-new-order
+ */
+export async function placePrintifyOrder({ productId, quantity, shippingAddress }) {
+  const apiKey = process.env.PRINTIFY_API_KEY
+  if (!apiKey) return { success: false, error: 'Printify API key not configured' }
+
+  try {
+    const pyProductId = productId.replace(/^py_/, '')
+
+    // Printify requires a shop_id — read from admin_settings
+    let shopId = process.env.PRINTIFY_SHOP_ID
+    if (!shopId) {
+      try {
+        const r = await sql`SELECT value FROM admin_settings WHERE key = 'printify_shop_id'`
+        shopId = r.rows[0]?.value
+      } catch { /* continue without */ }
+    }
+    if (!shopId) return { success: false, error: 'Printify shop ID not configured' }
+
+    const orderPayload = {
+      external_id: `TG-${Date.now().toString(36).toUpperCase()}`,
+      line_items: [{
+        product_id: pyProductId,
+        variant_id: 1,
+        quantity: quantity || 1,
+      }],
+      shipping_method: 1,
+      address_to: {
+        first_name: (shippingAddress.name || '').split(' ')[0] || '',
+        last_name: (shippingAddress.name || '').split(' ').slice(1).join(' ') || '',
+        email: shippingAddress.email || '',
+        phone: shippingAddress.phone || '',
+        country: shippingAddress.country_code || 'AU',
+        region: shippingAddress.state || '',
+        address1: shippingAddress.line1 || shippingAddress.address || '',
+        city: shippingAddress.city || '',
+        zip: shippingAddress.zip || shippingAddress.postcode || '',
+      },
+    }
+
+    const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(orderPayload),
+    })
+
+    const data = await response.json()
+    if (response.ok && data.id) {
+      return {
+        success: true,
+        supplier_order_id: data.id,
+        status: data.status || 'pending',
+      }
+    }
+    return { success: false, error: data.message || data.errors?.[0] || 'Printify order failed' }
+  } catch (err) {
+    console.error('Printify place order error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Place an order with Gooten
+ * API docs: https://www.gooten.com/api
+ */
+export async function placeGootenOrder({ productId, quantity, shippingAddress }) {
+  const recipeId = process.env.GOOTEN_RECIPE_ID
+  const billingKey = process.env.GOOTEN_PARTNER_BILLING_KEY
+  if (!recipeId || !billingKey) return { success: false, error: 'Gooten API keys not configured' }
+
+  try {
+    const gtProductId = productId.replace(/^gt_/, '')
+
+    const orderPayload = {
+      ShipToAddress: {
+        FirstName: (shippingAddress.name || '').split(' ')[0] || '',
+        LastName: (shippingAddress.name || '').split(' ').slice(1).join(' ') || '',
+        Line1: shippingAddress.line1 || shippingAddress.address || '',
+        City: shippingAddress.city || '',
+        State: shippingAddress.state || '',
+        CountryCode: shippingAddress.country_code || 'AU',
+        PostalCode: shippingAddress.zip || shippingAddress.postcode || '',
+        Phone: shippingAddress.phone || '',
+        Email: shippingAddress.email || '',
+      },
+      Items: [{
+        ProductId: parseInt(gtProductId) || gtProductId,
+        Quantity: quantity || 1,
+        SKUs: [{ SKU: gtProductId, Quantity: quantity || 1 }],
+      }],
+      Payment: { PartnerBillingKey: billingKey },
+    }
+
+    const response = await fetch(`https://api.print.io/api/v/4/source/api/orders?recipeId=${recipeId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderPayload),
+    })
+
+    const data = await response.json()
+    if (response.ok && (data.Id || data.id)) {
+      return {
+        success: true,
+        supplier_order_id: String(data.Id || data.id),
+        status: 'processing',
+      }
+    }
+    return { success: false, error: data.ErrorMessage || data.error || 'Gooten order failed' }
+  } catch (err) {
+    console.error('Gooten place order error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+/**
+ * Route an order to the correct supplier based on supplier name
+ */
+export async function placeSupplierOrder(supplier, orderDetails) {
+  const name = (supplier || '').toLowerCase()
+  if (name.includes('cj')) return placeCJOrder(orderDetails)
+  if (name.includes('printful')) return placePrintfulOrder(orderDetails)
+  if (name.includes('printify')) return placePrintifyOrder(orderDetails)
+  if (name.includes('gooten')) return placeGootenOrder(orderDetails)
+  // AliExpress doesn't support direct order placement via their DS API
+  return { success: false, error: `Order placement not supported for supplier: ${supplier}` }
+}
+
+// ============================================
+// SUPPLIER ORDER TRACKING
+// ============================================
+
+/**
+ * Query CJ for order status and tracking
+ */
+export async function getCJOrderTracking(supplierOrderId) {
+  const token = await getCJAccessToken()
+  if (!token) return { success: false, error: 'CJ auth failed' }
+
+  try {
+    const response = await fetch(`https://developers.cjdropshipping.com/api2.0/v1/shopping/order/getOrderDetail?orderId=${encodeURIComponent(supplierOrderId)}`, {
+      headers: { 'CJ-Access-Token': token },
+    })
+
+    const data = await response.json()
+    if (data.code === 200 && data.data) {
+      const order = data.data
+      return {
+        success: true,
+        status: mapCJStatus(order.orderStatus),
+        tracking_number: order.trackingNumber || order.logisticInfo?.trackNumber || null,
+        tracking_url: order.logisticInfo?.trackingUrl || null,
+        supplier_status: order.orderStatus,
+        updated_at: order.updateTime || order.createTime,
+      }
+    }
+    return { success: false, error: data.message || 'CJ tracking query failed' }
+  } catch (err) {
+    console.error('CJ tracking error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+function mapCJStatus(cjStatus) {
+  const map = {
+    CREATED: 'processing',
+    IN_CART: 'processing',
+    UNPAID: 'processing',
+    UNSHIPPED: 'processing',
+    SHIPPED: 'shipped',
+    DELIVERED: 'delivered',
+    CANCELLED: 'cancelled',
+  }
+  return map[(cjStatus || '').toUpperCase()] || 'processing'
+}
+
+/**
+ * Query Printful for order status and tracking
+ */
+export async function getPrintfulOrderTracking(supplierOrderId) {
+  const apiKey = process.env.PRINTFUL_API_KEY
+  if (!apiKey) return { success: false, error: 'Printful API key not configured' }
+
+  try {
+    const response = await fetch(`https://api.printful.com/orders/${encodeURIComponent(supplierOrderId)}`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    })
+
+    const data = await response.json()
+    if (response.ok && data.result) {
+      const order = data.result
+      const shipment = order.shipments?.[0]
+      return {
+        success: true,
+        status: mapPrintfulStatus(order.status),
+        tracking_number: shipment?.tracking_number || null,
+        tracking_url: shipment?.tracking_url || null,
+        supplier_status: order.status,
+        updated_at: order.updated,
+      }
+    }
+    return { success: false, error: data.error?.message || 'Printful tracking query failed' }
+  } catch (err) {
+    console.error('Printful tracking error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+function mapPrintfulStatus(pfStatus) {
+  const map = {
+    draft: 'pending',
+    pending: 'processing',
+    failed: 'processing',
+    canceled: 'cancelled',
+    inprocess: 'processing',
+    onhold: 'processing',
+    partial: 'shipped',
+    fulfilled: 'shipped',
+    returned: 'cancelled',
+  }
+  return map[(pfStatus || '').toLowerCase()] || 'processing'
+}
+
+/**
+ * Query Printify for order status and tracking
+ */
+export async function getPrintifyOrderTracking(supplierOrderId) {
+  const apiKey = process.env.PRINTIFY_API_KEY
+  if (!apiKey) return { success: false, error: 'Printify API key not configured' }
+
+  let shopId = process.env.PRINTIFY_SHOP_ID
+  if (!shopId) {
+    try {
+      const r = await sql`SELECT value FROM admin_settings WHERE key = 'printify_shop_id'`
+      shopId = r.rows[0]?.value
+    } catch { /* continue */ }
+  }
+  if (!shopId) return { success: false, error: 'Printify shop ID not configured' }
+
+  try {
+    const response = await fetch(`https://api.printify.com/v1/shops/${shopId}/orders/${encodeURIComponent(supplierOrderId)}.json`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+    })
+
+    const data = await response.json()
+    if (response.ok && data.id) {
+      const shipment = data.shipments?.[0]
+      return {
+        success: true,
+        status: mapPrintifyStatus(data.status),
+        tracking_number: shipment?.tracking_number || null,
+        tracking_url: shipment?.tracking_url || null,
+        supplier_status: data.status,
+        updated_at: data.updated_at,
+      }
+    }
+    return { success: false, error: data.message || 'Printify tracking query failed' }
+  } catch (err) {
+    console.error('Printify tracking error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+function mapPrintifyStatus(pyStatus) {
+  const map = {
+    'on-hold': 'pending',
+    'sending-to-production': 'processing',
+    'in-production': 'processing',
+    'shipping': 'shipped',
+    'fulfilled': 'delivered',
+    'canceled': 'cancelled',
+  }
+  return map[(pyStatus || '').toLowerCase()] || 'processing'
+}
+
+/**
+ * Query Gooten for order status and tracking
+ */
+export async function getGootenOrderTracking(supplierOrderId) {
+  const recipeId = process.env.GOOTEN_RECIPE_ID
+  if (!recipeId) return { success: false, error: 'Gooten API keys not configured' }
+
+  try {
+    const response = await fetch(`https://api.print.io/api/v/4/source/api/orders/${encodeURIComponent(supplierOrderId)}?recipeId=${recipeId}`)
+    const data = await response.json()
+
+    if (response.ok && (data.Id || data.id)) {
+      const shipment = data.Shipments?.[0] || data.shipments?.[0]
+      return {
+        success: true,
+        status: mapGootenStatus(data.Status || data.status),
+        tracking_number: shipment?.TrackingNumber || shipment?.tracking_number || null,
+        tracking_url: shipment?.TrackingUrl || shipment?.tracking_url || null,
+        supplier_status: data.Status || data.status,
+        updated_at: data.DateModified || data.date_modified,
+      }
+    }
+    return { success: false, error: 'Gooten tracking query failed' }
+  } catch (err) {
+    console.error('Gooten tracking error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+function mapGootenStatus(gtStatus) {
+  const s = (gtStatus || '').toLowerCase()
+  if (s.includes('ship')) return 'shipped'
+  if (s.includes('deliver') || s.includes('complete')) return 'delivered'
+  if (s.includes('cancel')) return 'cancelled'
+  return 'processing'
+}
+
+/**
+ * Route a tracking query to the correct supplier
+ */
+export async function getSupplierOrderTracking(supplier, supplierOrderId) {
+  if (!supplierOrderId) return { success: false, error: 'No supplier order ID' }
+  const name = (supplier || '').toLowerCase()
+  if (name.includes('cj')) return getCJOrderTracking(supplierOrderId)
+  if (name.includes('printful')) return getPrintfulOrderTracking(supplierOrderId)
+  if (name.includes('printify')) return getPrintifyOrderTracking(supplierOrderId)
+  if (name.includes('gooten')) return getGootenOrderTracking(supplierOrderId)
+  return { success: false, error: `Tracking not supported for supplier: ${supplier}` }
+}

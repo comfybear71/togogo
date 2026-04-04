@@ -166,7 +166,7 @@ export default async function handler(req, res) {
             supplier_cost, sale_price, profit, commission, commission_rate, quantity,
             platform, platform_order_id,
             customer_name, customer_email, shipping_address,
-            status, notes, stripe_checkout_session
+            status, notes, stripe_checkout_session, supplier_product_id
           ) VALUES (
             ${store.user_id}, ${item.supplier || 'AliExpress'}, ${item.supplierProductId || ''}, ${item.title}, ${item.image},
             ${supplierCost}, ${salePrice},
@@ -177,7 +177,8 @@ export default async function handler(req, res) {
             ${JSON.stringify({ ...customer.address, phone: customer.phone || '' })},
             'pending_payment',
             ${`Stripe session: ${session.id}`},
-            ${session.id}
+            ${session.id},
+            ${item.supplierProductId || null}
           )
         `
       } catch (err) {

@@ -27,10 +27,10 @@ export default async function handler(req, res) {
                  o.created_at, o.updated_at,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_orders o
-          JOIN users u ON u.id = o.user_id
+          LEFT JOIN users u ON u.id = o.user_id
           ORDER BY o.created_at DESC
           LIMIT 200
-        `.catch(() => ({ rows: [] })),
+        `.catch(e => { console.error('Orders query failed:', e.message); return { rows: [] } }),
         sql`
           SELECT d.id, d.stripe_dispute_id, d.order_id, d.amount, d.currency,
                  d.reason, d.status, d.admin_note, d.evidence_due_by,
@@ -40,14 +40,14 @@ export default async function handler(req, res) {
           LEFT JOIN users u ON u.id = d.user_id
           ORDER BY d.created_at DESC
           LIMIT 50
-        `.catch(() => ({ rows: [] })),
+        `.catch(e => { console.error('Disputes query failed:', e.message); return { rows: [] } }),
         sql`
           SELECT
             COALESCE(SUM(commission), 0)::numeric AS total_fees,
             COALESCE(SUM(CASE WHEN status = 'delivered' THEN sale_price - commission ELSE 0 END), 0)::numeric AS total_payouts,
             COALESCE(SUM(commission), 0)::numeric AS platform_balance
           FROM user_orders WHERE status != 'cancelled'
-        `.catch(() => ({ rows: [{ total_fees: 0, total_payouts: 0, platform_balance: 0 }] })),
+        `.catch(e => { console.error('Financials query failed:', e.message); return { rows: [{ total_fees: 0, total_payouts: 0, platform_balance: 0 }] } }),
       ])
 
       return res.json({
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       })
     } catch (err) {
       console.error('Admin orders error:', err)
-      return res.json({ orders: [], disputes: [], financials: { total_fees: 0, total_payouts: 0, platform_balance: 0 } })
+      return res.status(500).json({ error: 'Failed to fetch orders', detail: err.message })
     }
   }
 

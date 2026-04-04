@@ -180,6 +180,7 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS commission NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS commission_rate NUMERIC(5,4) DEFAULT 0.05` } catch { /* */ }
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS supplier_product_id TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_checkout_session TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT` } catch { /* */ }
   // Expand order status to include pending_payment
@@ -257,19 +258,19 @@ export async function initializeSchema() {
     )
   `
 
-  // Store customers — tracks customers per storefront
+  // Store customers — tracks customers per store
   await sql`
     CREATE TABLE IF NOT EXISTS store_customers (
       id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
       store_id UUID REFERENCES user_stores(id) ON DELETE CASCADE NOT NULL,
       email TEXT NOT NULL,
-      name TEXT DEFAULT '',
-      phone TEXT DEFAULT '',
-      total_orders INTEGER DEFAULT 0,
+      name TEXT,
+      phone TEXT,
+      order_count INTEGER DEFAULT 0,
       total_spent NUMERIC(10,2) DEFAULT 0,
-      first_order_at TIMESTAMPTZ DEFAULT NOW(),
-      last_order_at TIMESTAMPTZ DEFAULT NOW(),
+      last_order_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(store_id, email)
     )
   `
@@ -289,6 +290,8 @@ export async function initializeSchema() {
   await sql`CREATE INDEX IF NOT EXISTS idx_admin_settings_key ON admin_settings(key)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_domains_user ON user_domains(user_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_stores_user ON user_stores(user_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_email ON store_customers(email)`
   await sql`CREATE INDEX IF NOT EXISTS idx_user_stores_subdomain ON user_stores(subdomain)`
   await sql`CREATE INDEX IF NOT EXISTS idx_disputes_stripe ON disputes(stripe_dispute_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status)`

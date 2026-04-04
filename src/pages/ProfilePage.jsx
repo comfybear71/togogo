@@ -17,7 +17,7 @@ import Button from '../components/ui/Button'
 import { useAuthStore, authFetch } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
 
-const TABS = ['My Store', 'Settings']
+const BASE_TABS = ['My Store', 'Settings']
 
 const platformColors = {
   woocommerce: '#7F54B3',
@@ -156,7 +156,7 @@ export default function ProfilePage() {
       <div className="border-b border-white/5 sticky top-0 z-10 bg-[#050505]/90 backdrop-blur-lg">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <div className="flex gap-1">
-            {[...TABS, ...(isAdmin ? ['Admin'] : [])].map((tab) => (
+            {[...BASE_TABS, ...(user?.role === 'admin' ? ['Admin'] : [])].map((tab) => (
               <button
                 key={tab}
                 onClick={() => tab === 'Admin' ? navigate('/admin') : setActiveTab(tab)}

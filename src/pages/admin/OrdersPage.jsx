@@ -15,9 +15,15 @@ import {
   XCircle,
   Loader2,
 } from 'lucide-react';
-import { useAuthStore } from '../../stores/authStore';
-
 const API_BASE = import.meta.env.VITE_API_URL || '';
+
+function getAuthHeaders() {
+  const token = localStorage.getItem('togogo-token')
+  if (token) return { Authorization: `Bearer ${token}` }
+  const secret = sessionStorage.getItem('togogo-setup-secret')
+  if (secret) return { 'x-setup-secret': secret }
+  return {}
+}
 
 const statusConfig = {
   pending: { color: 'bg-[#FFD23F]/10 text-[#FFD23F]', icon: Clock },
@@ -37,7 +43,6 @@ const disputeStatusColors = {
 };
 
 export default function OrdersPage() {
-  const token = localStorage.getItem('togogo-token');
   const [orders, setOrders] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [financials, setFinancials] = useState({ total_fees: 0, total_payouts: 0, platform_balance: 0 });
@@ -51,7 +56,7 @@ export default function OrdersPage() {
   async function fetchOrders() {
     try {
       const res = await fetch(`${API_BASE}/api/admin/orders`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
