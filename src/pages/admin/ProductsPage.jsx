@@ -190,8 +190,10 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                   <th className="pb-3 pr-4">Product</th>
-                  <th className="pb-3 pr-4">Supplier Cost</th>
+                  <th className="pb-3 pr-4">Wholesale</th>
                   <th className="pb-3 pr-4">Sale Price</th>
+                  <th className="pb-3 pr-4">Profit</th>
+                  <th className="pb-3 pr-4">ToGoGo</th>
                   <th className="pb-3 pr-4">Category</th>
                   <th className="pb-3 pr-4">Store</th>
                   <th className="pb-3 pr-4">Status</th>
@@ -219,6 +221,8 @@ export default function ProductsPage() {
                       </td>
                       <td className="py-3 pr-4 text-zinc-400">${supplierCost.toFixed(2)}</td>
                       <td className="py-3 pr-4 font-medium text-white">${salePrice.toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-emerald-400">${(salePrice - supplierCost).toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-[#FF6B35]">${((salePrice - supplierCost) * 0.3).toFixed(2)}<span className="text-zinc-600 text-xs"> +$6</span></td>
                       <td className="py-3 pr-4 text-zinc-400 max-w-[120px] truncate">{p.category || 'General'}</td>
                       <td className="py-3 pr-4 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>
                       <td className="py-3 pr-4">
