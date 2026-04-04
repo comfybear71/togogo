@@ -214,7 +214,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress 
     }
 
     const params = {
-      product_id: String(productId),
+      ae_product_id: String(productId),
       logistics_address: JSON.stringify({
         receiver_country: shippingAddress.country || 'AU',
         receiver_province: shippingAddress.state || '',

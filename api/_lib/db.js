@@ -193,13 +193,15 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_connected'` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
-  // Migrations: store_customers table may exist from earlier session with different columns
-  try { await sql`ALTER TABLE store_customers ADD COLUMN IF NOT EXISTS first_order_at TIMESTAMPTZ DEFAULT NOW()` } catch { /* */ }
-  try { await sql`ALTER TABLE store_customers ADD COLUMN IF NOT EXISTS last_order_at TIMESTAMPTZ DEFAULT NOW()` } catch { /* */ }
-  try { await sql`ALTER TABLE store_customers ADD COLUMN IF NOT EXISTS total_orders INTEGER DEFAULT 0` } catch { /* */ }
-  try { await sql`ALTER TABLE store_customers ADD COLUMN IF NOT EXISTS total_spent NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
-  try { await sql`ALTER TABLE store_customers ADD COLUMN IF NOT EXISTS name TEXT DEFAULT ''` } catch { /* */ }
-  try { await sql`ALTER TABLE store_customers ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''` } catch { /* */ }
+  // Fix store_customers table — previous session created it with wrong columns (had password_hash)
+  // Drop and recreate since it never had valid data
+  try {
+    const { rows } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'store_customers' AND column_name = 'password_hash'`
+    if (rows.length > 0) {
+      await sql`DROP TABLE store_customers`
+      console.log('[Schema] Dropped broken store_customers table (had password_hash column)')
+    }
+  } catch { /* table might not exist */ }
 
   // Migration: expand subscription status to include 'past_due'
   try { await sql`ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check` } catch { /* */ }
