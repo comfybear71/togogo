@@ -1,9 +1,23 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-04
-**Session:** Rebuild from scratch after destructive Claude session
-**Branch:** claude/ipad-dev-prompt-2C4eB (PRODUCTION on Vercel)
+**Last Updated:** 2026-04-04 (Session 3 — Fix image crash)
+**Session:** Fix storefront crash caused by images/prices
+**Branch:** claude/fix-image-crash-BiIj9 (needs Vercel preview test)
+**Previous Branch:** claude/ipad-dev-prompt-2C4eB (PRODUCTION on Vercel)
+
+---
+
+## What Was Fixed This Session (Image Crash)
+
+### Root Causes:
+1. `product.price.toFixed(2)` crashes when price is undefined/null — kills entire storefront
+2. PostgreSQL TEXT[] `images` column can return as string `"{url1,url2}"` instead of array
+3. Variant prices from AliExpress API can also be undefined
+
+### Changes Made:
+- `src/pages/StorefrontPage.jsx` — Guard all `.toFixed(2)` with `(price || 0)`, safely parse images (array/string/null), add `onError` on img tags
+- `api/storefront/store.js` — Parse images TEXT[] safely before sending to frontend
 
 ---
 
