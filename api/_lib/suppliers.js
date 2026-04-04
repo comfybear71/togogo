@@ -199,47 +199,47 @@ export async function getProductDetails(productId) {
 
 export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount }) {
   try {
-    // If no SKU ID provided, fetch product details to get the first/default SKU
-    let resolvedSkuId = skuId
-    if (!resolvedSkuId) {
+    // If no SKU attr provided, fetch product details to get the first/default SKU
+    let resolvedSkuAttr = ''
+    if (!skuId) {
       try {
         const details = await getProductDetails(productId)
         if (details?.variants?.length > 0) {
-          resolvedSkuId = details.variants[0].skuId
-          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuId}`)
+          // Use the raw skuAttr string (format: "14:350853#Black;5:361386")
+          resolvedSkuAttr = details.variants[0].skuAttr || ''
+          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr}`)
         }
       } catch (err) {
         console.error(`[AliExpress] Failed to auto-resolve SKU for ${productId}:`, err.message)
       }
+    } else {
+      resolvedSkuAttr = skuId
     }
 
-    const productUrl = `https://www.aliexpress.com/item/${productId}.html`
+    // DS API requires ALL params wrapped in param_place_order_request4_open_api_d_t_o
+    const orderRequest = {
+      logistics_address: {
+        address: shippingAddress.line1 || shippingAddress.address || '',
+        city: shippingAddress.city || '',
+        country: shippingAddress.country || 'AU',
+        full_name: shippingAddress.name || '',
+        mobile_no: shippingAddress.phone || '',
+        phone_country: '+61',
+        province: shippingAddress.state || '',
+        zip: shippingAddress.zip || '',
+      },
+      product_items: [{
+        product_id: Number(productId),
+        product_count: quantity || 1,
+        sku_attr: resolvedSkuAttr,
+        logistics_service_name: 'CAINIAO_STANDARD',
+      }],
+    }
 
-    // Send ALL known param names — AliExpress DS API docs are inconsistent
+    console.log(`[AliExpress] Order request: ${JSON.stringify(orderRequest).slice(0, 500)}`)
+
     const params = {
-      product_id: String(productId),
-      ae_product_id: String(productId),
-      product_url: productUrl,
-      logistics_address: JSON.stringify({
-        receiver_country: shippingAddress.country || 'AU',
-        receiver_province: shippingAddress.state || '',
-        receiver_city: shippingAddress.city || '',
-        receiver_address: shippingAddress.line1 || '',
-        receiver_zip: shippingAddress.zip || '',
-        receiver_name: shippingAddress.name || '',
-        receiver_phone: shippingAddress.phone || '',
-      }),
-      product_count: String(quantity || 1),
-      quantity: String(quantity || 1),
-      sku_info: JSON.stringify({
-        sku_id: String(resolvedSkuId || ''),
-      }),
-      ae_sku_info: JSON.stringify([{
-        sku_id: String(resolvedSkuId || ''),
-        product_id: String(productId),
-        count: quantity || 1,
-      }]),
-      order_amount: String(orderAmount || '0'),
+      param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
     }
 
     const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
