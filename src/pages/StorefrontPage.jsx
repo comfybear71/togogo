@@ -139,46 +139,15 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Detail View ────────────────────────────────────────────
   if (view === 'product' && selectedProduct) return (
-    <div className={`min-h-screen ${theme.pageBg}`}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} />
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <button
-          onClick={() => setView('grid')}
-          className={`mb-6 flex items-center gap-1 text-sm ${theme.textSecondary}`}
-        >
-          <ChevronLeft className="h-4 w-4" /> Back to products
-        </button>
-        <div className="grid gap-8 md:grid-cols-2">
-          <ProductImageGallery product={selectedProduct} />
-          <div>
-            <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{selectedProduct.category}</p>
-            <h1 className="text-2xl font-bold text-white mb-3">{selectedProduct.title}</h1>
-            <p className="text-3xl font-bold text-white mb-4">${selectedProduct.price.toFixed(2)}</p>
-            {selectedProduct.description && selectedProduct.description !== selectedProduct.title && (
-              <p className="text-slate-400 mb-6 leading-relaxed">{selectedProduct.description}</p>
-            )}
-            <div className="flex gap-3 mb-6">
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
-                <Truck className="h-4 w-4" /> Free Shipping
-              </div>
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
-                <Shield className="h-4 w-4" /> Buyer Protection
-              </div>
-            </div>
-            {selectedProduct.totalSold > 0 && (
-              <p className="text-xs text-slate-500 mb-4">{selectedProduct.totalSold.toLocaleString()} sold</p>
-            )}
-            <button
-              onClick={() => { cart.add(selectedProduct); setView('cart') }}
-              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors"
-              style={{ backgroundColor: theme.accent }}
-            >
-              Add to Cart — ${selectedProduct.price.toFixed(2)}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <ProductDetailView
+      product={selectedProduct}
+      store={store}
+      cart={cart}
+      theme={theme}
+      subdomain={subdomain}
+      onBack={() => setView('grid')}
+      onCartClick={() => setView('cart')}
+    />
   )
 
   // ─── Cart View ──────────────────────────────────────────────────────
@@ -364,6 +333,165 @@ export default function StorefrontPage({ subdomain }) {
 }
 
 // ─── Store Header ─────────────────────────────────────────────────────────
+// ─── Product Detail View — fetches full details from AliExpress DS API ──
+function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onCartClick }) {
+  const [details, setDetails] = useState(null)
+  const [loadingDetails, setLoadingDetails] = useState(true)
+  const [selectedVariant, setSelectedVariant] = useState(null)
+
+  const API_BASE = import.meta.env.VITE_API_URL || ''
+
+  useEffect(() => {
+    // Extract AliExpress product ID from the product ID (remove ae_ prefix)
+    const aeId = (product.id || '').replace('ae_', '')
+    if (!aeId || aeId.startsWith('cur_')) {
+      setLoadingDetails(false)
+      return
+    }
+
+    fetch(`${API_BASE}/api/products/details?id=${aeId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) setDetails(data)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingDetails(false))
+  }, [product.id])
+
+  // Merge details with basic product data
+  const displayProduct = details ? {
+    ...product,
+    images: details.images?.length > 0 ? details.images : product.images,
+    description: details.description || product.description,
+    title: details.title || product.title,
+  } : product
+
+  const displayPrice = selectedVariant ? selectedVariant.price : product.price
+  const hasVariants = details?.variants?.length > 1
+
+  return (
+    <div className="min-h-screen bg-[#0f172a]">
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={onCartClick} />
+      <div className="mx-auto max-w-5xl px-4 py-8">
+        <button
+          onClick={onBack}
+          className="mb-6 flex items-center gap-1 text-sm text-slate-400 hover:text-white"
+        >
+          <ChevronLeft className="h-4 w-4" /> Back to products
+        </button>
+        <div className="grid gap-8 md:grid-cols-2">
+          {/* Image Gallery */}
+          <ProductImageGallery product={displayProduct} />
+
+          {/* Product Info */}
+          <div>
+            <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
+            <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
+            <p className="text-3xl font-bold text-white mb-2">${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">AUD</span></p>
+
+            {product.originalPrice > displayPrice && (
+              <p className="text-sm text-slate-500 line-through mb-4">${product.originalPrice?.toFixed(2)}</p>
+            )}
+
+            {/* Rating + Orders */}
+            {(product.totalSold > 0 || details?.rating) && (
+              <div className="flex items-center gap-3 mb-4 text-xs text-slate-400">
+                {details?.rating && <span className="text-[#FFD23F]">{'★'.repeat(Math.round(parseFloat(details.rating)))} {details.rating}</span>}
+                {product.totalSold > 0 && <span>{product.totalSold.toLocaleString()} sold</span>}
+              </div>
+            )}
+
+            {/* Variants (sizes/colors) */}
+            {hasVariants && (
+              <div className="mb-6">
+                <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Options</p>
+                <div className="flex flex-wrap gap-2">
+                  {details.variants.map((v, i) => {
+                    const label = v.skuAttr?.split('#')?.[1] || `Option ${i + 1}`
+                    const isSelected = selectedVariant?.skuId === v.skuId
+                    return (
+                      <button
+                        key={v.skuId}
+                        onClick={() => setSelectedVariant(isSelected ? null : v)}
+                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${
+                          isSelected
+                            ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white'
+                            : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'
+                        }`}
+                      >
+                        {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
+                        <span>{label}</span>
+                        <span className="text-slate-500">${v.price.toFixed(2)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Shipping */}
+            <div className="flex gap-3 mb-6">
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
+                <Truck className="h-4 w-4" /> Free Shipping
+              </div>
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
+                <Shield className="h-4 w-4" /> Buyer Protection
+              </div>
+            </div>
+
+            {/* Shipping options from API */}
+            {details?.shipping?.length > 0 && (
+              <div className="mb-6">
+                <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Shipping Options</p>
+                <div className="space-y-2">
+                  {details.shipping.slice(0, 3).map((s, i) => (
+                    <div key={i} className="flex justify-between items-center rounded-lg px-3 py-2 bg-white/[0.03] text-xs">
+                      <span className="text-slate-300">{s.serviceName || s.company}</span>
+                      <div className="text-right">
+                        <span className="text-white">{s.shippingFee > 0 ? `$${s.shippingFee.toFixed(2)}` : 'Free'}</span>
+                        {s.estimatedDays && <span className="text-slate-500 ml-2">{s.estimatedDays}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Store info */}
+            {details?.store?.name && (
+              <p className="text-xs text-slate-500 mb-4">Sold by: {details.store.name}</p>
+            )}
+
+            {/* Add to Cart */}
+            <button
+              onClick={() => { cart.add({ ...product, price: displayPrice }); onCartClick() }}
+              className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
+              style={{ backgroundColor: theme.accent }}
+            >
+              Add to Cart — ${displayPrice.toFixed(2)}
+            </button>
+          </div>
+        </div>
+
+        {/* HTML Description */}
+        {details?.description && details.description !== details.title && (
+          <div className="mt-10 rounded-2xl bg-[#1e293b] border border-white/[0.06] p-6">
+            <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
+            {details.description.includes('<') ? (
+              <div
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full"
+                dangerouslySetInnerHTML={{ __html: details.description }}
+              />
+            ) : (
+              <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function StoreHeader({ store, cart, theme, onCartClick }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
