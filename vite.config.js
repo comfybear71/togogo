@@ -28,12 +28,20 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        skipWaiting: true,
+        clientsClaim: true,
+        navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.vercel\.app\/api\/.*/i,
+            urlPattern: /^https:\/\/.*\.togogo\.me\/api\/.*/i,
             handler: 'NetworkFirst',
             options: { cacheName: 'api-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } }
+          },
+          {
+            urlPattern: /^https:\/\/ae-pic.*\.aliexpress-media\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: { cacheName: 'product-images', expiration: { maxEntries: 500, maxAgeSeconds: 86400 } }
           }
         ]
       }
