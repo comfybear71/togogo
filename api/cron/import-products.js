@@ -128,7 +128,12 @@ export default async function handler(req, res) {
 
       // Calculate wholesale cost (what ToGoGo actually pays on AliExpress)
       // API returns USD despite target_currency:AUD — convert to real AUD
-      const usdToAud = 1.45 // USD to AUD conversion rate
+      // Rate stored in admin_settings — update from admin panel when it changes
+      let usdToAud = 1.45
+      try {
+        const { rows: rateRows } = await sql`SELECT value FROM admin_settings WHERE key = 'usd_to_aud_rate'`
+        if (rateRows[0]) usdToAud = parseFloat(rateRows[0].value) || 1.45
+      } catch { /* use default */ }
       const productCostAUD = realProductCost * usdToAud
       // Always add minimum A$3 shipping (~US$2) — AE charges this even when API says free
       const minShipping = 3.00

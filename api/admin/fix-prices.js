@@ -11,7 +11,12 @@ export default async function handler(req, res) {
   await ensureSchema()
 
   try {
-    const rate = 1.45 // USD to AUD
+    // Read rate from admin_settings or use default
+    let rate = 1.45
+    try {
+      const { rows } = await sql`SELECT value FROM admin_settings WHERE key = 'usd_to_aud_rate'`
+      if (rows[0]) rate = parseFloat(rows[0].value) || 1.45
+    } catch { /* use default */ }
     const minShip = 3.00 // minimum A$3 shipping
 
     // Convert all prices from USD to AUD and recalculate
@@ -28,6 +33,13 @@ export default async function handler(req, res) {
       WHERE api_price > 0 AND api_price < 500
         AND (price_currency = 'USD' OR price_currency IS NULL)
     `
+
+    // Save current rate to admin_settings if not exists
+    await sql`
+      INSERT INTO admin_settings (key, value, category, label)
+      VALUES ('usd_to_aud_rate', ${String(rate)}, 'pricing', 'USD to AUD Exchange Rate')
+      ON CONFLICT (key) DO NOTHING
+    `.catch(() => {})
 
     return res.json({
       success: true,
