@@ -71,10 +71,40 @@ export default async function handler(req, res) {
 
     // Custom term via ?term= parameter, or random selection
     const customTerm = req.query.term || ''
+
+    // Expand single terms into multiple variations for more results
+    const termVariations = {
+      'dress': ['dress', 'summer dress', 'maxi dress', 'party dress', 'casual dress', 'mini dress', 'evening dress', 'floral dress'],
+      'toys': ['toys', 'kids toys', 'baby toys', 'educational toy', 'plush toy', 'building blocks', 'action figure'],
+      'home garden': ['home decor', 'garden tools', 'wall art', 'vase', 'cushion cover', 'curtain', 'rug'],
+      'computer': ['computer', 'laptop stand', 'USB hub', 'webcam', 'monitor stand', 'mouse pad', 'SSD'],
+      'jewelry': ['jewelry', 'necklace', 'earrings', 'bracelet', 'ring', 'pendant', 'chain'],
+      'beauty': ['beauty', 'makeup', 'skincare', 'face mask', 'lipstick', 'foundation', 'nail art'],
+      'sports': ['sports', 'yoga mat', 'fitness', 'water bottle', 'resistance band', 'gym gloves', 'running'],
+      'consumer electronics': ['electronics', 'smart watch', 'wireless charger', 'power bank', 'camera', 'drone', 'VR'],
+      'shoes': ['shoes', 'sneakers', 'sandals', 'boots', 'slippers', 'loafers', 'heels'],
+      'lights': ['lights', 'LED strip', 'desk lamp', 'fairy lights', 'night light', 'solar light', 'ceiling light'],
+      'mother kids': ['baby clothes', 'maternity', 'kids shoes', 'baby blanket', 'stroller', 'baby bottle'],
+      'mens clothing': ['mens shirt', 'mens jacket', 'mens pants', 'mens hoodie', 'mens shorts', 'mens suit'],
+      'leggings': ['leggings', 'yoga pants', 'workout leggings', 'high waist pants', 'gym leggings'],
+      'handbag': ['handbag', 'tote bag', 'crossbody bag', 'clutch', 'wallet', 'backpack women'],
+      'bikini': ['bikini', 'swimsuit', 'one piece swimsuit', 'beach cover up', 'swim shorts'],
+      'kitchen gadget': ['kitchen gadget', 'cooking tools', 'baking', 'food storage', 'knife set', 'cutting board'],
+      'pet': ['pet toys', 'dog collar', 'cat bed', 'pet clothes', 'aquarium', 'bird cage'],
+      'car accessories': ['car accessories', 'car phone holder', 'car charger', 'car seat cover', 'dash cam'],
+      'headphones': ['headphones', 'earbuds', 'bluetooth speaker', 'microphone', 'gaming headset'],
+      'phone case': ['phone case', 'screen protector', 'phone holder', 'phone charger', 'phone ring'],
+      'tablet stand': ['tablet stand', 'tablet case', 'stylus pen', 'tablet keyboard'],
+      'led light': ['LED light', 'RGB light', 'neon sign', 'grow light', 'flashlight', 'lantern'],
+      'makeup brush': ['makeup brush', 'makeup sponge', 'eyelash', 'eyebrow', 'concealer', 'mascara'],
+    }
+
     let selectedTerms
     if (customTerm) {
-      selectedTerms = [customTerm]
-      console.log(`[Cron] Custom search: "${customTerm}"`)
+      // Use variations if available, otherwise just the custom term
+      const variations = termVariations[customTerm.toLowerCase()] || [customTerm]
+      selectedTerms = variations
+      console.log(`[Cron] Custom search: "${customTerm}" → ${variations.length} variations`)
     } else {
       const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
       selectedTerms = shuffled.slice(0, 8)
@@ -82,24 +112,27 @@ export default async function handler(req, res) {
 
     console.log(`[Cron] Searching: ${selectedTerms.join(', ')}`)
 
-    // Fetch products from feed (fast — bulk)
+    // Fetch products from feed — try multiple pages for more variety
     let allProducts = []
     const seen = new Set()
     const { rows: existingRows } = await sql`SELECT DISTINCT supplier_product_id FROM user_products LIMIT 10000`
     const existingIds = new Set(existingRows.map(r => r.supplier_product_id))
 
     for (const term of selectedTerms) {
-      try {
-        const products = await searchAliExpress(term, 1)
-        for (const p of products) {
-          const pid = p.productId || p.id
-          if (!seen.has(pid) && !existingIds.has(pid)) {
-            seen.add(pid)
-            allProducts.push(p)
+      // Try pages 1 and 2 for more results
+      for (const page of [1, 2]) {
+        try {
+          const products = await searchAliExpress(term, page)
+          for (const p of products) {
+            const pid = p.productId || p.id
+            if (!seen.has(pid) && !existingIds.has(pid)) {
+              seen.add(pid)
+              allProducts.push(p)
+            }
           }
+        } catch (err) {
+          console.error(`[Cron] Error fetching "${term}" page ${page}:`, err.message)
         }
-      } catch (err) {
-        console.error(`[Cron] Error fetching "${term}":`, err.message)
       }
     }
 
@@ -107,8 +140,8 @@ export default async function handler(req, res) {
       return res.json({ success: true, message: 'No new products found', currentCount })
     }
 
-    // Process up to 30 products per run with accurate pricing
-    const batch = allProducts.slice(0, 30)
+    // Process up to 50 products per run with accurate pricing
+    const batch = allProducts.slice(0, 50)
     console.log(`[Cron] ${allProducts.length} new products found, processing ${batch.length} with accurate pricing`)
 
     let totalImported = 0
