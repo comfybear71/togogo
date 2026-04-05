@@ -237,7 +237,7 @@ export default function ProductsPage() {
                         </div>
                       </td>
                       <td className="py-3 pr-3 text-zinc-500 text-xs">${parseFloat(p.api_price || 0).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-xs">{parseFloat(p.shipping_cost || 0) === 0 ? <span className="text-emerald-400">FREE</span> : <span className="text-yellow-400">${parseFloat(p.shipping_cost || 0).toFixed(2)}</span>}</td>
+                      <td className="py-3 pr-3 text-xs text-yellow-400">${parseFloat(p.shipping_cost || 3).toFixed(2)}</td>
                       <td className="py-3 pr-3 text-zinc-500 text-xs">${parseFloat(p.tax_amount || 0).toFixed(2)}</td>
                       <td className="py-3 pr-3 text-zinc-400">${supplierCost.toFixed(2)}</td>
                       <td className="py-3 pr-3 font-medium text-white">${salePrice.toFixed(2)}</td>
