@@ -199,45 +199,56 @@ export async function getProductDetails(productId) {
 
 export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount }) {
   try {
-    // First, get product details to find the correct SKU if not provided
-    let aeSkuId = skuId || ''
-    if (!aeSkuId) {
+    // Resolve SKU attr if not provided
+    let resolvedSkuAttr = skuId || ''
+    let shippingMethod = 'CAINIAO_STANDARD'
+    if (!resolvedSkuAttr) {
       try {
-        const productData = await callAuthenticatedAPI('aliexpress.ds.product.get', {
-          product_id: String(productId),
-          ship_to_country: shippingAddress.country || 'AU',
-          target_currency: 'AUD',
-        })
-        const productResult = productData?.aliexpress_ds_product_get_response?.result
-        const skuList = productResult?.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
-        if (skuList.length > 0) {
-          // Use the first available SKU
-          aeSkuId = skuList[0].id || skuList[0].sku_id || ''
-          console.log(`[AliExpress] Auto-selected SKU: ${aeSkuId} for product ${productId}`)
+        const details = await getProductDetails(productId)
+        if (details?.variants?.length > 0) {
+          resolvedSkuAttr = details.variants[0].skuAttr || ''
+          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr}`)
         }
-      } catch (skuErr) {
-        console.warn(`[AliExpress] Could not fetch SKU for product ${productId}:`, skuErr.message)
+        if (details?.shipping?.length > 0) {
+          shippingMethod = details.shipping[0].serviceName || shippingMethod
+        }
+      } catch (err) {
+        console.error(`[AliExpress] Failed to auto-resolve SKU for ${productId}:`, err.message)
       }
     }
 
-    const params = {
-      product_id: String(productId),
-      ae_sku_info: JSON.stringify([{
-        sku_id: aeSkuId,
-        count: quantity || 1,
-      }]),
-      logistics_address: JSON.stringify({
-        receiver_country: shippingAddress.country || 'AU',
-        receiver_province: shippingAddress.state || '',
-        receiver_city: shippingAddress.city || '',
-        receiver_address: shippingAddress.line1 || '',
-        receiver_zip: shippingAddress.zip || '',
-        receiver_name: shippingAddress.name || '',
-        receiver_phone: shippingAddress.phone || '0400000000',
-      }),
+    // Map country and state
+    const countryCode = mapCountryToISO(shippingAddress.country || 'AU')
+    const fullName = shippingAddress.name || 'Customer'
+    const phone = shippingAddress.phone || '0400000000'
+
+    // aliexpress.trade.buy.placeorder — creates real order on AliExpress
+    const orderRequest = {
+      logistics_address: {
+        address: shippingAddress.line1 || shippingAddress.address || 'N/A',
+        city: shippingAddress.city || 'N/A',
+        country: countryCode,
+        contact_person: fullName,
+        full_name: fullName,
+        mobile_no: phone,
+        phone_country: countryCode === 'AU' ? '+61' : '+1',
+        province: mapAUState(shippingAddress.state, countryCode) || shippingAddress.state || '',
+        zip: shippingAddress.zip || '',
+      },
+      product_items: [{
+        product_id: Number(productId),
+        product_count: quantity || 1,
+        sku_attr: resolvedSkuAttr,
+        logistics_service_name: shippingMethod,
+        order_memo: 'ToGoGo dropship order',
+      }],
     }
 
-    console.log(`[AliExpress] Submitting order: product=${productId}, sku=${aeSkuId}, qty=${quantity}`)
+    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
+
+    const params = {
+      param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
+    }
 
     const data = await callAuthenticatedAPI('aliexpress.trade.buy.placeorder', params)
 
