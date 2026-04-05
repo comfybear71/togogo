@@ -43,6 +43,7 @@ export default function StorefrontPage({ subdomain }) {
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [priceRange, setPriceRange] = useState('')
   const cart = useCart(subdomain)
 
   // Always use midnight (dark) theme — stored in database, never localStorage
@@ -72,9 +73,13 @@ export default function StorefrontPage({ subdomain }) {
     return storeData.products.filter((p) => {
       if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
       if (selectedCategory && p.category !== selectedCategory) return false
+      if (priceRange === 'under10' && p.price >= 10) return false
+      if (priceRange === '10to20' && (p.price < 10 || p.price >= 20)) return false
+      if (priceRange === '20to50' && (p.price < 20 || p.price >= 50)) return false
+      if (priceRange === 'over50' && p.price < 50) return false
       return true
     })
-  }, [storeData?.products, searchQuery, selectedCategory])
+  }, [storeData?.products, searchQuery, selectedCategory, priceRange])
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
@@ -269,6 +274,30 @@ export default function StorefrontPage({ subdomain }) {
               ))}
             </select>
           )}
+        </div>
+
+        {/* Price Range Filters */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[
+            { key: '', label: 'All Prices' },
+            { key: 'under10', label: 'Under $10' },
+            { key: '10to20', label: '$10–$20' },
+            { key: '20to50', label: '$20–$50' },
+            { key: 'over50', label: '$50+' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setPriceRange(key)}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                priceRange === key
+                  ? 'text-white'
+                  : 'text-slate-400 border border-white/[0.08] hover:border-white/[0.2]'
+              }`}
+              style={priceRange === key ? { backgroundColor: theme.accent } : {}}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Products */}
