@@ -127,6 +127,15 @@ export default async function handler(req, res) {
           const shippingDetails = session.shipping_details || session.customer_details || {}
           console.log(`[Webhook] Storefront checkout completed: ${orderRef} (payment: ${paymentIntent})`)
 
+          // Idempotency check — prevent duplicate processing on webhook retries
+          const { rows: existingOrders } = await sql`
+            SELECT status FROM user_orders WHERE platform_order_id = ${orderRef} AND status != 'pending_payment' LIMIT 1
+          `
+          if (existingOrders.length > 0) {
+            console.log(`[Webhook] Order ${orderRef} already processed (status: ${existingOrders[0].status}), skipping duplicate`)
+            return res.json({ received: true, duplicate: true })
+          }
+
           try {
             // Update order with payment intent and shipping address from Stripe
             const shippingAddress = shippingDetails.address ? JSON.stringify({
