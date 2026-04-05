@@ -1,151 +1,157 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-05 (Session 4 — Pricing SOLVED + admin improvements)
-**Session:** USD→AUD conversion fix, accurate pricing, admin product breakdown, duplicate fix
-**Branch:** claude/fix-image-crash-BiIj9 (PRODUCTION on Vercel)
-**Previous Session:** Session 3 (April 4) — Full e2e dropshipping automated
+**Last Updated:** 2026-04-05 (Session 5 — UI Overhaul + Mega Import + Order Sync Fix)
+**Session:** AliExpress-style cards, infinite scroll, mega import, smart coupons, order sync
+**Branch:** claude/resume-after-crash-9FfCO (PRODUCTION on Vercel)
+**Previous Session:** Session 4 (April 5) — Pricing SOLVED + admin improvements
 
 ---
 
-## What Was Done This Session (Session 4 — April 5)
+## What Was Done This Session (Session 5 — April 5)
 
-### ROOT CAUSE FOUND: API Returns USD Not AUD
-- AliExpress API **ignores** `target_currency: 'AUD'` — returns USD values
-- All prices were stored as AUD but were actually USD
-- This caused every product to be underpriced (~30-45% too low)
-- **FIX:** All prices now converted with USD→AUD rate (default 1.45)
-- **Rate configurable** from admin Settings page (`usd_to_aud_rate` key)
-- **One-time fix endpoint:** `/api/admin/fix-prices?secret=JWT_SECRET` converts existing products
-- **`price_currency` column** tracks USD vs AUD — prevents double conversion
-- Safe to run fix-prices multiple times (only converts USD → AUD, skips AUD)
+### Phase 1: AliExpress-Style Product Cards
+- **Discount badges** (-20%, -53%, etc.) on product images
+- **Red bold prices** with original price ~~strikethrough~~
+- **"Save A$X.XX"** green callout on each product
+- **Star ratings** + "X+ sold" count
+- **Shipping badge** (A$6 shipping with truck icon)
+- **Hover effects** — cards lift up, quick-add button appears on hover
+- New DB columns: `product_rating`, `orders_count`, `original_price`, `discount_percent`
 
-### AliExpress "FREE" Shipping Is A Lie
-- API reports FREE shipping but AliExpress charges ~US$1.99 at checkout
-- **FIX:** Minimum A$3.00 shipping added to ALL products regardless of API
-- Formula: `actualShipping = Math.max(apiShipping × usdToAud, A$3.00)`
-- Removed "FREE" display from admin products page
-- Storefront shows "Shipping only $6" (not "Free Shipping")
+### Infinite Scroll (Phase 2)
+- Storefront API now supports `?page=1&limit=30` pagination
+- Products sorted by `created_at DESC` (stable sort, no more random)
+- Auto-loads 30 more products as user scrolls near bottom
+- "Load more products" button as fallback
+- "You've seen all X products" message at end
+- Categories queried from full dataset, not just current page
 
-### Final Pricing Formula (CORRECT)
-```
-1. API returns prices in USD
-2. Convert to AUD: price × 1.45 (configurable rate)
-3. Add shipping: minimum A$3.00 (or actual if higher)
-4. Add tax: 18% of AUD product cost
-5. Wholesale = AUD product + shipping + tax
-6. Sale price = wholesale × 1.5
-7. Checkout adds: A$6 flat shipping (100% to ToGoGo)
+### Redis Caching
+- Installed `@upstash/redis` package
+- Storefront pages cached in Redis for 2 minutes (using existing KV_REST_API_URL)
+- First visit loads from DB, repeat visits are instant from Redis
 
-EXAMPLE (Scissors US$2.42):
-  API: US$2.42 → A$3.51
-  Shipping: US$1.99 → A$3.00 (min)
-  Tax: A$3.51 × 18% = A$0.63
-  Wholesale: A$7.14
-  Sale: A$7.14 × 1.5 = A$10.71
-  Customer pays: A$10.71 + A$6 = A$16.71
-  AE real cost: ~A$7.04
-  PROFIT: ~A$9.67
-```
+### Mega Import System
+- **"Import ALL Categories"** purple mega button — imports all categories back-to-back
+- Each category expands into 4 search variations for more variety
+- Searches page 1 AND page 2 for more results
+- 20 products per batch (within Vercel 60s timeout)
+- 5-second timeout guard per product freight lookup
+- Live progress: "👗 Women's Dresses (12/31) — 200 new products so far"
+- **919 → 1000+ products** imported this session
 
-### Accurate Import (30 products/run)
-- Fetches real shipping cost per product from `getProductDetails()` API
-- Converts all values USD → AUD using configurable rate
-- Random search terms each run for variety
-- Marks new products as `price_currency = 'AUD'`
-- Cron runs every 6 hours automatically
+### Ladies Fashion Categories Added
+- 8 new import buttons: Tops & Blouses, Jeans, Skirts, Women's Pants, Knitwear, Women's Jackets, Lingerie, Women's Shoes
+- Each with 6-8 specific search variations
+- Ladies fashion prioritized at top of import panel
 
-### Admin Products Page — ENHANCED
-- **Full pricing breakdown:** API Price | Ship | Tax | Wholesale | Sale | Profit | ToGoGo
-- **Store dropdown filter:** "All Products" (deduplicated) or filter by store
-- **No more "FREE"** shipping display — all show actual AUD amount
-- **Price-check API:** `/api/admin/price-check?id=PRODUCT_ID&secret=JWT_SECRET`
+### Smart Coupon System
+- Auto-picks best AUAP coupon based on order value (no manual setting needed)
+- A$280+ → AUAP35 (A$35 off), A$175+ → AUAP23, A$116+ → AUAP15, A$85+ → AUAP12, A$43+ → AUAP06, under A$43 → AUAP03
+- Replaces manual `default_coupon_code` setting
 
-### Duplicate Orders Fix
-- Idempotency check on Stripe webhook — no more double AliExpress orders
-- Removed duplicate submitOrder block that was calling the old API format
+### Order Sync Fixed
+- **Root cause found:** API path `aliexpress.ds.member.order.get` was INVALID
+- **Fixed:** Now uses `aliexpress.trade.ds.order.get` with OAuth (correct endpoint)
+- Tries multiple API paths with fallbacks
+- **Status mapping fixed:** WAIT_BUYER_ACCEPT_GOODS=shipped, SELLER_SENT_GOODS=shipped, FINISH=delivered, etc.
+- **"Sync AliExpress" button** added to admin orders page (RefreshCw icon)
+- Shows result banner: "Synced X orders — Y shipped, Z delivered"
+- **Working result:** 2 shipped (with tracking numbers), 7 delivered, 4 processing
 
-### submitOrder — Restored After Merge Revert
-- The merge to master reverted submitOrder to old broken code
-- Restored: `param_place_order_request4_open_api_d_t_o` wrapper
-- Restored: country/state mapping, contact_person, SKU attr resolution
-- Correct API: `aliexpress.trade.buy.placeorder`
+### Import Auth Fixed
+- Admin JWT tokens now accepted for import (not just JWT_SECRET)
+- Same fix applied to sync-orders endpoint
+- Import buttons on admin panel work without copy-pasting URLs
 
-### Other Fixes
-- Price range filter buttons on storefronts (Under $10 | $10-$20 | $20-$50 | $50+)
-- Cart mobile layout fix (price was overlapping buttons)
-- Stripe session retrieve — removed invalid `expand` parameter
-- Postcode fallback (zip/postcode/postal_code)
-- Random search terms for more product variety per import
+### Auto-Pay Activated
+- AliExpress Auto-Pay activated via PayPal (linked to Wise card for best USD rate)
+- Fully hands-free: customer pays → AE order created → PayPal auto-pays → AE ships
 
 ---
 
-## Current State (April 5, 2026)
+## Current State (April 5, 2026 — End of Session 5)
 
 ### Fully Working:
-- ✅ Full e2e: customer pays → AliExpress order auto-created
-- ✅ **Accurate AUD pricing** with USD→AUD conversion
-- ✅ Real shipping costs (minimum A$3, no more fake FREE)
-- ✅ Configurable exchange rate from admin settings
+- ✅ Full e2e autonomous dropshipping (customer pays → AE order → auto-pay → ships)
+- ✅ **AliExpress-style product cards** (discount badges, ratings, sold count, savings)
+- ✅ **Infinite scroll** on storefronts (30 products per page, auto-loads)
+- ✅ **Redis caching** (2 min TTL, Upstash KV)
+- ✅ **Mega import** — 1000+ products across 31 categories
+- ✅ **Smart coupons** — auto-picks best AUAP code per order value
+- ✅ **Order sync working** — tracks shipped/delivered/cancelled from AliExpress
+- ✅ Accurate AUD pricing with USD→AUD conversion (rate 1.45)
+- ✅ Real shipping costs (freight calculator API, min A$3)
 - ✅ Admin product breakdown: API Price, Ship, Tax, Wholesale, Sale, Profit, ToGoGo
-- ✅ Store filter on admin products (deduplicated unique view)
-- ✅ Price range filters on storefronts
-- ✅ 3 email notifications per order
-- ✅ Store customer tracking with phone
+- ✅ Admin import panel (31 category buttons + cooldown + mega import)
+- ✅ 3 email notifications per order (customer, store owner, admin)
+- ✅ Shipping notification emails with tracking numbers
+- ✅ Auto-refund on AliExpress cancellation
+- ✅ Auto-payout to store owners on delivery
 - ✅ Duplicate order prevention
-- ✅ Product import cron (30/run, real shipping, AUD conversion)
-- ✅ Order sync cron (tracking, auto-refund on cancellation)
 - ✅ 4 active stores: stu, jum, stuie, annies-shop
-- ✅ ~350 products with accurate pricing
-- ✅ Mobile-friendly storefronts
+- ✅ 1000+ products with accurate pricing
+- ✅ Mobile-friendly dark theme storefronts
+- ✅ $194.50 pending Stripe Connect balance (stu store)
 
 ### Pricing Config:
 - **Exchange rate:** `usd_to_aud_rate` in admin_settings (default 1.45)
 - **Commission:** 30% of profit in `platform_fee_percent` (admin_settings)
-- **Shipping fee:** A$6 flat per order (hardcoded in checkout.js)
+- **Shipping fee:** A$6 flat per order (100% to ToGoGo)
 - **Markup:** 1.5x on wholesale (hardcoded in import cron)
 - **Min shipping:** A$3 per product (hardcoded in import cron)
+- **Coupons:** Smart system auto-picks best AUAP code (hardcoded tiers in webhook)
 
 ### Important URLs:
 
 | URL | Purpose |
 |-----|---------|
 | togogo.me/admin | Admin panel |
-| togogo.me/admin/products | Products with pricing breakdown |
-| togogo.me/api/admin/fix-prices?secret=JWT_SECRET | Convert USD→AUD (one-time, safe to repeat) |
-| togogo.me/api/admin/price-check?id=ID&secret=JWT_SECRET | Price breakdown for any product |
-| togogo.me/api/cron/import-products?secret=JWT_SECRET | Import 30 products with accurate pricing |
-| togogo.me/auth?logout=true | Force logout |
-| aliexpress.com/p/order/index.html | Pay AliExpress orders |
+| togogo.me/admin/products | Products with pricing breakdown + import panel |
+| togogo.me/admin/orders | Orders with "Sync AliExpress" button |
+| togogo.me/admin/settings | Platform configuration |
+| stu.togogo.me | Stu's store (primary test store) |
 
 ---
 
-## Next Session — UI Design + Features (THE FUN STUFF!)
+## Next Session — Phase 3-6 Roadmap
 
-### Store Features:
-1. Similar products below item
-2. Store themes (theme library for owners)
-3. Consistent branding (homepage logo style on stores)
-4. Store owner controls (name, products, style, AI images via Grok)
-5. Promotional codes & referral system
-6. Client profit percentage control (owners set their own markup)
-7. Purchase feedback animations (animated ToGoGo logo)
-8. Custom logos for stores (upload/generate)
-9. Custom domain purchases (buy URL through ToGoGo)
+### Phase 3: Product Detail Page Enhancement
+1. Similar/related products section below item
+2. "Customers also bought" section
+3. Better image gallery (swipe on mobile)
+4. Shipping estimate display ("Ships in 15-25 days")
+5. "Choice" or "Deal" tags on discounted items
 
-### Admin Features:
-10. Admin profit dashboard (all stores + subscriptions combined)
-11. Better product search (sortable columns, advanced filters)
-12. AI assistant for store owners (branding, products, pricing help)
-13. "Awaiting AE Payment" page with direct links
-14. Customers page (all customer data across stores)
+### Phase 4: Store Themes & Branding
+6. Theme library (5-6 pre-built color schemes)
+7. Store logo upload/display
+8. Custom store banner
+9. Store description/about section
+10. Theme preview before applying
 
-### Existing:
-15. Checkout dark theme
-16. Dynamic shipping (if AE shipping > $6, charge more)
-17. Flexible subscriptions (promos, half-price trials)
-18. Infinite scroll on storefronts
-19. Order tracking page for customers
+### Phase 5: Admin Profit Dashboard
+11. Total revenue across all stores
+12. Revenue per store breakdown
+13. Subscription income ($19.99/mo × stores)
+14. Commission earned (30% of profit)
+15. Charts/graphs (daily, weekly, monthly)
+
+### Phase 6: Store Owner Controls (THE BIG VISION)
+16. AI assistant asks "What do you want to sell?" → auto-imports niche products
+17. Owner product management (hide/show, reorder)
+18. Owner markup control (set their own profit %)
+19. Promo codes for their store
+20. Customer list for their store
+21. Custom domain purchases through ToGoGo
+22. Social media marketing pathway integration
+
+### The Dream:
+- Sign up, pay $19.99 → AI asks what you want to sell → auto-imports products
+- AI suggests theme, colors, logo → store goes live instantly
+- AI creates social media marketing → directs customers to store
+- One click to a real online shop. No tech skills needed.
 
 ---
 
