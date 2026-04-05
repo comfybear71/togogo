@@ -56,10 +56,16 @@ export default async function handler(req, res) {
       'headphones', 'speaker', 'mouse', 'keyboard',
     ]
 
-    const hour = new Date().getHours()
-    // Randomly pick 8 terms each run for maximum variety
-    const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
-    const selectedTerms = shuffled.slice(0, 8)
+    // Custom term via ?term= parameter, or random selection
+    const customTerm = req.query.term || ''
+    let selectedTerms
+    if (customTerm) {
+      selectedTerms = [customTerm]
+      console.log(`[Cron] Custom search: "${customTerm}"`)
+    } else {
+      const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
+      selectedTerms = shuffled.slice(0, 8)
+    }
 
     console.log(`[Cron] Searching: ${selectedTerms.join(', ')}`)
 
