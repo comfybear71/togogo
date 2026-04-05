@@ -43,6 +43,7 @@ export default function StorefrontPage({ subdomain }) {
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
+  const [priceRange, setPriceRange] = useState('')
   const cart = useCart(subdomain)
 
   // Always use midnight (dark) theme — stored in database, never localStorage
@@ -72,9 +73,13 @@ export default function StorefrontPage({ subdomain }) {
     return storeData.products.filter((p) => {
       if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
       if (selectedCategory && p.category !== selectedCategory) return false
+      if (priceRange === 'under10' && p.price >= 10) return false
+      if (priceRange === '10to20' && (p.price < 10 || p.price >= 20)) return false
+      if (priceRange === '20to50' && (p.price < 20 || p.price >= 50)) return false
+      if (priceRange === 'over50' && p.price < 50) return false
       return true
     })
-  }, [storeData?.products, searchQuery, selectedCategory])
+  }, [storeData?.products, searchQuery, selectedCategory, priceRange])
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
@@ -179,29 +184,28 @@ export default function StorefrontPage({ subdomain }) {
           <>
             <div className="space-y-3 mb-6">
               {cart.items.map((item) => (
-                <div key={item.id} className={`flex items-center gap-4 rounded-xl ${theme.cardBg} ${theme.cardBorder} p-4 shadow-sm`}>
-                  <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                <div key={item.id} className={`flex items-center gap-3 rounded-xl ${theme.cardBg} ${theme.cardBorder} p-3 shadow-sm`}>
+                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
                     {item.image ? (
                       <img src={item.image} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center"><Package className="h-6 w-6 text-gray-300" /></div>
+                      <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-gray-300" /></div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-medium ${theme.textPrimary} truncate`}>{item.title}</p>
-                    <p className={`text-sm font-semibold ${theme.textSecondary}`}>${item.price.toFixed(2)}</p>
+                    <p className={`text-sm font-medium ${theme.textPrimary} truncate`}>{item.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className={`w-5 text-center text-xs font-medium ${theme.textPrimary}`}>{item.quantity}</span>
+                      <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className={`rounded-lg p-1.5 ${theme.cardBg}`} style={{ backgroundColor: theme.accentLight }}>
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className={`w-6 text-center text-sm font-medium ${theme.textPrimary}`}>{item.quantity}</span>
-                    <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className={`rounded-lg p-1.5 ${theme.cardBg}`} style={{ backgroundColor: theme.accentLight }}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <p className={`w-20 text-right font-semibold ${theme.textPrimary}`}>${(item.price * item.quantity).toFixed(2)}</p>
-                  <button onClick={() => cart.remove(item.id)} className={`p-1.5 ${theme.textMuted} hover:text-red-500`}>
+                  <p className={`font-semibold ${theme.textPrimary} text-sm`}>A${(item.price * item.quantity).toFixed(2)}</p>
+                  <button onClick={() => cart.remove(item.id)} className={`p-1 ${theme.textMuted} hover:text-red-500`}>
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -269,6 +273,30 @@ export default function StorefrontPage({ subdomain }) {
               ))}
             </select>
           )}
+        </div>
+
+        {/* Price Range Filters */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {[
+            { key: '', label: 'All Prices' },
+            { key: 'under10', label: 'Under $10' },
+            { key: '10to20', label: '$10–$20' },
+            { key: '20to50', label: '$20–$50' },
+            { key: 'over50', label: '$50+' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setPriceRange(key)}
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                priceRange === key
+                  ? 'text-white'
+                  : 'text-slate-400 border border-white/[0.08] hover:border-white/[0.2]'
+              }`}
+              style={priceRange === key ? { backgroundColor: theme.accent } : {}}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Products */}
@@ -494,8 +522,8 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
 
             {/* Shipping */}
             <div className="flex flex-wrap gap-2 mb-6">
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-emerald-400 bg-emerald-500/10">
-                <Truck className="h-4 w-4" /> Free Shipping
+              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
+                <Truck className="h-4 w-4" /> Shipping only $6
               </div>
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection

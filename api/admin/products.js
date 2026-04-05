@@ -29,79 +29,78 @@ export default async function handler(req, res) {
       const offset = (page - 1) * limit
       const search = req.query.search || ''
       const category = req.query.category || ''
+      const storeUserId = req.query.store || ''
+      const unique = req.query.unique === 'true'
 
-      // Get total count
-      let countQuery
-      if (search && category) {
-        countQuery = await sql`SELECT COUNT(*) as count FROM user_products WHERE title ILIKE ${'%' + search + '%'} AND category = ${category}`
-      } else if (search) {
-        countQuery = await sql`SELECT COUNT(*) as count FROM user_products WHERE title ILIKE ${'%' + search + '%'}`
-      } else if (category) {
-        countQuery = await sql`SELECT COUNT(*) as count FROM user_products WHERE category = ${category}`
+      // Build WHERE conditions
+      const conditions = []
+      const params = []
+      if (search) conditions.push(`p.title ILIKE '%' || $${params.push(search)} || '%'`)
+      if (category) conditions.push(`p.category = $${params.push(category)}`)
+      if (storeUserId) conditions.push(`p.user_id = $${params.push(storeUserId)}::uuid`)
+
+      const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : ''
+
+      // For unique mode (no store filter): deduplicate by supplier_product_id
+      let countResult, productResult
+      if (unique && !storeUserId) {
+        countResult = await sql.query(
+          `SELECT COUNT(DISTINCT supplier_product_id) as count FROM user_products p ${whereClause}`,
+          params
+        )
+        productResult = await sql.query(
+          `SELECT DISTINCT ON (p.supplier_product_id)
+            p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
+            p.sale_price, p.api_price, p.shipping_cost, p.tax_amount,
+            p.supplier_product_id,
+            p.category, p.is_active, p.total_sold, p.total_revenue,
+            p.created_at, p.updated_at,
+            u.name AS seller_name, u.email AS seller_email
+          FROM user_products p
+          JOIN users u ON u.id = p.user_id
+          ${whereClause}
+          ORDER BY p.supplier_product_id, p.created_at DESC
+          LIMIT $${params.push(limit)} OFFSET $${params.push(offset)}`,
+          params
+        )
       } else {
-        countQuery = await sql`SELECT COUNT(*) as count FROM user_products`
+        countResult = await sql.query(
+          `SELECT COUNT(*) as count FROM user_products p ${whereClause}`,
+          params
+        )
+        const countParams = [...params]
+        productResult = await sql.query(
+          `SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
+            p.sale_price, p.api_price, p.shipping_cost, p.tax_amount,
+            p.supplier_product_id,
+            p.category, p.is_active, p.total_sold, p.total_revenue,
+            p.created_at, p.updated_at,
+            u.name AS seller_name, u.email AS seller_email
+          FROM user_products p
+          JOIN users u ON u.id = p.user_id
+          ${whereClause}
+          ORDER BY p.created_at DESC
+          LIMIT $${countParams.push(limit)} OFFSET $${countParams.push(offset)}`,
+          countParams
+        )
       }
-      const totalProducts = parseInt(countQuery.rows[0].count)
+
+      const totalProducts = parseInt(countResult.rows[0].count)
       const totalPages = Math.ceil(totalProducts / limit)
 
-      // Get products with pagination
-      let productQuery
-      if (search && category) {
-        productQuery = await sql`
-          SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
-                 p.created_at, p.updated_at,
-                 u.name AS seller_name, u.email AS seller_email
-          FROM user_products p
-          JOIN users u ON u.id = p.user_id
-          WHERE p.title ILIKE ${'%' + search + '%'} AND p.category = ${category}
-          ORDER BY p.created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `
-      } else if (search) {
-        productQuery = await sql`
-          SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
-                 p.created_at, p.updated_at,
-                 u.name AS seller_name, u.email AS seller_email
-          FROM user_products p
-          JOIN users u ON u.id = p.user_id
-          WHERE p.title ILIKE ${'%' + search + '%'}
-          ORDER BY p.created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `
-      } else if (category) {
-        productQuery = await sql`
-          SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
-                 p.created_at, p.updated_at,
-                 u.name AS seller_name, u.email AS seller_email
-          FROM user_products p
-          JOIN users u ON u.id = p.user_id
-          WHERE p.category = ${category}
-          ORDER BY p.created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `
-      } else {
-        productQuery = await sql`
-          SELECT p.id, p.title, p.description, p.image, p.supplier, p.supplier_cost,
-                 p.sale_price, p.category, p.is_active, p.total_sold, p.total_revenue,
-                 p.created_at, p.updated_at,
-                 u.name AS seller_name, u.email AS seller_email
-          FROM user_products p
-          JOIN users u ON u.id = p.user_id
-          ORDER BY p.created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `
-      }
-
-      // Get all categories for the filter dropdown
+      // Get categories + stores for filter dropdowns
       const { rows: catRows } = await sql`SELECT DISTINCT category FROM user_products WHERE category IS NOT NULL AND category != '' ORDER BY category`
       const categories = catRows.map(r => r.category)
 
+      const { rows: storeRows } = await sql`
+        SELECT s.user_id, s.store_name, s.subdomain
+        FROM user_stores s WHERE s.status = 'active' ORDER BY s.store_name
+      `
+
       return res.json({
-        products: productQuery.rows,
+        products: productResult.rows,
         categories,
+        stores: storeRows,
         pagination: { page, limit, totalProducts, totalPages },
       })
     } catch (err) {

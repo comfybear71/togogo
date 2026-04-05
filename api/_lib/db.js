@@ -194,6 +194,12 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_connected'` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
+  // Pricing breakdown columns on user_products
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS api_price NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS price_currency TEXT DEFAULT 'USD'` } catch { /* */ }
+
   // Fix store_customers table — previous session created it with wrong columns (had password_hash)
   try {
     const { rows } = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'store_customers' AND column_name = 'password_hash'`

@@ -1,8 +1,9 @@
 // Cron job — fetches products from AliExpress feeds and imports into all stores
 // Runs every 6 hours via Vercel Cron Jobs
 // Each run fetches from different feeds to build variety over time
+// ACCURATE PRICING: fetches real shipping cost via freight calculator API
 import { sql, ensureSchema } from '../_lib/db.js'
-import { searchAliExpress, fetchBulkProducts } from '../_lib/suppliers.js'
+import { searchAliExpress, getProductDetails, calculateFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // Auth: only allow Vercel cron or secret
@@ -16,7 +17,7 @@ export default async function handler(req, res) {
 
   await ensureSchema()
 
-  console.log('[Cron] Starting product import...')
+  console.log('[Cron] Starting product import (accurate pricing mode)...')
 
   try {
     // Get all active stores
@@ -27,11 +28,11 @@ export default async function handler(req, res) {
       return res.json({ success: false, message: 'No active stores' })
     }
 
-    // ?reset=true — clear all products and re-import with correct pricing
+    // ?reset=true — clear all products and re-import
     if (req.query.reset === 'true') {
       const { rows: delCount } = await sql`SELECT COUNT(*) as count FROM user_products`
       await sql`DELETE FROM user_products`
-      console.log(`[Cron] RESET: Deleted ${delCount[0].count} products for re-import with new pricing`)
+      console.log(`[Cron] RESET: Deleted ${delCount[0].count} products`)
     }
 
     // Get current product count
@@ -39,40 +40,38 @@ export default async function handler(req, res) {
     const currentCount = parseInt(countRows[0].count)
     console.log(`[Cron] Current unique products in DB: ${currentCount}`)
 
-    // Fetch products from AliExpress — different search terms each run
-    // Rotate through terms based on current hour to get variety
+    // Fetch products from AliExpress — rotate search terms
     const allTerms = [
-      '', // trending/hot products
-      'phone case', 'wireless earbuds', 'led light', 'charger', 'cable',
+      '', 'phone case', 'wireless earbuds', 'led light', 'charger', 'cable',
       'sunglasses', 'watch', 'necklace', 'ring', 'bracelet',
       'kitchen gadget', 'home decor', 'organiser', 'pillow', 'blanket',
       'makeup brush', 'skincare', 'beauty tool', 'hair accessories',
-      'dog toy', 'pet bowl', 'cat toy', 'pet bed', 'pet accessories',
-      'water bottle', 'yoga mat', 'resistance band', 'fitness',
-      'car phone mount', 'car accessories', 'dash cam',
-      'fidget toy', 'puzzle', 'kids toy', 'plush',
+      'dog toy', 'pet bowl', 'cat toy', 'pet bed',
+      'water bottle', 'yoga mat', 'fitness',
+      'car phone mount', 'car accessories',
+      'fidget toy', 'puzzle', 'kids toy',
       't-shirt', 'hoodie', 'dress', 'shoes', 'bag',
       'tools', 'drill', 'screwdriver',
       'lamp', 'led strip', 'light',
-      'sticker', 'notebook', 'pen',
       'headphones', 'speaker', 'mouse', 'keyboard',
     ]
 
-    // Pick 8 terms based on time rotation
-    const hour = new Date().getHours()
-    const startIdx = (hour * 3) % allTerms.length
-    const selectedTerms = []
-    for (let i = 0; i < 8; i++) {
-      selectedTerms.push(allTerms[(startIdx + i) % allTerms.length])
+    // Custom term via ?term= parameter, or random selection
+    const customTerm = req.query.term || ''
+    let selectedTerms
+    if (customTerm) {
+      selectedTerms = [customTerm]
+      console.log(`[Cron] Custom search: "${customTerm}"`)
+    } else {
+      const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
+      selectedTerms = shuffled.slice(0, 8)
     }
 
-    console.log(`[Cron] Searching terms: ${selectedTerms.join(', ')}`)
+    console.log(`[Cron] Searching: ${selectedTerms.join(', ')}`)
 
-    // Fetch products for each term
+    // Fetch products from feed (fast — bulk)
     let allProducts = []
     const seen = new Set()
-
-    // Get existing product IDs to avoid duplicates
     const { rows: existingRows } = await sql`SELECT DISTINCT supplier_product_id FROM user_products LIMIT 10000`
     const existingIds = new Set(existingRows.map(r => r.supplier_product_id))
 
@@ -91,41 +90,97 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`[Cron] ${allProducts.length} new products to import (skipped ${seen.size - allProducts.length + existingIds.size} existing)`)
-
     if (allProducts.length === 0) {
       return res.json({ success: true, message: 'No new products found', currentCount })
     }
 
-    // Import into all stores (max 100 per run to avoid timeout)
-    const batch = allProducts.slice(0, 100)
-    let totalImported = 0
+    // Process up to 30 products per run with accurate pricing
+    const batch = allProducts.slice(0, 30)
+    console.log(`[Cron] ${allProducts.length} new products found, processing ${batch.length} with accurate pricing`)
 
-    for (const store of stores) {
-      let imported = 0
-      for (const p of batch) {
-        // Skip products over A$1000 or with no valid price
-        if (!p.suggestedPrice || p.suggestedPrice > 1000) continue
+    let totalImported = 0
+    let enriched = 0
+    let enrichFailed = 0
+
+    for (const p of batch) {
+      const aeId = (p.productId || '').replace('ae_', '')
+
+      // Fetch EXACT shipping cost from freight calculator API (no OAuth needed)
+      let shippingCost = 0
+      let taxRate = 0.18 // 18% tax estimate
+      let realProductCost = p.cost || 0
+
+      if (aeId && !aeId.includes('-')) {
+        try {
+          // Get product details for real cost
+          const details = await getProductDetails(aeId)
+          if (details) {
+            realProductCost = details.cost || p.cost || 0
+          }
+
+          // Use freight calculator for EXACT shipping cost to AU
+          const freightOptions = await calculateFreight(aeId, 1, 'AU')
+          if (freightOptions && freightOptions.length > 0) {
+            // Find cheapest shipping option
+            const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
+            shippingCost = cheapest.cost
+            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+          } else {
+            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using $2 min)`)
+          }
+          enriched++
+        } catch (err) {
+          console.error(`[Cron] Enrichment failed for ${aeId}:`, err.message)
+          enrichFailed++
+        }
+      }
+
+      // Calculate wholesale cost (what ToGoGo actually pays on AliExpress)
+      // API returns USD despite target_currency:AUD — convert to real AUD
+      // Rate stored in admin_settings — update from admin panel when it changes
+      let usdToAud = 1.45
+      try {
+        const { rows: rateRows } = await sql`SELECT value FROM admin_settings WHERE key = 'usd_to_aud_rate'`
+        if (rateRows[0]) usdToAud = parseFloat(rateRows[0].value) || 1.45
+      } catch { /* use default */ }
+      const productCostAUD = realProductCost * usdToAud
+      // Freight calculator returns USD — convert to AUD with minimum A$3
+      const minShipping = 3.00
+      const shippingAUD = Math.max(shippingCost * usdToAud, minShipping)
+      // Tax is ~18% of product cost in AUD
+      const taxAUD = productCostAUD * taxRate
+      const wholesaleCost = productCostAUD + shippingAUD + taxAUD
+
+      // Store sale price = wholesale × 1.5 (client markup)
+      const salePrice = Math.ceil(wholesaleCost * 1.5 * 100) / 100
+
+      // Skip products over A$1000
+      if (salePrice > 1000) continue
+
+      // Import into all stores
+      for (const store of stores) {
         try {
           const imgArray = Array.isArray(p.images) ? p.images : []
           await sql`
             INSERT INTO user_products (
               user_id, title, description, image, images, supplier,
               supplier_product_id, supplier_cost, sale_price,
-              category, is_active
+              api_price, shipping_cost, tax_amount,
+              price_currency, category, is_active
             ) VALUES (
               ${store.user_id}, ${p.title}, ${p.title},
               ${p.image || ''}, ${imgArray},
               ${'AliExpress'}, ${p.productId || p.id},
-              ${p.cost || 0}, ${p.suggestedPrice || 0},
-              ${p.category || 'General'}, true
+              ${wholesaleCost}, ${salePrice},
+              ${productCostAUD}, ${shippingAUD}, ${taxAUD},
+              ${'AUD'}, ${p.category || 'General'}, true
             )
           `
-          imported++
+          totalImported++
         } catch { /* skip duplicates */ }
       }
-      totalImported += imported
-      console.log(`[Cron] ${imported} new products -> ${store.subdomain}`)
+
+      console.log(`[Cron] → AUD: product=$${productCostAUD.toFixed(2)} ship=$${shippingAUD.toFixed(2)} tax=$${taxAUD.toFixed(2)} wholesale=$${wholesaleCost.toFixed(2)} sale=$${salePrice.toFixed(2)} "${p.title?.slice(0, 50)}"`)
     }
 
     // Log to cron history
@@ -136,6 +191,8 @@ export default async function handler(req, res) {
           timestamp: new Date().toISOString(),
           newProducts: batch.length,
           totalImported,
+          enriched,
+          enrichFailed,
           stores: stores.length,
           currentTotal: currentCount + batch.length,
         })}, 'cron', 'Last Cron Import')
@@ -144,12 +201,14 @@ export default async function handler(req, res) {
     } catch { /* non-critical */ }
 
     const newTotal = currentCount + batch.length
-    console.log(`[Cron] Done! Imported ${totalImported} total. Catalog now: ~${newTotal} unique products`)
+    console.log(`[Cron] Done! ${enriched} enriched, ${enrichFailed} failed. Catalog: ~${newTotal}`)
 
     return res.json({
       success: true,
       newProducts: batch.length,
       totalImported,
+      enriched,
+      enrichFailed,
       stores: stores.length,
       catalogSize: newTotal,
     })
