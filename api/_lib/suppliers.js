@@ -233,7 +233,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
         mobile_no: phone,
         phone_country: countryCode === 'AU' ? '+61' : '+1',
         province: mapAUState(shippingAddress.state, countryCode) || shippingAddress.state || '',
-        zip: shippingAddress.zip || '',
+        zip: shippingAddress.zip || shippingAddress.postcode || shippingAddress.postal_code || '',
       },
       product_items: [{
         product_id: Number(productId),

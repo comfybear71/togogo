@@ -283,7 +283,12 @@ export default async function handler(req, res) {
                         }
                         console.log(`[Webhook] Stripe shipping: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
                       }
-                    } catch { /* non-critical */ }
+                    } catch (stripeErr) {
+                      console.error(`[Webhook] Stripe session retrieve failed:`, stripeErr.message)
+                    }
+
+                    // Log the final address being used
+                    console.log(`[Webhook] Address for AE: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
 
                     console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
                     const result = await submitOrder({
