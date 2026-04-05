@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
-  Store, Truck, Shield, Loader2, CheckCircle, AlertCircle,
+  Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star,
 } from 'lucide-react'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
@@ -313,14 +313,23 @@ export default function StorefrontPage({ subdomain }) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredProducts.map((product) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {filteredProducts.map((product) => {
+              const price = product.price || 0
+              const originalPrice = product.originalPrice || 0
+              const discount = product.discountPercent || (originalPrice > price ? Math.round((1 - price / originalPrice) * 100) : 0)
+              const rating = product.rating || 0
+              const soldCount = product.ordersCount || product.totalSold || 0
+              const savings = originalPrice > price ? (originalPrice - price) : 0
+
+              return (
               <div
                 key={product.id}
                 onClick={() => { setSelectedProduct(product); setView('product') }}
-                className={`group cursor-pointer overflow-hidden rounded-2xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-md`}
+                className={`group cursor-pointer overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5`}
               >
-                <div className="aspect-square overflow-hidden bg-gray-100">
+                {/* Image with discount badge */}
+                <div className="relative aspect-square overflow-hidden bg-gray-100">
                   {product.image ? (
                     <img
                       src={product.image}
@@ -332,25 +341,60 @@ export default function StorefrontPage({ subdomain }) {
                       <Package className="h-12 w-12 text-gray-300" />
                     </div>
                   )}
+                  {/* Discount badge */}
+                  {discount > 0 && (
+                    <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+                      -{discount}%
+                    </div>
+                  )}
+                  {/* Quick add button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); cart.add(product) }}
+                    className="absolute bottom-2 right-2 rounded-full p-2 shadow-lg transition-all opacity-0 group-hover:opacity-100 bg-white/90 hover:bg-white text-gray-700 hover:text-black"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-                <div className="p-3">
-                  <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
-                  <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-lg font-bold ${theme.textPrimary}`}>A${(product.price || 0).toFixed(2)}</p>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                      className="rounded-lg p-2 transition-colors hover:text-white"
-                      style={{ backgroundColor: theme.accentLight, color: theme.accent }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.accent; e.currentTarget.style.color = '#fff' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = theme.accentLight; e.currentTarget.style.color = theme.accent }}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+
+                {/* Product info */}
+                <div className="p-2.5">
+                  <h3 className={`text-xs font-medium ${theme.textPrimary} line-clamp-2 mb-1.5 leading-tight`}>{product.title}</h3>
+
+                  {/* Price section */}
+                  <div className="mb-1">
+                    <span className="text-lg font-bold text-red-500">A${price.toFixed(2)}</span>
+                    {originalPrice > price && (
+                      <span className={`text-xs ${theme.textMuted} line-through ml-1.5`}>A${originalPrice.toFixed(2)}</span>
+                    )}
+                  </div>
+
+                  {/* Savings callout */}
+                  {savings > 0 && (
+                    <p className="text-xs text-green-500 font-medium mb-1">Save A${savings.toFixed(2)}</p>
+                  )}
+
+                  {/* Rating + sold */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {rating > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                        <span className={`text-xs ${theme.textMuted}`}>{rating >= 1 ? rating.toFixed(1) : (rating * 5).toFixed(1)}</span>
+                      </div>
+                    )}
+                    {soldCount > 0 && (
+                      <span className={`text-xs ${theme.textMuted}`}>{soldCount >= 1000 ? `${(soldCount/1000).toFixed(1)}k` : soldCount}+ sold</span>
+                    )}
+                  </div>
+
+                  {/* Shipping badge */}
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
+                      <Truck className="h-3 w-3" /> A$6 shipping
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>

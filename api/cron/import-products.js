@@ -6,12 +6,25 @@ import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpress, getProductDetails, calculateFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
-  // Auth: only allow Vercel cron or secret
+  // Auth: allow Vercel cron, JWT_SECRET as query param, or admin JWT token
   const authHeader = req.headers.authorization
   const cronSecret = process.env.CRON_SECRET
   const querySecret = req.query.secret
 
-  if (authHeader !== `Bearer ${cronSecret}` && querySecret !== process.env.JWT_SECRET) {
+  let authorized = false
+  if (authHeader === `Bearer ${cronSecret}`) authorized = true
+  if (querySecret === process.env.JWT_SECRET) authorized = true
+
+  // Also allow admin users via JWT token passed as ?secret=
+  if (!authorized && querySecret) {
+    try {
+      const { verifyToken } = await import('../_lib/auth.js')
+      const payload = verifyToken(querySecret)
+      if (payload && payload.role === 'admin') authorized = true
+    } catch {}
+  }
+
+  if (!authorized) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
@@ -166,14 +179,18 @@ export default async function handler(req, res) {
               user_id, title, description, image, images, supplier,
               supplier_product_id, supplier_cost, sale_price,
               api_price, shipping_cost, tax_amount,
-              price_currency, category, is_active
+              price_currency, category, is_active,
+              product_rating, orders_count, original_price, discount_percent
             ) VALUES (
               ${store.user_id}, ${p.title}, ${p.title},
               ${p.image || ''}, ${imgArray},
               ${'AliExpress'}, ${p.productId || p.id},
               ${wholesaleCost}, ${salePrice},
               ${productCostAUD}, ${shippingAUD}, ${taxAUD},
-              ${'AUD'}, ${p.category || 'General'}, true
+              ${'AUD'}, ${p.category || 'General'}, true,
+              ${p.rating || 0}, ${p.orders || 0},
+              ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
+              ${p.discount || 20}
             )
           `
           totalImported++

@@ -199,6 +199,10 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS shipping_cost NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS price_currency TEXT DEFAULT 'USD'` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS product_rating NUMERIC(3,2) DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS orders_count INTEGER DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS original_price NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS discount_percent INTEGER DEFAULT 0` } catch { /* */ }
 
   // Fix store_customers table — previous session created it with wrong columns (had password_hash)
   try {
