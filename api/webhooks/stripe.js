@@ -312,63 +312,6 @@ export default async function handler(req, res) {
             } catch (emailErr) {
               console.error(`[Webhook] Email notification failed:`, emailErr.message)
             }
-
-            // Auto-submit order to AliExpress
-            try {
-              const { rows: orderRows } = await sql`
-                SELECT id, supplier_product_id, quantity, customer_name, shipping_address
-                FROM user_orders WHERE platform_order_id = ${orderRef}
-              `
-
-              for (const order of orderRows) {
-                if (!order.supplier_product_id) {
-                  console.log(`[Webhook] Order ${order.id} has no supplier_product_id, skipping AliExpress submission`)
-                  continue
-                }
-
-                const aeProductId = order.supplier_product_id.replace('ae_', '')
-                let address = {}
-                try { address = typeof order.shipping_address === 'string' ? JSON.parse(order.shipping_address) : (order.shipping_address || {}) } catch { /* */ }
-
-                console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${aeProductId})`)
-
-                const result = await submitOrder({
-                  productId: aeProductId,
-                  quantity: order.quantity || 1,
-                  shippingAddress: {
-                    name: order.customer_name,
-                    country: address.country || 'AU',
-                    state: address.state || '',
-                    city: address.city || '',
-                    line1: address.line1 || address.address || '',
-                    zip: address.zip || address.postcode || '',
-                    phone: address.phone || '',
-                  },
-                })
-
-                if (result.success) {
-                  await sql`
-                    UPDATE user_orders
-                    SET supplier_order_id = ${result.orderId},
-                        status = 'processing',
-                        notes = ${'Submitted to AliExpress — order ID: ' + result.orderId},
-                        updated_at = NOW()
-                    WHERE id = ${order.id}
-                  `
-                  console.log(`[Webhook] Order ${order.id} -> AliExpress order ${result.orderId}`)
-                } else {
-                  console.error(`[Webhook] AliExpress submission failed for ${order.id}: ${result.error}`)
-                  await sql`
-                    UPDATE user_orders
-                    SET notes = ${'AliExpress auto-submit failed: ' + (result.error || 'Unknown error') + '. Manual submission required.'},
-                        updated_at = NOW()
-                    WHERE id = ${order.id}
-                  `
-                }
-              }
-            } catch (aeErr) {
-              console.error(`[Webhook] AliExpress auto-submit error:`, aeErr.message)
-            }
           } catch (err) {
             console.error(`[Webhook] Failed to confirm order ${orderRef}:`, err.message)
           }
