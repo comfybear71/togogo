@@ -266,8 +266,7 @@ export default async function handler(req, res) {
                     // Also try to get shipping address from Stripe session (more complete)
                     try {
                       const stripeSession = await stripe.checkout.sessions.retrieve(
-                        order.stripe_checkout_session || '',
-                        { expand: ['shipping_details'] }
+                        order.stripe_checkout_session || ''
                       )
                       if (stripeSession?.shipping_details?.address) {
                         const sa = stripeSession.shipping_details
