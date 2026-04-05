@@ -25,6 +25,8 @@ export default function ProductsPage() {
   const [importResult, setImportResult] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ totalProducts: 0, totalPages: 0 });
+  const [showImportPanel, setShowImportPanel] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const ITEMS_PER_PAGE = 50;
 
   const fetchProducts = useCallback(async (pg = page, search = searchQuery, cat = categoryFilter, store = storeFilter) => {
@@ -52,22 +54,58 @@ export default function ProductsPage() {
 
   useEffect(() => { fetchProducts(page, searchQuery, categoryFilter, storeFilter); }, [page, searchQuery, categoryFilter, storeFilter]);
 
-  async function handleImportFromAliExpress() {
+  async function handleImport(term = '') {
+    if (cooldown > 0 || importing) return;
     setImporting(true);
     setImportResult(null);
     try {
-      const data = await authFetch('/api/admin/import-products', { method: 'POST' });
+      const token = localStorage.getItem('togogo-token');
+      const url = term
+        ? `/api/cron/import-products?secret=${token}&term=${encodeURIComponent(term)}`
+        : `/api/cron/import-products?secret=${token}`;
+      const res = await fetch(url);
+      const data = await res.json();
       setImportResult(data);
       if (data.success) {
-        setPage(1);
         fetchProducts(1, '', '');
       }
+      // Start 30 second cooldown
+      setCooldown(30);
+      const timer = setInterval(() => {
+        setCooldown(c => {
+          if (c <= 1) { clearInterval(timer); return 0; }
+          return c - 1;
+        });
+      }, 1000);
     } catch (err) {
       setImportResult({ error: err.message });
     } finally {
       setImporting(false);
     }
   }
+
+  const IMPORT_CATEGORIES = [
+    { term: '', label: 'Random Mix', emoji: '🎲' },
+    { term: 'toys', label: 'Toys', emoji: '🧸' },
+    { term: 'home garden', label: 'Home & Garden', emoji: '🏡' },
+    { term: 'computer', label: 'Computer', emoji: '💻' },
+    { term: 'jewelry', label: 'Jewelry', emoji: '💍' },
+    { term: 'beauty', label: 'Beauty', emoji: '💄' },
+    { term: 'sports', label: 'Sports', emoji: '⚽' },
+    { term: 'consumer electronics', label: 'Electronics', emoji: '📱' },
+    { term: 'shoes', label: 'Shoes', emoji: '👟' },
+    { term: 'lights', label: 'Lights', emoji: '💡' },
+    { term: 'mother kids', label: 'Mother & Kids', emoji: '👶' },
+    { term: 'mens clothing', label: "Men's Clothing", emoji: '👔' },
+    { term: 'dress', label: "Women's Dresses", emoji: '👗' },
+    { term: 'leggings', label: 'Leggings', emoji: '🩳' },
+    { term: 'handbag', label: 'Handbags', emoji: '👜' },
+    { term: 'bikini', label: 'Swimwear', emoji: '👙' },
+    { term: 'kitchen gadget', label: 'Kitchen', emoji: '🍳' },
+    { term: 'pet', label: 'Pets', emoji: '🐕' },
+    { term: 'car accessories', label: 'Car', emoji: '🚗' },
+    { term: 'headphones', label: 'Audio', emoji: '🎧' },
+  ];
 
   async function handleAction(id, action) {
     try {
@@ -113,15 +151,44 @@ export default function ProductsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button
-            onClick={handleImportFromAliExpress}
-            disabled={importing}
-            className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#e85d2c] transition-colors disabled:opacity-50"
+            onClick={() => setShowImportPanel(!showImportPanel)}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white transition-colors ${showImportPanel ? 'bg-zinc-700' : 'bg-[#FF6B35] hover:bg-[#e85d2c]'}`}
           >
-            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-            {importing ? 'Importing...' : 'Import from AliExpress'}
+            <Package className="h-4 w-4" />
+            {showImportPanel ? 'Close Import' : 'Import from AliExpress'}
           </button>
         </div>
       </div>
+
+      {/* Import Panel */}
+      {showImportPanel && (
+        <div className="rounded-2xl border border-white/[0.06] bg-[#111] p-5">
+          <h3 className="text-sm font-bold text-white mb-3">Import Products by Category</h3>
+          <p className="text-xs text-zinc-500 mb-4">Each click imports ~30 products with accurate AUD pricing. 30 second cooldown between imports.</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {IMPORT_CATEGORIES.map(({ term, label, emoji }) => (
+              <button
+                key={term || 'random'}
+                onClick={() => handleImport(term)}
+                disabled={importing || cooldown > 0}
+                className="flex items-center gap-1.5 rounded-lg border border-white/[0.08] px-3 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:border-[#FF6B35]/50 hover:bg-[#FF6B35]/10 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                <span>{emoji}</span> {label}
+              </button>
+            ))}
+          </div>
+          {cooldown > 0 && (
+            <div className="flex items-center gap-2 text-xs text-yellow-400 mb-3">
+              <Loader2 className="h-3 w-3 animate-spin" /> Cooldown: {cooldown}s — preventing API rate limit
+            </div>
+          )}
+          {importing && (
+            <div className="flex items-center gap-2 text-xs text-[#FF6B35] mb-3">
+              <Loader2 className="h-3 w-3 animate-spin" /> Importing products with freight calculator pricing...
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Import Result */}
       {importResult && (
