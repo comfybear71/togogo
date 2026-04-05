@@ -23,8 +23,10 @@ export default async function handler(req, res) {
         tax_amount = ROUND((api_price * ${rate} * 0.18)::numeric, 2),
         supplier_cost = ROUND((api_price * ${rate})::numeric, 2) + GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip}) + ROUND((api_price * ${rate} * 0.18)::numeric, 2),
         sale_price = ROUND(((ROUND((api_price * ${rate})::numeric, 2) + GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip}) + ROUND((api_price * ${rate} * 0.18)::numeric, 2)) * 1.5)::numeric, 2),
+        price_currency = 'AUD',
         updated_at = NOW()
       WHERE api_price > 0 AND api_price < 500
+        AND (price_currency = 'USD' OR price_currency IS NULL)
     `
 
     return res.json({

@@ -152,14 +152,14 @@ export default async function handler(req, res) {
               user_id, title, description, image, images, supplier,
               supplier_product_id, supplier_cost, sale_price,
               api_price, shipping_cost, tax_amount,
-              category, is_active
+              price_currency, category, is_active
             ) VALUES (
               ${store.user_id}, ${p.title}, ${p.title},
               ${p.image || ''}, ${imgArray},
               ${'AliExpress'}, ${p.productId || p.id},
               ${wholesaleCost}, ${salePrice},
               ${productCostAUD}, ${shippingAUD}, ${taxAUD},
-              ${p.category || 'General'}, true
+              ${'AUD'}, ${p.category || 'General'}, true
             )
           `
           totalImported++
