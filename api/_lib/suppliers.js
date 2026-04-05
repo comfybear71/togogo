@@ -317,14 +317,50 @@ function mapCountryToISO(country) {
 
 export async function getOrderTracking(orderId) {
   try {
-    // Try the member order query API
-    const data = await callAuthenticatedAPI('aliexpress.ds.member.order.get', {
-      order_id: String(orderId),
-    })
+    // Try multiple API paths — AliExpress DS has different endpoints
+    let result = null
+    const apiPaths = [
+      { method: 'aliexpress.trade.ds.order.get', key: 'aliexpress_trade_ds_order_get_response', auth: false },
+      { method: 'aliexpress.ds.trade.order.get', key: 'aliexpress_ds_trade_order_get_response', auth: false },
+      { method: 'aliexpress.trade.ds.order.get', key: 'aliexpress_trade_ds_order_get_response', auth: true },
+    ]
 
-    const result = data?.aliexpress_ds_member_order_get_response?.result
+    for (const api of apiPaths) {
+      try {
+        const params = {
+          single_order_query: JSON.stringify({ order_id: Number(orderId) }),
+        }
+        const data = api.auth
+          ? await callAuthenticatedAPI(api.method, params)
+          : await callAPI(api.method, params)
+
+        // Try to find result in response (AliExpress nests results differently)
+        result = data?.[api.key]?.result
+          || data?.[api.key]?.data
+          || data?.result
+          || data?.data
+        if (result) {
+          console.log(`[AliExpress] Order ${orderId} found via ${api.method}`)
+          break
+        }
+      } catch (err) {
+        console.log(`[AliExpress] ${api.method} failed for ${orderId}: ${err.message}`)
+      }
+    }
+
+    // Fallback: try simple param format
     if (!result) {
-      console.log(`[AliExpress] No tracking result for order ${orderId}`)
+      try {
+        const data = await callAPI('aliexpress.trade.ds.order.get', { order_id: String(orderId) })
+        result = data?.aliexpress_trade_ds_order_get_response?.result || data?.result
+        if (result) console.log(`[AliExpress] Order ${orderId} found via simple format`)
+      } catch (err) {
+        console.log(`[AliExpress] Simple format failed for ${orderId}: ${err.message}`)
+      }
+    }
+
+    if (!result) {
+      console.log(`[AliExpress] No tracking result for order ${orderId} — all API paths failed`)
       return null
     }
 
