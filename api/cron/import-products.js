@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     const hour = new Date().getHours()
     const startIdx = (hour * 3) % allTerms.length
     const selectedTerms = []
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 8; i++) {
       selectedTerms.push(allTerms[(startIdx + i) % allTerms.length])
     }
 
@@ -90,8 +90,8 @@ export default async function handler(req, res) {
       return res.json({ success: true, message: 'No new products found', currentCount })
     }
 
-    // Limit to 15 products per run — each needs a getProductDetails() call for shipping
-    const batch = allProducts.slice(0, 15)
+    // Process up to 30 products per run with accurate pricing
+    const batch = allProducts.slice(0, 30)
     console.log(`[Cron] ${allProducts.length} new products found, processing ${batch.length} with accurate pricing`)
 
     let totalImported = 0
