@@ -57,11 +57,9 @@ export default async function handler(req, res) {
     ]
 
     const hour = new Date().getHours()
-    const startIdx = (hour * 3) % allTerms.length
-    const selectedTerms = []
-    for (let i = 0; i < 8; i++) {
-      selectedTerms.push(allTerms[(startIdx + i) % allTerms.length])
-    }
+    // Randomly pick 8 terms each run for maximum variety
+    const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
+    const selectedTerms = shuffled.slice(0, 8)
 
     console.log(`[Cron] Searching: ${selectedTerms.join(', ')}`)
 
