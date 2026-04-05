@@ -239,7 +239,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 
     console.log(`[AliExpress] Submitting order: product=${productId}, sku=${aeSkuId}, qty=${quantity}`)
 
-    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+    const data = await callAuthenticatedAPI('aliexpress.trade.buy.placeorder', params)
 
     // Response can be in different formats depending on API version
     const result = data?.aliexpress_trade_buy_placeorder_response?.result
