@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star,
@@ -38,24 +38,34 @@ function useCart(subdomain) {
 // ─── Main Storefront Component ────────────────────────────────────────────
 export default function StorefrontPage({ subdomain }) {
   const [storeData, setStoreData] = useState(null)
+  const [allProducts, setAllProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [view, setView] = useState('grid') // grid | product | cart | checkout | success | orders
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
   const [priceRange, setPriceRange] = useState('')
   const cart = useCart(subdomain)
+  const loadingRef = useRef(false)
+  const PRODUCTS_PER_PAGE = 30
 
   // Always use midnight (dark) theme — stored in database, never localStorage
   const theme = getThemeById(storeData?.store?.themeId || 'midnight')
 
+  // Load initial page
   useEffect(() => {
-    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}`)
+    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=1&limit=${PRODUCTS_PER_PAGE}`)
       .then((r) => r.ok ? r.json() : Promise.reject('Store not found'))
-      .then((data) => setStoreData(data))
-      .catch(() => {
-        setStoreData(null)
+      .then((data) => {
+        setStoreData(data)
+        setAllProducts(data.products || [])
+        setHasMore(data.pagination?.hasMore || false)
+        setCurrentPage(1)
       })
+      .catch(() => { setStoreData(null) })
       .finally(() => setLoading(false))
 
     // Check if returning from Stripe checkout
@@ -63,14 +73,50 @@ export default function StorefrontPage({ subdomain }) {
     if (params.get('checkout') === 'success') {
       setView('success')
       cart.clear()
-      // Clean up URL
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [subdomain])
 
+  // Load more products
+  const loadMore = useCallback(() => {
+    if (loadingRef.current || !hasMore) return
+    loadingRef.current = true
+    setLoadingMore(true)
+    const nextPage = currentPage + 1
+    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=${nextPage}&limit=${PRODUCTS_PER_PAGE}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.products?.length) {
+          setAllProducts(prev => [...prev, ...data.products])
+          setHasMore(data.pagination?.hasMore || false)
+          setCurrentPage(nextPage)
+          // Update categories from full data
+          if (data.categories) {
+            setStoreData(prev => prev ? { ...prev, categories: data.categories } : prev)
+          }
+        } else {
+          setHasMore(false)
+        }
+      })
+      .catch(() => { setHasMore(false) })
+      .finally(() => { setLoadingMore(false); loadingRef.current = false })
+  }, [subdomain, currentPage, hasMore])
+
+  // Infinite scroll listener
+  useEffect(() => {
+    if (view !== 'grid') return
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+        loadMore()
+      }
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [view, loadMore])
+
   const filteredProducts = useMemo(() => {
-    if (!storeData?.products) return []
-    return storeData.products.filter((p) => {
+    if (!allProducts.length) return []
+    return allProducts.filter((p) => {
       if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
       if (selectedCategory && p.category !== selectedCategory) return false
       if (priceRange === 'under10' && p.price >= 10) return false
@@ -79,7 +125,7 @@ export default function StorefrontPage({ subdomain }) {
       if (priceRange === 'over50' && p.price < 50) return false
       return true
     })
-  }, [storeData?.products, searchQuery, selectedCategory, priceRange])
+  }, [allProducts, searchQuery, selectedCategory, priceRange])
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
@@ -396,6 +442,27 @@ export default function StorefrontPage({ subdomain }) {
               </div>
             )})}
           </div>
+        )}
+
+        {/* Loading more / infinite scroll indicator */}
+        {loadingMore && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <span className="ml-2 text-sm text-slate-400">Loading more products...</span>
+          </div>
+        )}
+        {hasMore && !loadingMore && filteredProducts.length > 0 && (
+          <div className="flex justify-center py-6">
+            <button
+              onClick={loadMore}
+              className="rounded-full px-6 py-2 text-sm font-medium border border-white/[0.1] text-slate-400 hover:text-white hover:border-white/[0.3] transition-all"
+            >
+              Load more products
+            </button>
+          </div>
+        )}
+        {!hasMore && allProducts.length > PRODUCTS_PER_PAGE && (
+          <p className="text-center py-6 text-xs text-slate-500">You've seen all {allProducts.length} products</p>
         )}
       </div>
 

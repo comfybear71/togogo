@@ -1,7 +1,21 @@
 // Public storefront API — serves store info + products by subdomain
 // No auth required — this is the customer-facing store
+// Supports pagination: ?page=1&limit=20 for infinite scroll
 import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
+import { Redis } from '@upstash/redis'
+
+// Redis caching (optional — works with Upstash REST API)
+// Needs UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (https:// format)
+// Falls back gracefully if not configured
+let redis = null
+try {
+  const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
+  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
+  if (restUrl && restToken) {
+    redis = new Redis({ url: restUrl, token: restToken })
+  }
+} catch { /* Redis optional — storefront works without it */ }
 
 export default async function handler(req, res) {
   // CORS for subdomain requests
@@ -42,14 +56,39 @@ export default async function handler(req, res) {
 
     const store = stores[0]
 
-    // Get the store owner's custom products
+    // Pagination params
+    const page = Math.max(1, parseInt(req.query.page) || 1)
+    const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 30))
+    const offset = (page - 1) * limit
+
+    // Try Redis cache first (cache per store+page, 2 min TTL)
+    const cacheKey = `store:${subdomain}:p${page}:l${limit}`
+    if (redis && page > 0) {
+      try {
+        const cached = await redis.get(cacheKey)
+        if (cached) {
+          console.log(`[Storefront] Cache hit: ${cacheKey}`)
+          return res.json(typeof cached === 'string' ? JSON.parse(cached) : cached)
+        }
+      } catch { /* cache miss, continue */ }
+    }
+
+    // Get total product count
+    const { rows: countRows } = await sql`
+      SELECT COUNT(*) as total FROM user_products
+      WHERE user_id = ${store.owner_id} AND is_active = true
+    `
+    const totalProducts = parseInt(countRows[0].total)
+
+    // Get the store owner's products — paginated, stable sort by created_at
     const { rows: ownerProducts } = await sql`
       SELECT id, title, description, image, images, supplier, supplier_cost,
              sale_price, category, total_sold, created_at, supplier_product_id,
              product_rating, orders_count, original_price, discount_percent
       FROM user_products
       WHERE user_id = ${store.owner_id} AND is_active = true
-      ORDER BY RANDOM()
+      ORDER BY created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `
 
     let products = ownerProducts.map((p) => {
@@ -109,17 +148,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // Get categories with counts for filtering
-    const catCounts = {}
-    for (const p of products) {
-      const cat = p.category || 'General'
-      catCounts[cat] = (catCounts[cat] || 0) + 1
-    }
-    const categories = Object.entries(catCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
+    // Get ALL categories with counts (not just current page)
+    const { rows: catRows } = await sql`
+      SELECT category, COUNT(*) as count FROM user_products
+      WHERE user_id = ${store.owner_id} AND is_active = true
+      GROUP BY category ORDER BY count DESC
+    `
+    const categories = catRows.map(r => ({ name: r.category || 'General', count: parseInt(r.count) }))
 
-    return res.json({
+    const response = {
       store: {
         id: store.id,
         name: store.store_name,
@@ -132,7 +169,21 @@ export default async function handler(req, res) {
       },
       products,
       categories,
-    })
+      pagination: {
+        page,
+        limit,
+        totalProducts,
+        totalPages: Math.ceil(totalProducts / limit),
+        hasMore: offset + products.length < totalProducts,
+      },
+    }
+
+    // Cache in Redis (2 min TTL)
+    if (redis) {
+      try { await redis.set(cacheKey, JSON.stringify(response), { ex: 120 }) } catch { /* non-critical */ }
+    }
+
+    return res.json(response)
   } catch (err) {
     console.error('Storefront API error:', err)
     return res.status(500).json({ error: 'Failed to load store' })
