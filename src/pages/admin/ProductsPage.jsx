@@ -198,8 +198,8 @@ export default function ProductsPage() {
       {importResult && (
         <div className={`rounded-xl p-3 text-sm ${importResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
           {importResult.success
-            ? `Imported ${importResult.totalImported} products from AliExpress across ${importResult.stores} stores`
-            : `Import failed: ${importResult.error || importResult.message}`}
+            ? `Imported ${importResult.newProducts || importResult.totalImported || 0} new products across ${importResult.stores || 0} stores (${importResult.catalogSize || importResult.totalImported || 0} total)`
+            : `Import failed: ${importResult.error || importResult.message || 'Unknown error'}`}
         </div>
       )}
 
