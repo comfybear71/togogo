@@ -323,16 +323,45 @@ export async function getOrderTracking(orderId) {
     })
 
     const result = data?.aliexpress_ds_member_order_get_response?.result
-    if (!result) return null
+    if (!result) {
+      console.log(`[AliExpress] No tracking result for order ${orderId}`)
+      return null
+    }
+
+    // AliExpress uses various status strings — map them all
+    const rawStatus = (result.order_status || result.logistics_status || '').toUpperCase()
+    console.log(`[AliExpress] Order ${orderId} raw status: ${rawStatus}, logistics: ${JSON.stringify(result.logistics_info_list || result.logistics_info || 'none').slice(0, 200)}`)
+
+    // Extract logistics info — can be in different locations
+    const logisticsInfo = result.logistics_info_list?.logistics_info_list?.[0]
+      || result.logistics_info_list?.[0]
+      || result.logistics_info
+      || {}
+
+    let status = rawStatus
+    // Map AliExpress statuses to our statuses
+    if (['WAIT_SELLER_SEND_GOODS', 'PLACE_ORDER_SUCCESS', 'IN_CANCEL', 'WAIT_BUYER_ACCEPT_GOODS'].includes(rawStatus)) {
+      if (rawStatus === 'WAIT_BUYER_ACCEPT_GOODS') status = 'shipped'
+      else if (rawStatus === 'IN_CANCEL') status = 'cancelled'
+      else status = 'processing'
+    } else if (['SELLER_SENT_GOODS', 'PARTIAL_SEND_GOODS', 'IN_TRANSIT'].includes(rawStatus) || logisticsInfo.tracking_number) {
+      status = 'shipped'
+    } else if (['FINISH', 'COMPLETED', 'BUYER_ACCEPT_GOODS'].includes(rawStatus)) {
+      status = 'delivered'
+    } else if (['FUND_PROCESSING', 'IN_ISSUE', 'IN_FROZEN'].includes(rawStatus)) {
+      status = 'processing'
+    } else if (['CANCELLED', 'CANCELED', 'CLOSED'].includes(rawStatus)) {
+      status = 'cancelled'
+    }
 
     return {
       orderId: result.order_id || orderId,
-      status: result.order_status || result.logistics_status || '',
-      trackingNumber: result.logistics_info?.tracking_number || '',
-      trackingUrl: result.logistics_info?.tracking_url || '',
-      logisticsCompany: result.logistics_info?.logistics_company || '',
-      shippedDate: result.send_goods_date || '',
-      estimatedDelivery: result.logistics_info?.estimated_delivery_time || '',
+      status,
+      trackingNumber: logisticsInfo.tracking_number || logisticsInfo.logistics_no || '',
+      trackingUrl: logisticsInfo.tracking_url || logisticsInfo.logistics_tracking_url || '',
+      logisticsCompany: logisticsInfo.logistics_company || logisticsInfo.logistics_service || '',
+      shippedDate: result.send_goods_date || logisticsInfo.send_goods_date || '',
+      estimatedDelivery: logisticsInfo.estimated_delivery_time || '',
       rawData: result,
     }
   } catch (err) {
