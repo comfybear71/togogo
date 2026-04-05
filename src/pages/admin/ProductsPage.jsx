@@ -17,7 +17,9 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [storeFilter, setStoreFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [stores, setStores] = useState([]);
   const [actionMenuProduct, setActionMenuProduct] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
@@ -25,27 +27,30 @@ export default function ProductsPage() {
   const [pagination, setPagination] = useState({ totalProducts: 0, totalPages: 0 });
   const ITEMS_PER_PAGE = 50;
 
-  const fetchProducts = useCallback(async (pg = page, search = searchQuery, cat = categoryFilter) => {
+  const fetchProducts = useCallback(async (pg = page, search = searchQuery, cat = categoryFilter, store = storeFilter) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: pg, limit: ITEMS_PER_PAGE });
       if (search) params.set('search', search);
       if (cat) params.set('category', cat);
+      if (store) params.set('store', store);
+      if (!store) params.set('unique', 'true');
 
       const data = await authFetch(`/api/admin/products?${params}`);
       setProducts(data.products || []);
       setCategories(data.categories || []);
+      if (data.stores) setStores(data.stores);
       setPagination(data.pagination || { totalProducts: 0, totalPages: 0 });
     } catch (err) {
       console.error('Failed to fetch products:', err);
     } finally {
       setLoading(false);
     }
-  }, [page, searchQuery, categoryFilter]);
+  }, [page, searchQuery, categoryFilter, storeFilter]);
 
   useEffect(() => { fetchProducts(); }, []);
 
-  useEffect(() => { fetchProducts(page, searchQuery, categoryFilter); }, [page, searchQuery, categoryFilter]);
+  useEffect(() => { fetchProducts(page, searchQuery, categoryFilter, storeFilter); }, [page, searchQuery, categoryFilter, storeFilter]);
 
   async function handleImportFromAliExpress() {
     setImporting(true);
@@ -151,6 +156,16 @@ export default function ProductsPage() {
             Search
           </button>
           <select
+            value={storeFilter}
+            onChange={(e) => { setStoreFilter(e.target.value); setPage(1); }}
+            className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
+          >
+            <option value="">All Products</option>
+            {stores.map((s) => (
+              <option key={s.user_id} value={s.user_id}>{s.store_name} ({s.subdomain})</option>
+            ))}
+          </select>
+          <select
             value={categoryFilter}
             onChange={(e) => { setCategoryFilter(e.target.value); setPage(1); }}
             className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white focus:border-[#FF6B35] focus:outline-none"
@@ -197,7 +212,7 @@ export default function ProductsPage() {
                   <th className="pb-3 pr-3">Sale</th>
                   <th className="pb-3 pr-3">Profit</th>
                   <th className="pb-3 pr-3">ToGoGo</th>
-                  <th className="pb-3 pr-3">Store</th>
+                  {storeFilter && <th className="pb-3 pr-3">Store</th>}
                   <th className="pb-3 pr-3">Status</th>
                   <th className="pb-3 text-right">Actions</th>
                 </tr>
@@ -228,7 +243,7 @@ export default function ProductsPage() {
                       <td className="py-3 pr-3 font-medium text-white">${salePrice.toFixed(2)}</td>
                       <td className="py-3 pr-3 text-emerald-400">${(salePrice - supplierCost).toFixed(2)}</td>
                       <td className="py-3 pr-3 text-[#FF6B35]">${((salePrice - supplierCost) * 0.3).toFixed(2)}<span className="text-zinc-600 text-xs"> +$6</span></td>
-                      <td className="py-3 pr-3 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>
+                      {storeFilter && <td className="py-3 pr-3 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>}
                       <td className="py-3 pr-4">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColors[status]}`}>
                           {status}
