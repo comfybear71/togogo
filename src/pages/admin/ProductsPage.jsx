@@ -105,6 +105,10 @@ export default function ProductsPage() {
     { term: 'pet', label: 'Pets', emoji: '🐕' },
     { term: 'car accessories', label: 'Car', emoji: '🚗' },
     { term: 'headphones', label: 'Audio', emoji: '🎧' },
+    { term: 'phone case', label: 'Phone Cases', emoji: '📱' },
+    { term: 'tablet stand', label: 'Tablet', emoji: '📲' },
+    { term: 'led light', label: 'LED Lights', emoji: '🔦' },
+    { term: 'makeup brush', label: 'Makeup', emoji: '💅' },
   ];
 
   async function handleAction(id, action) {
