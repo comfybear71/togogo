@@ -1,9 +1,9 @@
 // Cron job — fetches products from AliExpress feeds and imports into all stores
 // Runs every 6 hours via Vercel Cron Jobs
 // Each run fetches from different feeds to build variety over time
-// ACCURATE PRICING: fetches real shipping cost per product from ds.product.get
+// ACCURATE PRICING: fetches real shipping cost via freight calculator API
 import { sql, ensureSchema } from '../_lib/db.js'
-import { searchAliExpress, getProductDetails } from '../_lib/suppliers.js'
+import { searchAliExpress, getProductDetails, calculateFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // Auth: only allow Vercel cron or secret
@@ -105,29 +105,32 @@ export default async function handler(req, res) {
     for (const p of batch) {
       const aeId = (p.productId || '').replace('ae_', '')
 
-      // Fetch real shipping cost from product details API
+      // Fetch EXACT shipping cost from freight calculator API (no OAuth needed)
       let shippingCost = 0
-      let taxRate = 0.18 // default 18% if we can't determine
+      let taxRate = 0.18 // 18% tax estimate
       let realProductCost = p.cost || 0
 
       if (aeId && !aeId.includes('-')) {
         try {
+          // Get product details for real cost
           const details = await getProductDetails(aeId)
           if (details) {
-            // Use the real product cost from details API
             realProductCost = details.cost || p.cost || 0
-
-            // Find cheapest shipping to AU
-            const shippingOptions = details.shipping || []
-            if (shippingOptions.length > 0) {
-              shippingCost = Math.min(...shippingOptions.map(s => s.shippingFee || 999))
-              if (shippingCost === 999) shippingCost = 0
-            }
-            enriched++
-            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} apiShip=$${shippingCost.toFixed(2)}${shippingCost === 0 ? ' (FREE→$3min)' : ''}`)
           }
+
+          // Use freight calculator for EXACT shipping cost to AU
+          const freightOptions = await calculateFreight(aeId, 1, 'AU')
+          if (freightOptions && freightOptions.length > 0) {
+            // Find cheapest shipping option
+            const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
+            shippingCost = cheapest.cost
+            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+          } else {
+            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using $2 min)`)
+          }
+          enriched++
         } catch (err) {
-          console.error(`[Cron] Details failed for ${aeId}:`, err.message)
+          console.error(`[Cron] Enrichment failed for ${aeId}:`, err.message)
           enrichFailed++
         }
       }
@@ -141,7 +144,7 @@ export default async function handler(req, res) {
         if (rateRows[0]) usdToAud = parseFloat(rateRows[0].value) || 1.45
       } catch { /* use default */ }
       const productCostAUD = realProductCost * usdToAud
-      // Always add minimum A$3 shipping (~US$2) — AE charges this even when API says free
+      // Freight calculator returns USD — convert to AUD with minimum A$3
       const minShipping = 3.00
       const shippingAUD = Math.max(shippingCost * usdToAud, minShipping)
       // Tax is ~18% of product cost in AUD

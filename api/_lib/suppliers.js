@@ -197,7 +197,7 @@ export async function getProductDetails(productId) {
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
-export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount }) {
+export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount, promotionCode }) {
   try {
     // Resolve SKU attr if not provided
     let resolvedSkuAttr = skuId || ''
@@ -242,6 +242,12 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
         logistics_service_name: shippingMethod,
         order_memo: 'ToGoGo dropship order',
       }],
+    }
+
+    // Add promotion/coupon code if available
+    if (promotionCode) {
+      orderRequest.promotion = { promotion_code: promotionCode }
+      console.log(`[AliExpress] Applying promo code: ${promotionCode}`)
     }
 
     console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
@@ -331,6 +337,127 @@ export async function getOrderTracking(orderId) {
     }
   } catch (err) {
     console.error(`[AliExpress] Order tracking failed for ${orderId}:`, err.message)
+    return null
+  }
+}
+
+// ============================================
+// FREIGHT CALCULATOR — exact shipping costs to any country
+// No OAuth required — uses app_key + signature only
+// ============================================
+
+export async function calculateFreight(productId, quantity = 1, countryCode = 'AU', skuId = '') {
+  try {
+    const params = {
+      param_aeop_freight_calculate_for_buyer_d_t_o: JSON.stringify({
+        product_id: Number(productId),
+        product_num: quantity,
+        country_code: countryCode,
+        send_goods_country_code: 'CN',
+        ...(skuId ? { sku_id: String(skuId) } : {}),
+      }),
+    }
+
+    const data = await callAPI('aliexpress.logistics.buyer.freight.calculate', params)
+
+    const result = data?.aliexpress_logistics_buyer_freight_calculate_response?.result
+    if (!result?.success) {
+      console.error('[AliExpress] Freight calc failed:', result?.error_desc || JSON.stringify(data).slice(0, 300))
+      return null
+    }
+
+    const options = result.aeop_freight_calculate_result_for_buyer_d_t_o_list
+      ?.aeop_freight_calculate_result_for_buyer_dto || []
+
+    return options.map(o => ({
+      serviceName: o.service_name || '',
+      cost: parseFloat(o.freight?.amount || '0'),
+      costCents: parseInt(o.freight?.cent || '0'),
+      currency: o.freight?.currency_code || 'USD',
+      estimatedDays: o.estimated_delivery_time || '',
+      trackingAvailable: o.tracking_available === true || o.tracking_available === 'true',
+    }))
+  } catch (err) {
+    console.error('[AliExpress] Freight calc error:', err.message)
+    return null
+  }
+}
+
+// ============================================
+// DS LEVEL REPORTING — report orders to build DS level for automatic discounts
+// Level C ($1k+) = ~2% off, Level B = ~3-4%, Level A = ~5%+
+// ============================================
+
+export async function reportOrderForDSLevel({ productId, orderId, orderAmount, skuInfo, payTime }) {
+  try {
+    const now = new Date()
+    const paytime = payTime || (
+      now.getUTCFullYear().toString()
+      + String(now.getUTCMonth() + 1).padStart(2, '0')
+      + String(now.getUTCDate()).padStart(2, '0')
+      + ':' + String(now.getUTCHours()).padStart(2, '0')
+      + String(now.getUTCMinutes()).padStart(2, '0')
+      + String(now.getUTCSeconds()).padStart(2, '0')
+    )
+
+    const params = {
+      ae_product_id: String(productId),
+      ae_orderid: String(orderId || ''),
+      product_amount: parseFloat(orderAmount || 0).toFixed(2),
+      order_amount: parseFloat(orderAmount || 0).toFixed(2),
+      ae_sku_info: String(skuInfo || ''),
+      product_url: `https://www.aliexpress.com/item/${productId}.html`,
+      paytime,
+    }
+
+    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+
+    const result = data?.aliexpress_ds_member_orderdata_submit_response?.result
+    if (result?.is_success || result?.success) {
+      console.log(`[AliExpress] DS Level: reported order ${orderId} for product ${productId}`)
+      return { success: true }
+    } else {
+      console.error('[AliExpress] DS Level report failed:', JSON.stringify(data).slice(0, 300))
+      return { success: false, error: result?.error_msg || 'Report failed' }
+    }
+  } catch (err) {
+    console.error('[AliExpress] DS Level report error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ============================================
+// DETAILED TRACKING — full tracking events for shipped orders
+// ============================================
+
+export async function getDetailedTracking(trackingNumber, orderId, serviceName = 'CAINIAO_STANDARD') {
+  try {
+    const data = await callAPI('aliexpress.logistics.ds.trackinginfo.query', {
+      logistics_no: trackingNumber,
+      origin: 'ESCROW',
+      out_ref: String(orderId),
+      service_name: serviceName,
+      to_area: 'AU',
+    })
+
+    const response = data?.aliexpress_logistics_ds_trackinginfo_query_response
+    if (!response?.result_success) {
+      return null
+    }
+
+    const events = response.details?.details || []
+    return {
+      trackingNumber,
+      trackingUrl: response.official_website || '',
+      events: events.map(e => ({
+        description: e.event_desc || '',
+        date: e.signed_date || '',
+        status: e.status || '',
+        location: e.address || '',
+      })),
+    }
+  } catch (err) {
+    console.error('[AliExpress] Detailed tracking error:', err.message)
     return null
   }
 }

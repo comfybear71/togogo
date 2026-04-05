@@ -4,7 +4,7 @@ import { sql, ensureSchema } from '../_lib/db.js'
 import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
 import { sendEmail, orderConfirmationEmail, newOrderAlertEmail } from '../_lib/email.js'
-import { submitOrder } from '../_lib/suppliers.js'
+import { submitOrder, reportOrderForDSLevel } from '../_lib/suppliers.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -304,6 +304,16 @@ export default async function handler(req, res) {
                     if (result.success) {
                       await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress'}, updated_at = NOW() WHERE id = ${order.id}`
                       console.log(`[Webhook] AliExpress order submitted: ${result.orderId}`)
+
+                      // Report to DS Level system — builds towards automatic discounts
+                      try {
+                        await reportOrderForDSLevel({
+                          productId,
+                          orderId: result.orderId,
+                          orderAmount: order.sale_price || 0,
+                          skuInfo: '',
+                        })
+                      } catch { /* non-critical */ }
                     } else {
                       await sql`UPDATE user_orders SET notes = ${'AliExpress auto-submit failed: ' + result.error + '. Manual submission required.'}, updated_at = NOW() WHERE id = ${order.id}`
                       console.error(`[Webhook] AliExpress submission failed for ${order.id}: ${result.error}`)
