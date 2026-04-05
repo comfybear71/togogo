@@ -103,8 +103,9 @@ export default async function handler(req, res) {
     if (customTerm) {
       // Use variations if available, otherwise just the custom term
       const variations = termVariations[customTerm.toLowerCase()] || [customTerm]
-      selectedTerms = variations
-      console.log(`[Cron] Custom search: "${customTerm}" → ${variations.length} variations`)
+      // Limit to 4 variations to stay within Vercel timeout
+      selectedTerms = variations.slice(0, 4)
+      console.log(`[Cron] Custom search: "${customTerm}" → ${selectedTerms.length} variations`)
     } else {
       const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
       selectedTerms = shuffled.slice(0, 8)
@@ -140,8 +141,9 @@ export default async function handler(req, res) {
       return res.json({ success: true, message: 'No new products found', currentCount })
     }
 
-    // Process up to 50 products per run with accurate pricing
-    const batch = allProducts.slice(0, 50)
+    // Process up to 20 products per run with accurate pricing
+    // Keep batch small to stay within Vercel 60s timeout (freight API is slow)
+    const batch = allProducts.slice(0, 20)
     console.log(`[Cron] ${allProducts.length} new products found, processing ${batch.length} with accurate pricing`)
 
     let totalImported = 0
@@ -158,23 +160,29 @@ export default async function handler(req, res) {
 
       if (aeId && !aeId.includes('-')) {
         try {
-          // Get product details for real cost
-          const details = await getProductDetails(aeId)
-          if (details) {
-            realProductCost = details.cost || p.cost || 0
-          }
-
-          // Use freight calculator for EXACT shipping cost to AU
-          const freightOptions = await calculateFreight(aeId, 1, 'AU')
-          if (freightOptions && freightOptions.length > 0) {
-            // Find cheapest shipping option
-            const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
-            shippingCost = cheapest.cost
-            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+          // Race against a 5s timeout to avoid Vercel function timeout
+          const enrichResult = await Promise.race([
+            (async () => {
+              const details = await getProductDetails(aeId)
+              if (details) realProductCost = details.cost || p.cost || 0
+              const freightOptions = await calculateFreight(aeId, 1, 'AU')
+              if (freightOptions && freightOptions.length > 0) {
+                const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
+                shippingCost = cheapest.cost
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+              } else {
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using min)`)
+              }
+              return 'ok'
+            })(),
+            new Promise(r => setTimeout(() => r('timeout'), 5000))
+          ])
+          if (enrichResult === 'timeout') {
+            console.log(`[Cron] ${aeId}: enrichment timed out, using defaults`)
+            enrichFailed++
           } else {
-            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using $2 min)`)
+            enriched++
           }
-          enriched++
         } catch (err) {
           console.error(`[Cron] Enrichment failed for ${aeId}:`, err.message)
           enrichFailed++

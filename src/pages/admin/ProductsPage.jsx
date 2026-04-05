@@ -204,7 +204,7 @@ export default function ProductsPage() {
           <div className="flex items-center justify-between mb-3">
             <div>
               <h3 className="text-sm font-bold text-white">Import Products by Category</h3>
-              <p className="text-xs text-zinc-500 mt-1">Each click imports ~50 products with accurate AUD pricing. 30 second cooldown between imports.</p>
+              <p className="text-xs text-zinc-500 mt-1">Each click imports ~20 products with accurate freight pricing. 30 second cooldown between imports.</p>
             </div>
             <button
               onClick={handleMegaImport}
