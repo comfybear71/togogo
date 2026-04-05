@@ -34,10 +34,15 @@ export default async function handler(req, res) {
         AND (price_currency = 'USD' OR price_currency IS NULL)
     `
 
-    // Save current rate to admin_settings if not exists
+    // Save current rate + coupon code to admin_settings if not exists
     await sql`
       INSERT INTO admin_settings (key, value, category, label)
       VALUES ('usd_to_aud_rate', ${String(rate)}, 'pricing', 'USD to AUD Exchange Rate')
+      ON CONFLICT (key) DO NOTHING
+    `.catch(() => {})
+    await sql`
+      INSERT INTO admin_settings (key, value, category, label)
+      VALUES ('default_coupon_code', 'AUAP03', 'pricing', 'AliExpress Coupon Code (applied to all orders)')
       ON CONFLICT (key) DO NOTHING
     `.catch(() => {})
 

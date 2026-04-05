@@ -289,12 +289,20 @@ export default async function handler(req, res) {
                     // Log the final address being used
                     console.log(`[Webhook] Address for AE: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
 
-                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})`)
+                    // Get active coupon code from admin settings
+                    let couponCode = ''
+                    try {
+                      const { rows: couponRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_coupon_code'`
+                      if (couponRows[0]?.value) couponCode = couponRows[0].value
+                    } catch { /* no coupon */ }
+
+                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})${couponCode ? ' with coupon: ' + couponCode : ''}`)
                     const result = await submitOrder({
                       productId,
-                      skuId: null, // auto-resolved from product details
+                      skuId: null,
                       quantity: order.quantity || 1,
                       orderAmount,
+                      promotionCode: couponCode || undefined,
                       shippingAddress: {
                         ...shippingAddr,
                         name: order.customer_name || shippingAddr.name || '',
