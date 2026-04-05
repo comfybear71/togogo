@@ -184,29 +184,28 @@ export default function StorefrontPage({ subdomain }) {
           <>
             <div className="space-y-3 mb-6">
               {cart.items.map((item) => (
-                <div key={item.id} className={`flex items-center gap-4 rounded-xl ${theme.cardBg} ${theme.cardBorder} p-4 shadow-sm`}>
-                  <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                <div key={item.id} className={`flex items-center gap-3 rounded-xl ${theme.cardBg} ${theme.cardBorder} p-3 shadow-sm`}>
+                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
                     {item.image ? (
                       <img src={item.image} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center"><Package className="h-6 w-6 text-gray-300" /></div>
+                      <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-gray-300" /></div>
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`font-medium ${theme.textPrimary} truncate`}>{item.title}</p>
-                    <p className={`text-sm font-semibold ${theme.textSecondary}`}>${item.price.toFixed(2)}</p>
+                    <p className={`text-sm font-medium ${theme.textPrimary} truncate`}>{item.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className={`w-5 text-center text-xs font-medium ${theme.textPrimary}`}>{item.quantity}</span>
+                      <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className={`rounded-lg p-1.5 ${theme.cardBg}`} style={{ backgroundColor: theme.accentLight }}>
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className={`w-6 text-center text-sm font-medium ${theme.textPrimary}`}>{item.quantity}</span>
-                    <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className={`rounded-lg p-1.5 ${theme.cardBg}`} style={{ backgroundColor: theme.accentLight }}>
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <p className={`w-20 text-right font-semibold ${theme.textPrimary}`}>${(item.price * item.quantity).toFixed(2)}</p>
-                  <button onClick={() => cart.remove(item.id)} className={`p-1.5 ${theme.textMuted} hover:text-red-500`}>
+                  <p className={`font-semibold ${theme.textPrimary} text-sm`}>A${(item.price * item.quantity).toFixed(2)}</p>
+                  <button onClick={() => cart.remove(item.id)} className={`p-1 ${theme.textMuted} hover:text-red-500`}>
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
