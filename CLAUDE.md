@@ -220,11 +220,15 @@ If the user asks you to:
 - ✅ 30% commission on profit (configurable)
 
 ### Pricing Model:
-- **Wholesale:** API price + AE shipping + 18% tax
+- **CRITICAL:** AliExpress API returns USD despite `target_currency: 'AUD'`
+- **USD→AUD rate:** Configurable in admin_settings (`usd_to_aud_rate`, default 1.45)
+- **Wholesale:** (API price × USD→AUD) + shipping (min A$3) + 18% tax
 - **Store price:** wholesale × 1.5
-- **Checkout:** + A$6 shipping (goes to ToGoGo)
-- **Commission:** 30% of (sale - wholesale)
+- **Checkout:** + A$6 flat shipping (100% to ToGoGo)
+- **Commission:** 30% of profit (sale - wholesale)
+- **AliExpress "FREE" shipping:** Always charge min A$3 — they add ~US$1.99 at checkout
 - **AliExpress orders:** auto-created via `trade.buy.placeorder`, admin pays in bulk
+- **Fix existing prices:** `/api/admin/fix-prices` converts USD→AUD (safe to repeat)
 
 ### Needs Work:
 - ⚠️ Checkout dark theme (still white background)

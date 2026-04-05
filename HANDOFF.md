@@ -1,147 +1,154 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-05 (Session 4 — Accurate pricing + admin improvements)
-**Session:** Accurate pricing with real shipping, admin product breakdown, duplicate fix
-**Branch:** claude/fix-image-crash-BiIj9 (merged to master, PRODUCTION on Vercel)
+**Last Updated:** 2026-04-05 (Session 4 — Pricing SOLVED + admin improvements)
+**Session:** USD→AUD conversion fix, accurate pricing, admin product breakdown, duplicate fix
+**Branch:** claude/fix-image-crash-BiIj9 (PRODUCTION on Vercel)
 **Previous Session:** Session 3 (April 4) — Full e2e dropshipping automated
 
 ---
 
 ## What Was Done This Session (Session 4 — April 5)
 
-### Accurate Pricing — IMPLEMENTED
-- **Import now fetches real shipping cost per product** from `getProductDetails()` API
-- **Wholesale cost** = API product price + AE shipping to AU + 18% tax estimate
-- **Store sale price** = wholesale × 1.5 (client markup)
-- **A$6 flat shipping** added at checkout — goes 100% to ToGoGo platform
-- **Commission:** 30% of profit (sale - wholesale) goes to ToGoGo
-- **Price breakdown stored in DB:** `api_price`, `shipping_cost`, `tax_amount` columns added
-- Products with FREE shipping show green "FREE" in admin
-- Import processes 30 products per run with 8 search terms for variety
-- `country: 'AU'` filter on feed API for Australia-relevant products
+### ROOT CAUSE FOUND: API Returns USD Not AUD
+- AliExpress API **ignores** `target_currency: 'AUD'` — returns USD values
+- All prices were stored as AUD but were actually USD
+- This caused every product to be underpriced (~30-45% too low)
+- **FIX:** All prices now converted with USD→AUD rate (default 1.45)
+- **Rate configurable** from admin Settings page (`usd_to_aud_rate` key)
+- **One-time fix endpoint:** `/api/admin/fix-prices?secret=JWT_SECRET` converts existing products
+- **`price_currency` column** tracks USD vs AUD — prevents double conversion
+- Safe to run fix-prices multiple times (only converts USD → AUD, skips AUD)
+
+### AliExpress "FREE" Shipping Is A Lie
+- API reports FREE shipping but AliExpress charges ~US$1.99 at checkout
+- **FIX:** Minimum A$3.00 shipping added to ALL products regardless of API
+- Formula: `actualShipping = Math.max(apiShipping × usdToAud, A$3.00)`
+- Removed "FREE" display from admin products page
+- Storefront shows "Shipping only $6" (not "Free Shipping")
+
+### Final Pricing Formula (CORRECT)
+```
+1. API returns prices in USD
+2. Convert to AUD: price × 1.45 (configurable rate)
+3. Add shipping: minimum A$3.00 (or actual if higher)
+4. Add tax: 18% of AUD product cost
+5. Wholesale = AUD product + shipping + tax
+6. Sale price = wholesale × 1.5
+7. Checkout adds: A$6 flat shipping (100% to ToGoGo)
+
+EXAMPLE (Scissors US$2.42):
+  API: US$2.42 → A$3.51
+  Shipping: US$1.99 → A$3.00 (min)
+  Tax: A$3.51 × 18% = A$0.63
+  Wholesale: A$7.14
+  Sale: A$7.14 × 1.5 = A$10.71
+  Customer pays: A$10.71 + A$6 = A$16.71
+  AE real cost: ~A$7.04
+  PROFIT: ~A$9.67
+```
+
+### Accurate Import (30 products/run)
+- Fetches real shipping cost per product from `getProductDetails()` API
+- Converts all values USD → AUD using configurable rate
+- Random search terms each run for variety
+- Marks new products as `price_currency = 'AUD'`
+- Cron runs every 6 hours automatically
 
 ### Admin Products Page — ENHANCED
-- **Full pricing breakdown columns:** API Price | Ship | Tax | Wholesale | Sale | Profit | ToGoGo
-- **Store dropdown filter:** "All Products" (deduplicated) or filter by specific store
-- **Unique product view:** Default shows each product once (not 4x per store)
+- **Full pricing breakdown:** API Price | Ship | Tax | Wholesale | Sale | Profit | ToGoGo
+- **Store dropdown filter:** "All Products" (deduplicated) or filter by store
+- **No more "FREE"** shipping display — all show actual AUD amount
 - **Price-check API:** `/api/admin/price-check?id=PRODUCT_ID&secret=JWT_SECRET`
 
 ### Duplicate Orders Fix
-- **Idempotency check** on Stripe webhook — prevents duplicate AliExpress orders on retries
-- Checks if order already processed before running emails/AE submission
+- Idempotency check on Stripe webhook — no more double AliExpress orders
+- Removed duplicate submitOrder block that was calling the old API format
+
+### submitOrder — Restored After Merge Revert
+- The merge to master reverted submitOrder to old broken code
+- Restored: `param_place_order_request4_open_api_d_t_o` wrapper
+- Restored: country/state mapping, contact_person, SKU attr resolution
+- Correct API: `aliexpress.trade.buy.placeorder`
 
 ### Other Fixes
-- Removed "Free Shipping" label — now shows "Shipping only $6"
-- Branch cleanup: removed old branches, merged to master
-- Repo health: MasterHQ showing all green
+- Price range filter buttons on storefronts (Under $10 | $10-$20 | $20-$50 | $50+)
+- Cart mobile layout fix (price was overlapping buttons)
+- Stripe session retrieve — removed invalid `expand` parameter
+- Postcode fallback (zip/postcode/postal_code)
+- Random search terms for more product variety per import
 
 ---
 
 ## Current State (April 5, 2026)
 
 ### Fully Working:
-- ✅ Full e2e: customer pays → AliExpress order auto-created with accurate pricing
-- ✅ Accurate pricing: real shipping + tax baked into wholesale cost
+- ✅ Full e2e: customer pays → AliExpress order auto-created
+- ✅ **Accurate AUD pricing** with USD→AUD conversion
+- ✅ Real shipping costs (minimum A$3, no more fake FREE)
+- ✅ Configurable exchange rate from admin settings
 - ✅ Admin product breakdown: API Price, Ship, Tax, Wholesale, Sale, Profit, ToGoGo
-- ✅ 3 email notifications per order (customer, store owner, admin)
-- ✅ Store customer tracking (repeat recognition with phone)
-- ✅ Stripe Connect with destination charges + payment splits
-- ✅ A$6 shipping per order → 100% to ToGoGo platform
-- ✅ 30% commission on profit → ToGoGo platform
-- ✅ Duplicate order prevention (idempotency)
-- ✅ Product import cron (every 6hrs, 30 products/run, accurate pricing)
-- ✅ Order sync cron (every 4hrs, tracking + auto-refund)
+- ✅ Store filter on admin products (deduplicated unique view)
+- ✅ Price range filters on storefronts
+- ✅ 3 email notifications per order
+- ✅ Store customer tracking with phone
+- ✅ Duplicate order prevention
+- ✅ Product import cron (30/run, real shipping, AUD conversion)
+- ✅ Order sync cron (tracking, auto-refund on cancellation)
 - ✅ 4 active stores: stu, jum, stuie, annies-shop
-- ✅ Admin panel (7 pages, all functional)
+- ✅ ~350 products with accurate pricing
 - ✅ Mobile-friendly storefronts
-- ✅ Sign In on homepage, logout URL, cold start fix
-- ✅ Admin tab on profile for admin users
 
-### Pricing Model:
-```
-IMPORT:
-  wholesale_cost = API_price + AE_shipping + (API_price × 0.18 tax)
-  sale_price = wholesale_cost × 1.5
+### Pricing Config:
+- **Exchange rate:** `usd_to_aud_rate` in admin_settings (default 1.45)
+- **Commission:** 30% of profit in `platform_fee_percent` (admin_settings)
+- **Shipping fee:** A$6 flat per order (hardcoded in checkout.js)
+- **Markup:** 1.5x on wholesale (hardcoded in import cron)
+- **Min shipping:** A$3 per product (hardcoded in import cron)
 
-CHECKOUT:
-  Customer pays: sale_price + A$6 shipping
-  ToGoGo gets: 30% of (sale - wholesale) + A$6 shipping
-  Store owner gets: sale_price - 30% commission
-
-EXAMPLE (flashlight):
-  API: $2.77 + Ship: $1.99 + Tax: $0.50 = Wholesale: $5.26
-  Sale: $7.89 | Customer: $13.89 (+$6 ship)
-  ToGoGo: $0.79 + $6 = $6.79 | Store owner: $1.84
-```
-
-### Database:
-- 100+ unique products (growing via cron + manual import)
-- 0 orders (cleaned up all test orders for fresh start)
-- 6 users (1 admin, 3 subscribers, 2 buyers)
-- Pricing breakdown columns: api_price, shipping_cost, tax_amount
-- store_customers table active
-
-### Environment:
-- Production branch: master (claude/fix-image-crash-BiIj9 merged)
-- AliExpress: OAuth active, trade.buy.placeorder confirmed
-- Stripe: Live mode, Connect active (4 accounts)
-- Resend: Email sending confirmed
-- Wise card recommended for AliExpress payments (better FX rate)
-
----
-
-## Future Features (Next Sessions)
-
-### HIGH PRIORITY — Platform Improvements
-1. **Similar products below item** — show related products on product detail page
-2. **Store themes** — let store owners choose from theme library
-3. **Store branding** — same style logo as homepage, consistent branding
-4. **Store owner controls** — change store name, manage what they sell, style their store
-5. **AI/Grok image generation** — help store owners create custom product images
-6. **Promotional codes & referrals** — discount codes, referral bonuses
-7. **Client profit percentage control** — store owners can set their own markup %
-8. **Purchase feedback animations** — animated ToGoGo logo during checkout flow
-9. **Custom logos for stores** — store owners upload/generate their own logo
-10. **Custom domain purchases** — clients buy their own URL through ToGoGo
-
-### ADMIN IMPROVEMENTS
-11. **Admin profit dashboard** — see profits from all stores + subscription fees combined
-12. **Better product search** — sortable columns, advanced filters for 1000s of products
-13. **AI assistant for store owners** — help with branding, products, pricing, store setup
-
-### EXISTING ROADMAP
-14. **Checkout dark theme** — still white/light background
-15. **Dynamic shipping** — if AE shipping > $6, charge more
-16. **"Awaiting AE Payment" admin page** — pending AE orders with direct links
-17. **Flexible subscriptions** — promos, half-price trials, special deals
-18. **Infinite scroll** on storefronts (Temu-style)
-19. **Store owner product management** — curate catalog
-20. **Order tracking page** for customers
-21. **"Pay after Delivery"** — investigate AliExpress option for cash flow
-
----
-
-## Important URLs
+### Important URLs:
 
 | URL | Purpose |
 |-----|---------|
-| https://togogo.me | Main site (Sign In top-right) |
-| https://togogo.me/auth?logout=true | Force logout |
-| https://togogo.me/profile | Store owner dashboard + Admin tab |
-| https://togogo.me/admin | Admin panel (7 pages) |
-| https://togogo.me/admin/products | Products with pricing breakdown |
-| https://stu.togogo.me | Stu's store |
-| https://jum.togogo.me | Jum's store |
-| togogo.me/api/cron/import-products?secret=JWT_SECRET | Import products (30/run) |
-| togogo.me/api/cron/import-products?secret=JWT_SECRET&reset=true | Reset + re-import |
-| togogo.me/api/admin/enrich-prices?secret=JWT_SECRET | Enrich prices (20/run) |
-| togogo.me/api/admin/price-check?id=PRODUCT_ID&secret=JWT_SECRET | Price breakdown |
-| togogo.me/api/admin/cleanup-orders?secret=JWT_SECRET | Delete all orders |
-| aliexpress.com/p/order/index.html | Pay AliExpress orders in bulk |
+| togogo.me/admin | Admin panel |
+| togogo.me/admin/products | Products with pricing breakdown |
+| togogo.me/api/admin/fix-prices?secret=JWT_SECRET | Convert USD→AUD (one-time, safe to repeat) |
+| togogo.me/api/admin/price-check?id=ID&secret=JWT_SECRET | Price breakdown for any product |
+| togogo.me/api/cron/import-products?secret=JWT_SECRET | Import 30 products with accurate pricing |
+| togogo.me/auth?logout=true | Force logout |
+| aliexpress.com/p/order/index.html | Pay AliExpress orders |
+
+---
+
+## Next Session — UI Design + Features (THE FUN STUFF!)
+
+### Store Features:
+1. Similar products below item
+2. Store themes (theme library for owners)
+3. Consistent branding (homepage logo style on stores)
+4. Store owner controls (name, products, style, AI images via Grok)
+5. Promotional codes & referral system
+6. Client profit percentage control (owners set their own markup)
+7. Purchase feedback animations (animated ToGoGo logo)
+8. Custom logos for stores (upload/generate)
+9. Custom domain purchases (buy URL through ToGoGo)
+
+### Admin Features:
+10. Admin profit dashboard (all stores + subscriptions combined)
+11. Better product search (sortable columns, advanced filters)
+12. AI assistant for store owners (branding, products, pricing help)
+13. "Awaiting AE Payment" page with direct links
+14. Customers page (all customer data across stores)
+
+### Existing:
+15. Checkout dark theme
+16. Dynamic shipping (if AE shipping > $6, charge more)
+17. Flexible subscriptions (promos, half-price trials)
+18. Infinite scroll on storefronts
+19. Order tracking page for customers
 
 ---
 
 ## Comprehensive Platform Docs
 
-Full documentation at: `docs/TOGOGO-HOW-IT-WORKS.md` (copy to MasterHQ)
+Full documentation at: `docs/TOGOGO-HOW-IT-WORKS.md`
