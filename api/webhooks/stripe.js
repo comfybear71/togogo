@@ -174,16 +174,15 @@ export default async function handler(req, res) {
                 const orderTotal = parseFloat(orderTotals[0]?.total) || 0
 
                 await sql`
-                  INSERT INTO store_customers (store_id, email, name, phone, order_count, total_spent, last_order_at)
+                  INSERT INTO store_customers (store_id, email, name, phone, total_orders, total_spent, last_order_at)
                   VALUES (${storeId}, ${custEmail}, ${custName}, ${session.customer_details?.phone || ''},
                           1, ${orderTotal}, NOW())
                   ON CONFLICT (store_id, email) DO UPDATE SET
                     name = COALESCE(NULLIF(${custName}, ''), store_customers.name),
                     phone = COALESCE(NULLIF(${session.customer_details?.phone || ''}, ''), store_customers.phone),
-                    order_count = store_customers.order_count + 1,
+                    total_orders = store_customers.total_orders + 1,
                     total_spent = store_customers.total_spent + ${orderTotal},
-                    last_order_at = NOW(),
-                    updated_at = NOW()
+                    last_order_at = NOW()
                 `
                 console.log(`[Webhook] Store customer saved: ${custEmail} for store ${storeId}`)
               }
