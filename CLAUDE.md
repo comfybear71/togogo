@@ -204,24 +204,35 @@ If the user asks you to:
 ### Working:
 - ✅ Auth (email + Google OAuth)
 - ✅ Database (15+ tables, auto-migration)
-- ✅ Admin panel (7 pages: dashboard, users, products, orders, stores, marketing, settings)
-- ✅ AliExpress product fetching (600+ products, growing via cron)
+- ✅ Admin panel (7 pages with pricing breakdown columns)
+- ✅ AliExpress product import with ACCURATE pricing (real shipping + tax)
 - ✅ Multi-tenant storefronts (4 active stores)
 - ✅ Stripe subscriptions ($19.99/mo)
-- ✅ Stripe Connect onboarding (embedded, Custom accounts)
-- ✅ Stripe Connect checkout (destination charges, payment splits)
-- ✅ Product import (manual + cron every 6hrs)
-- ✅ Dark theme storefronts
-- ✅ Product image gallery
-- ✅ Category filtering with counts
+- ✅ Stripe Connect (destination charges, payment splits)
+- ✅ **Full e2e dropshipping:** customer pays → AliExpress order auto-created
+- ✅ 3 email notifications per order (customer, store owner, admin)
+- ✅ Store customer tracking (repeat recognition)
+- ✅ Order sync cron (tracking, auto-refund on cancellation)
+- ✅ Duplicate order prevention (idempotency)
+- ✅ Dark theme storefronts with product details, variants, gallery
+- ✅ Mobile-friendly (no zoom issues)
+- ✅ A$6 flat shipping per order (100% to platform)
+- ✅ 30% commission on profit (configurable)
+
+### Pricing Model:
+- **Wholesale:** API price + AE shipping + 18% tax
+- **Store price:** wholesale × 1.5
+- **Checkout:** + A$6 shipping (goes to ToGoGo)
+- **Commission:** 30% of (sale - wholesale)
+- **AliExpress orders:** auto-created via `trade.buy.placeorder`, admin pays in bulk
 
 ### Needs Work:
-- ⚠️ Storefront infinite scroll (currently paginated)
-- ⚠️ Store owner dashboard for managing products
-- ⚠️ Email notifications (welcome, order confirmation)
-- ⚠️ Order tracking/fulfillment pipeline
-- ⚠️ Dispute resolution UI
-- ⚠️ Dev branch workflow (currently pushing to production)
+- ⚠️ Checkout dark theme (still white background)
+- ⚠️ Storefront infinite scroll
+- ⚠️ Store owner product management
+- ⚠️ Store themes + branding
+- ⚠️ Similar products on detail page
+- ⚠️ AI assistant for store owners
 
 ## Commands
 
@@ -238,7 +249,7 @@ npm run lint         # ESLint
 | `api/_lib/suppliers.js` | AliExpress API: signing, feeds, product normalization, search |
 | `api/_lib/db.js` | Database connection, schema, all migrations |
 | `api/_lib/auth.js` | JWT, password hashing, OAuth, admin checks |
-| `api/_lib/commission.js` | Platform fee calculation (5% default) |
+| `api/_lib/commission.js` | Platform fee calculation (30% of profit) |
 | `api/storefront/store.js` | Public storefront API (products + store info) |
 | `api/storefront/checkout.js` | Stripe Checkout with Connect payment splits |
 | `api/webhooks/stripe.js` | All Stripe webhook handling (13+ events) |

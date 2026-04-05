@@ -1,126 +1,147 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-04 (Session 2 — Admin fixes)
-**Session:** Fix admin panel auth + orders/stores display
-**Branch:** claude/review-safety-protocol-j8RQJ (PRODUCTION on Vercel)
-**Previous Branch:** claude/ipad-dev-prompt-2C4eB (merged to master)
+**Last Updated:** 2026-04-05 (Session 4 — Accurate pricing + admin improvements)
+**Session:** Accurate pricing with real shipping, admin product breakdown, duplicate fix
+**Branch:** claude/fix-image-crash-BiIj9 (merged to master, PRODUCTION on Vercel)
+**Previous Session:** Session 3 (April 4) — Full e2e dropshipping automated
 
 ---
 
-## What Was Fixed This Session
+## What Was Done This Session (Session 4 — April 5)
 
-### Root Causes Found:
-1. **Admin Orders/Stores showed 0 items** — Two bugs:
-   - Orders page used `JOIN` instead of `LEFT JOIN` on users table (orders with missing user_id were excluded)
-   - Orders & Stores pages read JWT token from Zustand store (`useAuthStore`) which was null/stale on page load. Dashboard & Users pages read from `localStorage` directly and worked fine.
-2. **AdminRoute black screen** — After fixing auth, a stale `authLoading` reference (from removed Zustand import) caused a ReferenceError crash on all admin pages.
-3. **Admin access from profile** — AdminRoute now verifies admin access via API call (checks DB role) instead of relying on Zustand store's `user.role`.
+### Accurate Pricing — IMPLEMENTED
+- **Import now fetches real shipping cost per product** from `getProductDetails()` API
+- **Wholesale cost** = API product price + AE shipping to AU + 18% tax estimate
+- **Store sale price** = wholesale × 1.5 (client markup)
+- **A$6 flat shipping** added at checkout — goes 100% to ToGoGo platform
+- **Commission:** 30% of profit (sale - wholesale) goes to ToGoGo
+- **Price breakdown stored in DB:** `api_price`, `shipping_cost`, `tax_amount` columns added
+- Products with FREE shipping show green "FREE" in admin
+- Import processes 30 products per run with 8 search terms for variety
+- `country: 'AU'` filter on feed API for Australia-relevant products
 
-### Changes Made:
-- `api/admin/orders.js` — Changed `JOIN` to `LEFT JOIN`, added error logging
-- `api/admin/stores.js` — Added `ensureSchema()`, import fix
-- `api/admin/stats.js` — Added error logging to all catch blocks
-- `api/admin/debug.js` — NEW: Debug endpoint for raw DB queries
-- `src/pages/admin/OrdersPage.jsx` — Read token from localStorage instead of Zustand
-- `src/pages/admin/StoresPage.jsx` — Read token from localStorage instead of Zustand
-- `src/components/admin/AdminRoute.jsx` — Verify admin via API call, removed Zustand dependency
-- `src/pages/ProfilePage.jsx` — Added Admin tab (Shield icon) for admin users
+### Admin Products Page — ENHANCED
+- **Full pricing breakdown columns:** API Price | Ship | Tax | Wholesale | Sale | Profit | ToGoGo
+- **Store dropdown filter:** "All Products" (deduplicated) or filter by specific store
+- **Unique product view:** Default shows each product once (not 4x per store)
+- **Price-check API:** `/api/admin/price-check?id=PRODUCT_ID&secret=JWT_SECRET`
 
-## Current State
+### Duplicate Orders Fix
+- **Idempotency check** on Stripe webhook — prevents duplicate AliExpress orders on retries
+- Checks if order already processed before running emails/AE submission
 
-### All Working:
-- 3,192 AliExpress products in database (growing via cron every 6hrs)
-- 4 active stores: stu, jum, stuie, annies-shop (all with ~798 products each)
-- Admin panel: ALL 7 pages functional (Dashboard, Users, Products, Orders, Stores, Marketing, Settings)
-- Admin Orders: 5 orders showing, $6.63 fees collected
-- Admin Stores: 4 stores showing, all Active
-- Admin Users: 6 users with roles, stores, revenue
-- Admin Products: 3,192 products with pagination (64 pages)
-- Storefront: dark theme, product grid, image gallery, categories, cart, checkout
-- Stripe Connect: 4 accounts (stu=active, jum=active, stuie=action_required, annies-shop=onboarding)
-- Stripe Checkout: destination charges with Connect payment splits
-- Email notifications: built with Resend (domain verified, DNS configured, NOT yet tested)
-- Profile page: Admin tab for admin users, links to /admin
-- Cron: imports products every 6 hours (vercel.json configured)
+### Other Fixes
+- Removed "Free Shipping" label — now shows "Shipping only $6"
+- Branch cleanup: removed old branches, merged to master
+- Repo health: MasterHQ showing all green
 
-### AliExpress Integration — FULLY WORKING:
-- **OAuth: COMPLETED** — access_token saved in `admin_settings` table (key: `aliexpress_access_token`)
-- **Token valid for 30 days** from ~April 3, 2026
-- **ds.feedname.get** — returns 135 feeds with product counts
-- **ds.recommend.feed.get** — returns products from a feed (50/page)
-- **ds.product.get** — TESTED & WORKING — full product details, all images, variants, shipping
-- **ds.order.create** — Endpoint BUILT at `/api/orders/submit-to-supplier` (not yet tested with real order)
-- **ds.order.get** — Endpoint BUILT at `/api/orders/track` (not yet tested)
-- OAuth callback endpoint: `/api/platforms/callback/aliexpress`
-- App: ToGoGo, AppKey: 529066, Category: Drop Shipping, Status: Online
+---
 
-### Email Notifications — BUILT, NOT TESTED:
-- Resend API key configured in Vercel (`RESEND_API_KEY`)
-- togogo.me domain verified in Resend, DNS records configured
-- ImprovMX account exists for receiving @togogo.me emails (not yet configured)
-- Email templates built in `api/_lib/email.js`:
-  - Order confirmation → customer
-  - New order alert → store owner
-  - New order alert → admin (sfrench71@gmail.com)
-- Triggered by `checkout.session.completed` Stripe webhook in `api/webhooks/stripe.js`
+## Current State (April 5, 2026)
 
-### Known Issues:
-1. Storefront requires Ctrl+Shift+R on cold start (service worker caching)
-2. Storefront theme hardcoded to midnight (theme_id column exists but UI not built)
-3. No infinite scroll on storefronts yet
-4. Order `687f70cb` (sunglasses $70.20) stuck at `pending_payment` — checkout was cancelled, needs cleanup
-5. No order tracking/fulfillment pipeline wired end-to-end
-6. Store owner can't manage their own products yet
-7. AliExpress orders not yet auto-submitted (endpoint built, not wired into checkout flow)
+### Fully Working:
+- ✅ Full e2e: customer pays → AliExpress order auto-created with accurate pricing
+- ✅ Accurate pricing: real shipping + tax baked into wholesale cost
+- ✅ Admin product breakdown: API Price, Ship, Tax, Wholesale, Sale, Profit, ToGoGo
+- ✅ 3 email notifications per order (customer, store owner, admin)
+- ✅ Store customer tracking (repeat recognition with phone)
+- ✅ Stripe Connect with destination charges + payment splits
+- ✅ A$6 shipping per order → 100% to ToGoGo platform
+- ✅ 30% commission on profit → ToGoGo platform
+- ✅ Duplicate order prevention (idempotency)
+- ✅ Product import cron (every 6hrs, 30 products/run, accurate pricing)
+- ✅ Order sync cron (every 4hrs, tracking + auto-refund)
+- ✅ 4 active stores: stu, jum, stuie, annies-shop
+- ✅ Admin panel (7 pages, all functional)
+- ✅ Mobile-friendly storefronts
+- ✅ Sign In on homepage, logout URL, cold start fix
+- ✅ Admin tab on profile for admin users
+
+### Pricing Model:
+```
+IMPORT:
+  wholesale_cost = API_price + AE_shipping + (API_price × 0.18 tax)
+  sale_price = wholesale_cost × 1.5
+
+CHECKOUT:
+  Customer pays: sale_price + A$6 shipping
+  ToGoGo gets: 30% of (sale - wholesale) + A$6 shipping
+  Store owner gets: sale_price - 30% commission
+
+EXAMPLE (flashlight):
+  API: $2.77 + Ship: $1.99 + Tax: $0.50 = Wholesale: $5.26
+  Sale: $7.89 | Customer: $13.89 (+$6 ship)
+  ToGoGo: $0.79 + $6 = $6.79 | Store owner: $1.84
+```
 
 ### Database:
-- 3,192 products (798 per store × 4 stores)
-- 5 orders (2 Stuart, 3 Jum) — 1 pending, 1 pending_payment, 3 processing
-- 6 users (1 admin, 3 subscribers, 2 buyers/test)
-- sfrench71@gmail.com = admin role
-- All 4 stores have stripe_connect_id
-- AliExpress OAuth token stored in admin_settings table
+- 100+ unique products (growing via cron + manual import)
+- 0 orders (cleaned up all test orders for fresh start)
+- 6 users (1 admin, 3 subscribers, 2 buyers)
+- Pricing breakdown columns: api_price, shipping_cost, tax_amount
+- store_customers table active
 
 ### Environment:
-- Production branch: claude/review-safety-protocol-j8RQJ
-- All API keys confirmed working in Vercel
-- Stripe: Live mode (not test mode) — use real cards for testing
-- Resend: togogo.me domain verified, DNS configured
-- AliExpress: OAuth token active, full DS API access
+- Production branch: master (claude/fix-image-crash-BiIj9 merged)
+- AliExpress: OAuth active, trade.buy.placeorder confirmed
+- Stripe: Live mode, Connect active (4 accounts)
+- Resend: Email sending confirmed
+- Wise card recommended for AliExpress payments (better FX rate)
 
-## Next Session Priorities
+---
 
-1. **Test email notifications** — place a small test order, verify 3 emails sent
-2. **Clean up stale pending_payment order** — cancel order 687f70cb
-3. **Wire auto-order flow** — after Stripe payment → auto-submit to AliExpress via ds.order.create
-4. **Infinite scroll** — Temu-style product feed on storefronts
-5. **Store owner product management** — let owners curate their catalog
-6. **Order tracking/fulfillment** — poll ds.order.get, update status, notify customers
-7. **Fix service worker caching** — eliminate need for Ctrl+Shift+R
-8. **Store themes** — let owners choose from available themes
-9. **Configure ImprovMX** — receive emails at @togogo.me addresses
+## Future Features (Next Sessions)
+
+### HIGH PRIORITY — Platform Improvements
+1. **Similar products below item** — show related products on product detail page
+2. **Store themes** — let store owners choose from theme library
+3. **Store branding** — same style logo as homepage, consistent branding
+4. **Store owner controls** — change store name, manage what they sell, style their store
+5. **AI/Grok image generation** — help store owners create custom product images
+6. **Promotional codes & referrals** — discount codes, referral bonuses
+7. **Client profit percentage control** — store owners can set their own markup %
+8. **Purchase feedback animations** — animated ToGoGo logo during checkout flow
+9. **Custom logos for stores** — store owners upload/generate their own logo
+10. **Custom domain purchases** — clients buy their own URL through ToGoGo
+
+### ADMIN IMPROVEMENTS
+11. **Admin profit dashboard** — see profits from all stores + subscription fees combined
+12. **Better product search** — sortable columns, advanced filters for 1000s of products
+13. **AI assistant for store owners** — help with branding, products, pricing, store setup
+
+### EXISTING ROADMAP
+14. **Checkout dark theme** — still white/light background
+15. **Dynamic shipping** — if AE shipping > $6, charge more
+16. **"Awaiting AE Payment" admin page** — pending AE orders with direct links
+17. **Flexible subscriptions** — promos, half-price trials, special deals
+18. **Infinite scroll** on storefronts (Temu-style)
+19. **Store owner product management** — curate catalog
+20. **Order tracking page** for customers
+21. **"Pay after Delivery"** — investigate AliExpress option for cash flow
+
+---
 
 ## Important URLs
 
-- Main site: https://togogo.me
-- Admin: https://togogo.me/admin
-- Profile: https://togogo.me/profile
-- Storefronts: https://stu.togogo.me, https://jum.togogo.me, https://stuie.togogo.me, https://annies-shop.togogo.me
-- Debug endpoint: https://togogo.me/api/admin/debug?secret=JWT_SECRET
-- Product details test: https://togogo.me/api/products/details?id=1005007732555371
-- Manual cron: https://togogo.me/api/cron/import-products?secret=JWT_SECRET
-- Fix admin role: https://togogo.me/api/admin/fix-role?secret=JWT_SECRET
+| URL | Purpose |
+|-----|---------|
+| https://togogo.me | Main site (Sign In top-right) |
+| https://togogo.me/auth?logout=true | Force logout |
+| https://togogo.me/profile | Store owner dashboard + Admin tab |
+| https://togogo.me/admin | Admin panel (7 pages) |
+| https://togogo.me/admin/products | Products with pricing breakdown |
+| https://stu.togogo.me | Stu's store |
+| https://jum.togogo.me | Jum's store |
+| togogo.me/api/cron/import-products?secret=JWT_SECRET | Import products (30/run) |
+| togogo.me/api/cron/import-products?secret=JWT_SECRET&reset=true | Reset + re-import |
+| togogo.me/api/admin/enrich-prices?secret=JWT_SECRET | Enrich prices (20/run) |
+| togogo.me/api/admin/price-check?id=PRODUCT_ID&secret=JWT_SECRET | Price breakdown |
+| togogo.me/api/admin/cleanup-orders?secret=JWT_SECRET | Delete all orders |
+| aliexpress.com/p/order/index.html | Pay AliExpress orders in bulk |
 
-## Key API Endpoints
+---
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/products/details?id=PRODUCT_ID` | GET | Full product details from AliExpress DS API |
-| `/api/orders/submit-to-supplier` | POST | Submit order to AliExpress (ds.order.create) |
-| `/api/orders/track?orderId=AE_ORDER_ID` | GET | Track AliExpress order (ds.order.get) |
-| `/api/storefront/checkout` | POST | Stripe Checkout with Connect payment splits |
-| `/api/connect/onboard` | POST | Stripe Connect embedded onboarding |
-| `/api/connect/status` | GET | Check Connect account status |
-| `/api/cron/import-products` | GET | Import products from AliExpress feeds |
-| `/api/admin/debug` | GET | Raw DB query results for debugging |
+## Comprehensive Platform Docs
+
+Full documentation at: `docs/TOGOGO-HOW-IT-WORKS.md` (copy to MasterHQ)
