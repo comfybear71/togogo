@@ -127,11 +127,15 @@ export default async function handler(req, res) {
       }
 
       // Calculate wholesale cost (what ToGoGo actually pays on AliExpress)
-      // Always add minimum $3 AUD shipping (~US$2) — AE charges this even when API says free
+      // API returns USD despite target_currency:AUD — convert to real AUD
+      const usdToAud = 1.45 // USD to AUD conversion rate
+      const productCostAUD = realProductCost * usdToAud
+      // Always add minimum A$3 shipping (~US$2) — AE charges this even when API says free
       const minShipping = 3.00
-      const actualShipping = Math.max(shippingCost, minShipping)
-      const taxEstimate = realProductCost * taxRate
-      const wholesaleCost = realProductCost + actualShipping + taxEstimate
+      const shippingAUD = Math.max(shippingCost * usdToAud, minShipping)
+      // Tax is ~18% of product cost in AUD
+      const taxAUD = productCostAUD * taxRate
+      const wholesaleCost = productCostAUD + shippingAUD + taxAUD
 
       // Store sale price = wholesale × 1.5 (client markup)
       const salePrice = Math.ceil(wholesaleCost * 1.5 * 100) / 100
@@ -154,7 +158,7 @@ export default async function handler(req, res) {
               ${p.image || ''}, ${imgArray},
               ${'AliExpress'}, ${p.productId || p.id},
               ${wholesaleCost}, ${salePrice},
-              ${realProductCost}, ${shippingCost}, ${taxEstimate},
+              ${productCostAUD}, ${shippingAUD}, ${taxAUD},
               ${p.category || 'General'}, true
             )
           `
@@ -162,7 +166,7 @@ export default async function handler(req, res) {
         } catch { /* skip duplicates */ }
       }
 
-      console.log(`[Cron] → wholesale=$${wholesaleCost.toFixed(2)} sale=$${salePrice.toFixed(2)} "${p.title?.slice(0, 50)}"`)
+      console.log(`[Cron] → AUD: product=$${productCostAUD.toFixed(2)} ship=$${shippingAUD.toFixed(2)} tax=$${taxAUD.toFixed(2)} wholesale=$${wholesaleCost.toFixed(2)} sale=$${salePrice.toFixed(2)} "${p.title?.slice(0, 50)}"`)
     }
 
     // Log to cron history
