@@ -118,7 +118,7 @@ export default async function handler(req, res) {
               if (shippingCost === 999) shippingCost = 0
             }
             enriched++
-            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} ship=$${shippingCost.toFixed(2)}${shippingCost === 0 ? ' (FREE)' : ''}`)
+            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} apiShip=$${shippingCost.toFixed(2)}${shippingCost === 0 ? ' (FREE→$3min)' : ''}`)
           }
         } catch (err) {
           console.error(`[Cron] Details failed for ${aeId}:`, err.message)
@@ -127,8 +127,11 @@ export default async function handler(req, res) {
       }
 
       // Calculate wholesale cost (what ToGoGo actually pays on AliExpress)
+      // Always add minimum $3 AUD shipping (~US$2) — AE charges this even when API says free
+      const minShipping = 3.00
+      const actualShipping = Math.max(shippingCost, minShipping)
       const taxEstimate = realProductCost * taxRate
-      const wholesaleCost = realProductCost + shippingCost + taxEstimate
+      const wholesaleCost = realProductCost + actualShipping + taxEstimate
 
       // Store sale price = wholesale × 1.5 (client markup)
       const salePrice = Math.ceil(wholesaleCost * 1.5 * 100) / 100
