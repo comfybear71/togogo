@@ -9,10 +9,18 @@ import Stripe from 'stripe'
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 
 export default async function handler(req, res) {
-  // Auth: cron secret or JWT secret
+  // Auth: cron secret, JWT_SECRET, or admin JWT token
   const secret = req.headers['authorization']?.replace('Bearer ', '') || req.query.secret
   const validSecret = process.env.CRON_SECRET || process.env.JWT_SECRET
-  if (!secret || secret !== validSecret) {
+  let authorized = secret && secret === validSecret
+  if (!authorized && secret) {
+    try {
+      const { verifyToken } = await import('../_lib/auth.js')
+      const payload = verifyToken(secret)
+      if (payload && payload.role === 'admin') authorized = true
+    } catch {}
+  }
+  if (!authorized) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
