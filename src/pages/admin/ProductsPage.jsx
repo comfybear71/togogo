@@ -120,21 +120,32 @@ export default function ProductsPage() {
 
   const IMPORT_CATEGORIES = [
     { term: '', label: 'Random Mix', emoji: '🎲' },
+    // Ladies Fashion
+    { term: 'dress', label: "Women's Dresses", emoji: '👗' },
+    { term: 'womens tops', label: 'Tops & Blouses', emoji: '👚' },
+    { term: 'womens jeans', label: 'Jeans', emoji: '👖' },
+    { term: 'skirt', label: 'Skirts', emoji: '🩱' },
+    { term: 'womens pants', label: "Women's Pants", emoji: '👖' },
+    { term: 'knitwear women', label: 'Knitwear', emoji: '🧶' },
+    { term: 'womens jacket', label: "Women's Jackets", emoji: '🧥' },
+    { term: 'lingerie', label: 'Lingerie', emoji: '🩱' },
+    { term: 'bikini', label: 'Swimwear', emoji: '👙' },
+    { term: 'leggings', label: 'Leggings', emoji: '🩳' },
+    { term: 'handbag', label: 'Handbags', emoji: '👜' },
+    { term: 'womens shoes', label: "Women's Shoes", emoji: '👠' },
+    // General
+    { term: 'jewelry', label: 'Jewelry', emoji: '💍' },
+    { term: 'beauty', label: 'Beauty', emoji: '💄' },
+    { term: 'makeup brush', label: 'Makeup', emoji: '💅' },
     { term: 'toys', label: 'Toys', emoji: '🧸' },
     { term: 'home garden', label: 'Home & Garden', emoji: '🏡' },
     { term: 'computer', label: 'Computer', emoji: '💻' },
-    { term: 'jewelry', label: 'Jewelry', emoji: '💍' },
-    { term: 'beauty', label: 'Beauty', emoji: '💄' },
     { term: 'sports', label: 'Sports', emoji: '⚽' },
     { term: 'consumer electronics', label: 'Electronics', emoji: '📱' },
     { term: 'shoes', label: 'Shoes', emoji: '👟' },
     { term: 'lights', label: 'Lights', emoji: '💡' },
     { term: 'mother kids', label: 'Mother & Kids', emoji: '👶' },
     { term: 'mens clothing', label: "Men's Clothing", emoji: '👔' },
-    { term: 'dress', label: "Women's Dresses", emoji: '👗' },
-    { term: 'leggings', label: 'Leggings', emoji: '🩳' },
-    { term: 'handbag', label: 'Handbags', emoji: '👜' },
-    { term: 'bikini', label: 'Swimwear', emoji: '👙' },
     { term: 'kitchen gadget', label: 'Kitchen', emoji: '🍳' },
     { term: 'pet', label: 'Pets', emoji: '🐕' },
     { term: 'car accessories', label: 'Car', emoji: '🚗' },
@@ -142,7 +153,6 @@ export default function ProductsPage() {
     { term: 'phone case', label: 'Phone Cases', emoji: '📱' },
     { term: 'tablet stand', label: 'Tablet', emoji: '📲' },
     { term: 'led light', label: 'LED Lights', emoji: '🔦' },
-    { term: 'makeup brush', label: 'Makeup', emoji: '💅' },
   ];
 
   async function handleAction(id, action) {

@@ -75,6 +75,14 @@ export default async function handler(req, res) {
     // Expand single terms into multiple variations for more results
     const termVariations = {
       'dress': ['dress', 'summer dress', 'maxi dress', 'party dress', 'casual dress', 'mini dress', 'evening dress', 'floral dress'],
+      'womens tops': ['women blouse', 'women t-shirt', 'crop top', 'tank top women', 'camisole', 'women shirt', 'peplum top', 'tunic'],
+      'womens jeans': ['women jeans', 'skinny jeans women', 'wide leg jeans', 'mom jeans', 'ripped jeans women', 'high waist jeans'],
+      'skirt': ['skirt', 'midi skirt', 'mini skirt', 'pleated skirt', 'denim skirt', 'wrap skirt', 'pencil skirt', 'long skirt'],
+      'womens pants': ['women pants', 'palazzo pants', 'wide leg pants women', 'cargo pants women', 'culottes', 'women trousers'],
+      'knitwear women': ['women sweater', 'cardigan women', 'pullover women', 'knit top', 'turtleneck women', 'women vest knit'],
+      'womens jacket': ['women jacket', 'blazer women', 'women coat', 'denim jacket women', 'windbreaker women', 'puffer jacket women'],
+      'lingerie': ['lingerie set', 'bra set', 'women underwear', 'nightgown', 'sleepwear women', 'pajama set women', 'silk robe'],
+      'womens shoes': ['women heels', 'women sandals', 'women boots', 'ballet flats', 'women sneakers', 'platform shoes', 'mules women'],
       'toys': ['toys', 'kids toys', 'baby toys', 'educational toy', 'plush toy', 'building blocks', 'action figure'],
       'home garden': ['home decor', 'garden tools', 'wall art', 'vase', 'cushion cover', 'curtain', 'rug'],
       'computer': ['computer', 'laptop stand', 'USB hub', 'webcam', 'monitor stand', 'mouse pad', 'SSD'],
