@@ -387,15 +387,19 @@ export default function StorefrontPage({ subdomain }) {
                 clearTimeout(searchTimerRef.current)
                 searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500)
               }}
-              className="w-full rounded-xl border border-white/[0.1] py-2.5 pl-10 pr-4 text-base text-white bg-[#111827] focus:outline-none focus:border-white/[0.3] placeholder-slate-500"
-              style={{ fontSize: '16px' }}
+              className="w-full rounded-xl border border-white/[0.1] py-2.5 pl-10 pr-4 text-base text-white bg-[#111827] placeholder-slate-500"
+              style={{ fontSize: '16px', outline: 'none', boxShadow: 'none', WebkitAppearance: 'none' }}
+              onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full sm:w-auto rounded-xl border border-white/[0.1] px-4 py-2.5 text-base text-white bg-[#111827] focus:outline-none focus:border-white/[0.3]"
-            style={{ fontSize: '16px' }}
+            className="w-full sm:w-auto rounded-xl border border-white/[0.1] px-4 py-2.5 text-base text-white bg-[#111827]"
+            style={{ fontSize: '16px', outline: 'none', boxShadow: 'none', colorScheme: 'dark' }}
+            onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
+            onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
           >
             <option value="newest">Newest</option>
             <option value="bestsellers">Bestsellers</option>
