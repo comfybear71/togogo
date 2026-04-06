@@ -46,6 +46,8 @@ export default function StorefrontPage({ subdomain }) {
   const [view, setView] = useState('grid') // grid | product | cart | checkout | success | orders
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const searchTimerRef = useRef(null)
   const [selectedCategory, setSelectedCategory] = useState('')
   const [priceRange, setPriceRange] = useState('')
   const [sortBy, setSortBy] = useState('newest')
@@ -55,6 +57,18 @@ export default function StorefrontPage({ subdomain }) {
 
   // Always use midnight (dark) theme — stored in database, never localStorage
   const theme = getThemeById(storeData?.store?.themeId || 'midnight')
+
+  // Build API URL with filters
+  const buildUrl = useCallback((page) => {
+    const params = new URLSearchParams({
+      subdomain, page, limit: PRODUCTS_PER_PAGE,
+    })
+    if (selectedCategory) params.set('category', selectedCategory)
+    if (priceRange) params.set('priceRange', priceRange)
+    if (sortBy !== 'newest') params.set('sort', sortBy)
+    if (searchQuery) params.set('search', searchQuery)
+    return `${API_BASE}/api/storefront/store?${params}`
+  }, [subdomain, selectedCategory, priceRange, sortBy, searchQuery])
 
   // Load initial page
   useEffect(() => {
@@ -69,14 +83,31 @@ export default function StorefrontPage({ subdomain }) {
       .catch(() => { setStoreData(null) })
       .finally(() => setLoading(false))
 
-    // Check if returning from Stripe checkout
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('checkout') === 'success') {
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('checkout') === 'success') {
       setView('success')
       cart.clear()
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [subdomain])
+
+  // Reload when filters change (server-side filtering)
+  useEffect(() => {
+    if (!storeData) return
+    setLoading(true)
+    fetch(buildUrl(1))
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setAllProducts(data.products || [])
+          setHasMore(data.pagination?.hasMore || false)
+          setCurrentPage(1)
+          if (data.pagination) setStoreData(prev => prev ? { ...prev, pagination: data.pagination } : prev)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [selectedCategory, priceRange, sortBy, searchQuery])
 
   // Load more products
   const loadMore = useCallback(() => {
@@ -84,7 +115,7 @@ export default function StorefrontPage({ subdomain }) {
     loadingRef.current = true
     setLoadingMore(true)
     const nextPage = currentPage + 1
-    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=${nextPage}&limit=${PRODUCTS_PER_PAGE}`)
+    fetch(buildUrl(nextPage))
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data?.products?.length) {
@@ -115,24 +146,8 @@ export default function StorefrontPage({ subdomain }) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [view, loadMore])
 
-  const filteredProducts = useMemo(() => {
-    if (!allProducts.length) return []
-    let filtered = allProducts.filter((p) => {
-      if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
-      if (selectedCategory && p.category !== selectedCategory) return false
-      if (priceRange === 'under10' && p.price >= 10) return false
-      if (priceRange === '10to20' && (p.price < 10 || p.price >= 20)) return false
-      if (priceRange === '20to50' && (p.price < 20 || p.price >= 50)) return false
-      if (priceRange === 'over50' && p.price < 50) return false
-      return true
-    })
-    if (sortBy === 'price-low') filtered = [...filtered].sort((a, b) => a.price - b.price)
-    else if (sortBy === 'price-high') filtered = [...filtered].sort((a, b) => b.price - a.price)
-    else if (sortBy === 'bestsellers') filtered = [...filtered].sort((a, b) => (b.ordersCount || b.totalSold || 0) - (a.ordersCount || a.totalSold || 0))
-    else if (sortBy === 'rating') filtered = [...filtered].sort((a, b) => (b.rating || 0) - (a.rating || 0))
-    else if (sortBy === 'discount') filtered = [...filtered].sort((a, b) => (b.discountPercent || 0) - (a.discountPercent || 0))
-    return filtered
-  }, [allProducts, searchQuery, selectedCategory, priceRange, sortBy])
+  // Products are now filtered and sorted server-side
+  const filteredProducts = allProducts
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
@@ -360,8 +375,12 @@ export default function StorefrontPage({ subdomain }) {
             <input
               type="text"
               placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value)
+                clearTimeout(searchTimerRef.current)
+                searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500)
+              }}
               className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-1 focus:ring-white/20`}
               style={{ borderColor: theme.accentLight, fontSize: '16px' }}
             />

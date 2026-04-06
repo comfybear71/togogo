@@ -60,9 +60,30 @@ export default async function handler(req, res) {
     const page = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 30))
     const offset = (page - 1) * limit
+    const category = req.query.category || ''
+    const priceRange = req.query.priceRange || ''
+    const sortBy = req.query.sort || 'newest'
+    const search = req.query.search || ''
 
-    // Try Redis cache first (cache per store+page, 2 min TTL)
-    const cacheKey = `store:${subdomain}:p${page}:l${limit}`
+    // Build WHERE conditions
+    let whereExtra = ''
+    if (category) whereExtra += ` AND category = '${category.replace(/'/g, "''")}'`
+    if (priceRange === 'under10') whereExtra += ' AND sale_price < 10'
+    else if (priceRange === '10to20') whereExtra += ' AND sale_price >= 10 AND sale_price < 20'
+    else if (priceRange === '20to50') whereExtra += ' AND sale_price >= 20 AND sale_price < 50'
+    else if (priceRange === 'over50') whereExtra += ' AND sale_price >= 50'
+    if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
+
+    // Build ORDER BY
+    let orderBy = 'created_at DESC'
+    if (sortBy === 'price-low') orderBy = 'sale_price ASC'
+    else if (sortBy === 'price-high') orderBy = 'sale_price DESC'
+    else if (sortBy === 'bestsellers') orderBy = 'COALESCE(orders_count, 0) DESC, COALESCE(total_sold, 0) DESC'
+    else if (sortBy === 'rating') orderBy = 'COALESCE(product_rating, 0) DESC'
+    else if (sortBy === 'discount') orderBy = 'COALESCE(discount_percent, 0) DESC'
+
+    // Try Redis cache (cache per store+page+filters, 2 min TTL)
+    const cacheKey = `store:${subdomain}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
     if (redis && page > 0) {
       try {
         const cached = await redis.get(cacheKey)
@@ -73,23 +94,25 @@ export default async function handler(req, res) {
       } catch { /* cache miss, continue */ }
     }
 
-    // Get total product count
-    const { rows: countRows } = await sql`
-      SELECT COUNT(*) as total FROM user_products
-      WHERE user_id = ${store.owner_id} AND is_active = true
-    `
-    const totalProducts = parseInt(countRows[0].total)
+    // Get total product count (with filters applied)
+    const countResult = await sql.query(
+      `SELECT COUNT(*) as total FROM user_products WHERE user_id = $1 AND is_active = true${whereExtra}`,
+      [store.owner_id]
+    )
+    const totalProducts = parseInt(countResult.rows[0].total)
 
-    // Get the store owner's products — paginated, stable sort by created_at
-    const { rows: ownerProducts } = await sql`
-      SELECT id, title, description, image, images, supplier, supplier_cost,
+    // Get the store owner's products — paginated with filters and sort
+    const productResult = await sql.query(
+      `SELECT id, title, description, image, images, supplier, supplier_cost,
              sale_price, category, total_sold, created_at, supplier_product_id,
              product_rating, orders_count, original_price, discount_percent
       FROM user_products
-      WHERE user_id = ${store.owner_id} AND is_active = true
-      ORDER BY created_at DESC
-      LIMIT ${limit} OFFSET ${offset}
-    `
+      WHERE user_id = $1 AND is_active = true${whereExtra}
+      ORDER BY ${orderBy}
+      LIMIT $2 OFFSET $3`,
+      [store.owner_id, limit, offset]
+    )
+    const ownerProducts = productResult.rows
 
     let products = ownerProducts.map((p) => {
       // Safely parse images — could be array, string, or null from Postgres TEXT[]
