@@ -288,6 +288,13 @@ export default function StorefrontPage({ subdomain }) {
           {store.name}
         </h1>
         <p className="relative mt-3 text-slate-400">Quality products, fast shipping</p>
+        <div className="relative mt-4 flex items-center justify-center gap-6 text-sm">
+          <span className="text-slate-300 font-medium">{storeData.pagination?.totalProducts || allProducts.length} <span className="text-slate-500">Products</span></span>
+          <span className="text-slate-600">|</span>
+          <span className="text-slate-300 font-medium">{storeData.categories?.length || 0} <span className="text-slate-500">Categories</span></span>
+          <span className="text-slate-600">|</span>
+          <span className="text-emerald-400 font-medium">A$6 <span className="text-slate-500">Flat Shipping</span></span>
+        </div>
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-8">
@@ -311,7 +318,7 @@ export default function StorefrontPage({ subdomain }) {
               className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
               style={{ borderColor: theme.accentLight, fontSize: '16px' }}
             >
-              <option value="">All Categories ({storeData.categories?.length || ''})</option>
+              <option value="">All Categories</option>
               {storeData.categories.map((c) => (
                 <option key={c.name || c} value={c.name || c}>
                   {c.name || c}{c.count ? ` (${c.count})` : ''}
