@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
-  ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
+  ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft, ChevronRight,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star,
 } from 'lucide-react'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
@@ -341,29 +341,72 @@ export default function StorefrontPage({ subdomain }) {
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className={`min-h-screen ${theme.pageBg}`} style={{ overflowX: 'clip' }}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} />
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} searchInput={searchInput} onSearchChange={(e) => { setSearchInput(e.target.value); clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500) }} />
 
-      {/* Hero */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] py-16 px-4 text-center">
-        <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 50% 50%, ${theme.accent}40, transparent 70%)` }} />
-        <h1 className="relative text-4xl font-extrabold tracking-tight md:text-5xl bg-gradient-to-r from-white via-slate-200 to-white bg-clip-text text-transparent animate-pulse" style={{ animationDuration: '3s' }}>
-          {store.name}
-        </h1>
-        <p className="relative mt-3 text-slate-400">Quality products, fast shipping</p>
-        <div className="relative mt-4 flex items-center justify-center gap-6 text-sm">
-          <span className="text-slate-300 font-medium">{storeData.pagination?.totalProducts || allProducts.length} <span className="text-slate-500">Products</span></span>
-          <span className="text-slate-600">|</span>
-          <span className="text-slate-300 font-medium">{storeData.categories?.length || 0} <span className="text-slate-500">Categories</span></span>
-          <span className="text-slate-600">|</span>
-          <span className="text-emerald-400 font-medium">A$6 <span className="text-slate-500">Flat Shipping</span></span>
+      {/* New Arrivals — horizontal scroll like AliExpress */}
+      {allProducts.length > 0 && (
+        <div className="bg-gradient-to-b from-[#0f172a] to-[#0c1222] px-4 py-6">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">New arrivals, great discounts</h2>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span>{storeData.pagination?.totalProducts || allProducts.length} products</span>
+                <span>•</span>
+                <span>{storeData.categories?.length || 0} categories</span>
+                <span>•</span>
+                <span className="text-emerald-400">A$6 shipping</span>
+              </div>
+            </div>
+            <div className="relative group">
+              <div className="flex gap-3 overflow-x-auto pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }} id="newArrivalsScroll">
+                {allProducts.slice(0, 15).map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => navigateTo('product', p)}
+                    className="flex-shrink-0 w-[140px] sm:w-[160px] cursor-pointer"
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100 mb-1.5">
+                      {p.image && <img src={p.image} alt={p.title} className="h-full w-full object-cover" />}
+                      {p.discountPercent > 0 && (
+                        <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">-{p.discountPercent}%</div>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); cart.add(p) }}
+                        className="absolute bottom-2 right-2 rounded-full p-1.5 bg-white/80 hover:bg-white shadow text-gray-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-white line-clamp-2 leading-tight mb-0.5">{p.title}</p>
+                    {p.ordersCount > 0 && <p className="text-[10px] text-slate-500">{p.ordersCount}+ sold</p>}
+                    <p className="text-sm font-bold text-red-500">A${(p.price || 0).toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
+              {/* Left/right scroll buttons */}
+              <button
+                onClick={() => document.getElementById('newArrivalsScroll')?.scrollBy({ left: -300, behavior: 'smooth' })}
+                className="absolute left-0 top-0 h-[140px] sm:h-[160px] w-10 flex items-center justify-center bg-black/30 hover:bg-black/50 text-white rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => document.getElementById('newArrivalsScroll')?.scrollBy({ left: 300, behavior: 'smooth' })}
+                className="absolute right-0 top-0 h-[140px] sm:h-[160px] w-10 flex items-center justify-center bg-black/30 hover:bg-black/50 text-white rounded-r-xl opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Category Bar — horizontal scroll like AliExpress */}
       {storeData.categories?.length > 0 && (
-        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[52px] z-30">
+        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[49px] z-30">
           <div className="mx-auto max-w-7xl px-4">
-            <div className="flex items-center gap-1.5 overflow-x-auto py-3 pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {/* Category tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
               <style>{`
                 .category-scroll::-webkit-scrollbar { height: 6px; }
                 .category-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 6px; }
@@ -409,70 +452,46 @@ export default function StorefrontPage({ subdomain }) {
                 </button>
               )})}
             </div>
+            {/* Price filters + Sort — in sticky bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {[
+                { key: '', label: 'All Prices' },
+                { key: 'under10', label: `Under $10${storeData.priceRanges?.under10 ? ` (${storeData.priceRanges.under10})` : ''}` },
+                { key: '10to20', label: `$10–$20${storeData.priceRanges?.['10to20'] ? ` (${storeData.priceRanges['10to20']})` : ''}` },
+                { key: '20to50', label: `$20–$50${storeData.priceRanges?.['20to50'] ? ` (${storeData.priceRanges['20to50']})` : ''}` },
+                { key: 'over50', label: `$50+${storeData.priceRanges?.over50 ? ` (${storeData.priceRanges.over50})` : ''}` },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setPriceRange(key)}
+                  className={`flex-shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                    priceRange === key
+                      ? 'text-white bg-[#FF6B35]'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="flex-shrink-0 ml-auto rounded-full border border-white/[0.1] px-3 py-1 text-[11px] text-slate-400 bg-transparent"
+                style={{ outline: 'none', colorScheme: 'dark' }}
+              >
+                <option value="newest">Newest</option>
+                <option value="bestsellers">Bestsellers</option>
+                <option value="price-low">Price: Low → High</option>
+                <option value="price-high">Price: High → Low</option>
+                <option value="rating">Top Rated</option>
+                <option value="discount">Biggest Discounts</option>
+              </select>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        {/* Search + Sort */}
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center overflow-hidden">
-          <div className="relative flex-1 min-w-0">
-            <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.textMuted}`} />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchInput}
-              onChange={(e) => {
-                setSearchInput(e.target.value)
-                clearTimeout(searchTimerRef.current)
-                searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500)
-              }}
-              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.textPrimary} placeholder-slate-500 bg-transparent`}
-              style={{ fontSize: '16px', outline: 'none', borderColor: 'rgba(255,255,255,0.15)' }}
-              onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
-              onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
-            />
-          </div>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.textPrimary} bg-transparent`}
-            style={{ fontSize: '16px', outline: 'none', borderColor: 'rgba(255,255,255,0.15)', colorScheme: 'dark' }}
-            onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
-            onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
-          >
-            <option value="newest">Newest</option>
-            <option value="bestsellers">Bestsellers</option>
-            <option value="price-low">Price: Low → High</option>
-            <option value="price-high">Price: High → Low</option>
-            <option value="rating">Top Rated</option>
-            <option value="discount">Biggest Discounts</option>
-          </select>
-        </div>
-
-        {/* Price Range Filters */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {[
-            { key: '', label: 'All Prices' },
-            { key: 'under10', label: `Under $10${storeData.priceRanges?.under10 ? ` (${storeData.priceRanges.under10})` : ''}` },
-            { key: '10to20', label: `$10–$20${storeData.priceRanges?.['10to20'] ? ` (${storeData.priceRanges['10to20']})` : ''}` },
-            { key: '20to50', label: `$20–$50${storeData.priceRanges?.['20to50'] ? ` (${storeData.priceRanges['20to50']})` : ''}` },
-            { key: 'over50', label: `$50+${storeData.priceRanges?.over50 ? ` (${storeData.priceRanges.over50})` : ''}` },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setPriceRange(key)}
-              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
-                priceRange === key
-                  ? 'text-white'
-                  : 'text-slate-400 border border-white/[0.08] hover:border-white/[0.2]'
-              }`}
-              style={priceRange === key ? { backgroundColor: theme.accent } : {}}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      <div className="mx-auto max-w-7xl px-4 py-4">
 
         {/* Products */}
         {filteredProducts.length === 0 ? (
@@ -897,17 +916,31 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
   )
 }
 
-function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder }) {
+function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInput, onSearchChange }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
             <Store className="h-4 w-4 text-white" />
           </div>
-          <span className="text-lg font-bold text-white">{store.name}</span>
+          <span className="text-lg font-bold text-white hidden sm:inline">{store.name}</span>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Search bar in header */}
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchInput}
+            onChange={onSearchChange}
+            className="w-full rounded-full border border-white/[0.12] py-2 pl-10 pr-4 text-sm text-white bg-white/[0.06] placeholder-slate-500"
+            style={{ fontSize: '16px', outline: 'none' }}
+            onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
+            onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
+          />
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {onTrackOrder && (
             <button
               onClick={onTrackOrder}
@@ -925,11 +958,11 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder }) {
           </a>
           <button
             onClick={onCartClick}
-            className="relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition-colors"
+            className="relative flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
             <ShoppingCart className="h-4 w-4" />
-            Cart
+            <span className="hidden sm:inline">Cart</span>
             {cart.count > 0 && (
               <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white bg-red-500">
                 {cart.count}
