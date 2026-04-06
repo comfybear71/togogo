@@ -55,6 +55,44 @@ export default function StorefrontPage({ subdomain }) {
   const loadingRef = useRef(false)
   const PRODUCTS_PER_PAGE = 30
 
+  // Handle browser back button — return to grid instead of leaving site
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (e.state?.view) {
+        setView(e.state.view)
+        if (e.state.product) setSelectedProduct(e.state.product)
+      } else {
+        setView('grid')
+        setSelectedProduct(null)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    // Push initial state
+    if (!window.history.state?.view) {
+      window.history.replaceState({ view: 'grid' }, '')
+    }
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // When view changes, push to browser history
+  const navigateTo = useCallback((newView, product = null) => {
+    if (newView === 'product' && product) {
+      setSelectedProduct(product)
+      setView('product')
+      window.history.pushState({ view: 'product', product }, '')
+    } else if (newView === 'cart') {
+      setView('cart')
+      window.history.pushState({ view: 'cart' }, '')
+    } else if (newView === 'grid') {
+      setView('grid')
+      setSelectedProduct(null)
+      // Don't push — let popstate handle it, or replace
+    } else {
+      setView(newView)
+      window.history.pushState({ view: newView }, '')
+    }
+  }, [])
+
   // Always use midnight (dark) theme — stored in database, never localStorage
   const theme = getThemeById(storeData?.store?.themeId || 'midnight')
 
@@ -223,8 +261,10 @@ export default function StorefrontPage({ subdomain }) {
       cart={cart}
       theme={theme}
       subdomain={subdomain}
-      onBack={() => setView('grid')}
-      onCartClick={() => setView('cart')}
+      allProducts={allProducts}
+      onSelectProduct={(p) => navigateTo('product', p)}
+      onBack={() => window.history.back()}
+      onCartClick={() => navigateTo('cart')}
     />
   )
 
@@ -301,7 +341,7 @@ export default function StorefrontPage({ subdomain }) {
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} onTrackOrder={() => setView('orders')} />
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} />
 
       {/* Hero */}
       <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] py-16 px-4 text-center">
@@ -321,7 +361,7 @@ export default function StorefrontPage({ subdomain }) {
 
       {/* Category Bar — horizontal scroll like AliExpress */}
       {storeData.categories?.length > 0 && (
-        <div className="border-b border-white/[0.06] bg-[#0c1222]">
+        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-0 z-40">
           <div className="mx-auto max-w-7xl px-4">
             <div className="flex items-center gap-1.5 overflow-x-auto py-3 pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
               <style>{`
@@ -448,6 +488,10 @@ export default function StorefrontPage({ subdomain }) {
             </p>
           </div>
         ) : (
+          <>
+          <h2 className="text-xl font-bold text-white mb-4">
+            {selectedCategory ? `${selectedCategory}` : 'More to love'}
+          </h2>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredProducts.map((product) => {
               const price = product.price || 0
@@ -460,7 +504,7 @@ export default function StorefrontPage({ subdomain }) {
               return (
               <div
                 key={product.id}
-                onClick={() => { setSelectedProduct(product); setView('product') }}
+                onClick={() => navigateTo('product', product)}
                 className={`group cursor-pointer overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5`}
               >
                 {/* Image with discount badge */}
@@ -531,6 +575,7 @@ export default function StorefrontPage({ subdomain }) {
               </div>
             )})}
           </div>
+          </>
         )}
 
         {/* Loading more / infinite scroll indicator */}
@@ -567,7 +612,7 @@ export default function StorefrontPage({ subdomain }) {
 
 // ─── Store Header ─────────────────────────────────────────────────────────
 // ─── Product Detail View — fetches full details from AliExpress DS API ──
-function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onCartClick }) {
+function ProductDetailView({ product, store, cart, theme, subdomain, allProducts = [], onSelectProduct, onBack, onCartClick }) {
   const [details, setDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(true)
   const [selectedVariant, setSelectedVariant] = useState(null)
@@ -756,6 +801,31 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               <p className="text-xs text-slate-500 mb-4">Sold by: {details.store.name}</p>
             )}
 
+            {/* Shipping estimate */}
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-[#1e293b] border border-white/[0.06]">
+              <Truck className="h-5 w-5 text-emerald-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-white font-medium">A$6 flat shipping to Australia</p>
+                <p className="text-xs text-slate-400">Estimated delivery: 15–25 business days</p>
+              </div>
+            </div>
+
+            {/* Deal tag */}
+            {(product.discountPercent > 30 || product.ordersCount > 100) && (
+              <div className="flex items-center gap-2 mb-4">
+                {product.discountPercent > 30 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 text-red-400 text-xs font-medium px-2.5 py-1">
+                    🔥 Deal — {product.discountPercent}% off
+                  </span>
+                )}
+                {product.ordersCount > 100 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-medium px-2.5 py-1">
+                    ⭐ Popular — {product.ordersCount}+ sold
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Add to Cart */}
             <button
               onClick={() => { cart.add({ ...product, price: displayPrice }); onCartClick() }}
@@ -781,6 +851,47 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             )}
           </div>
         )}
+
+        {/* Similar Products */}
+        {allProducts.length > 0 && (() => {
+          const similar = allProducts
+            .filter(p => p.id !== product.id && p.category === product.category)
+            .slice(0, 12)
+          const alsoLike = similar.length < 6
+            ? allProducts.filter(p => p.id !== product.id && !similar.find(s => s.id === p.id)).slice(0, 12 - similar.length)
+            : []
+          const showProducts = [...similar, ...alsoLike]
+          if (showProducts.length === 0) return null
+          return (
+            <div className="mt-10">
+              <h3 className="text-lg font-bold text-white mb-4">You may also like</h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                {showProducts.map(p => {
+                  const discount = p.discountPercent || 0
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => { onSelectProduct?.(p); window.scrollTo(0, 0) }}
+                      className="cursor-pointer overflow-hidden rounded-xl bg-[#1e293b] border border-white/[0.06] hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                    >
+                      <div className="relative aspect-square overflow-hidden bg-gray-100">
+                        {p.image && <img src={p.image} alt={p.title} className="h-full w-full object-cover" />}
+                        {discount > 0 && (
+                          <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">-{discount}%</div>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <h4 className="text-xs text-white line-clamp-2 mb-1">{p.title}</h4>
+                        <span className="text-sm font-bold text-red-500">A${(p.price || 0).toFixed(2)}</span>
+                        {p.ordersCount > 0 && <span className="text-[10px] text-slate-500 ml-1">{p.ordersCount}+ sold</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
