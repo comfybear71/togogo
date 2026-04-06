@@ -340,7 +340,7 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
-    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
+    <div className={`min-h-screen ${theme.pageBg}`} style={{ overflowX: 'clip' }}>
       <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} />
 
       {/* Hero */}
@@ -361,7 +361,7 @@ export default function StorefrontPage({ subdomain }) {
 
       {/* Category Bar — horizontal scroll like AliExpress */}
       {storeData.categories?.length > 0 && (
-        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-0 z-40">
+        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[52px] z-30">
           <div className="mx-auto max-w-7xl px-4">
             <div className="flex items-center gap-1.5 overflow-x-auto py-3 pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
               <style>{`
@@ -427,8 +427,8 @@ export default function StorefrontPage({ subdomain }) {
                 clearTimeout(searchTimerRef.current)
                 searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500)
               }}
-              className="w-full rounded-xl border border-white/[0.15] py-2.5 pl-10 pr-4 text-base text-white bg-[#1e293b] placeholder-slate-500"
-              style={{ fontSize: '16px', outline: 'none', boxShadow: 'none' }}
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.textPrimary} placeholder-slate-500 bg-transparent`}
+              style={{ fontSize: '16px', outline: 'none', borderColor: 'rgba(255,255,255,0.15)' }}
               onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
               onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
             />
@@ -436,8 +436,8 @@ export default function StorefrontPage({ subdomain }) {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full sm:w-auto rounded-xl border border-white/[0.15] px-4 py-2.5 text-base text-white bg-[#1e293b]"
-            style={{ fontSize: '16px', outline: 'none', boxShadow: 'none', colorScheme: 'dark' }}
+            className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.textPrimary} bg-transparent`}
+            style={{ fontSize: '16px', outline: 'none', borderColor: 'rgba(255,255,255,0.15)', colorScheme: 'dark' }}
             onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
             onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.15)'}
           >
