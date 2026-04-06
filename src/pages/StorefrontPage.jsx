@@ -332,10 +332,10 @@ export default function StorefrontPage({ subdomain }) {
         <div className="flex flex-wrap gap-2 mb-6">
           {[
             { key: '', label: 'All Prices' },
-            { key: 'under10', label: 'Under $10' },
-            { key: '10to20', label: '$10–$20' },
-            { key: '20to50', label: '$20–$50' },
-            { key: 'over50', label: '$50+' },
+            { key: 'under10', label: `Under $10${storeData.priceRanges?.under10 ? ` (${storeData.priceRanges.under10})` : ''}` },
+            { key: '10to20', label: `$10–$20${storeData.priceRanges?.['10to20'] ? ` (${storeData.priceRanges['10to20']})` : ''}` },
+            { key: '20to50', label: `$20–$50${storeData.priceRanges?.['20to50'] ? ` (${storeData.priceRanges['20to50']})` : ''}` },
+            { key: 'over50', label: `$50+${storeData.priceRanges?.over50 ? ` (${storeData.priceRanges.over50})` : ''}` },
           ].map(({ key, label }) => (
             <button
               key={key}

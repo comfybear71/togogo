@@ -156,6 +156,23 @@ export default async function handler(req, res) {
     `
     const categories = catRows.map(r => ({ name: r.category || 'General', count: parseInt(r.count) }))
 
+    // Get price range counts
+    const { rows: priceRows } = await sql`
+      SELECT
+        COUNT(*) FILTER (WHERE sale_price < 10) as under10,
+        COUNT(*) FILTER (WHERE sale_price >= 10 AND sale_price < 20) as range10to20,
+        COUNT(*) FILTER (WHERE sale_price >= 20 AND sale_price < 50) as range20to50,
+        COUNT(*) FILTER (WHERE sale_price >= 50) as over50
+      FROM user_products
+      WHERE user_id = ${store.owner_id} AND is_active = true
+    `
+    const priceRanges = priceRows[0] ? {
+      under10: parseInt(priceRows[0].under10) || 0,
+      '10to20': parseInt(priceRows[0].range10to20) || 0,
+      '20to50': parseInt(priceRows[0].range20to50) || 0,
+      over50: parseInt(priceRows[0].over50) || 0,
+    } : {}
+
     const response = {
       store: {
         id: store.id,
@@ -169,6 +186,7 @@ export default async function handler(req, res) {
       },
       products,
       categories,
+      priceRanges,
       pagination: {
         page,
         limit,
