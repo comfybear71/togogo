@@ -219,13 +219,16 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 
     // Map country and state
     const countryCode = mapCountryToISO(shippingAddress.country || 'AU')
-    const fullName = shippingAddress.name || 'Customer'
-    const phone = shippingAddress.phone || '0400000000'
+    const fullName = shippingAddress.name || shippingAddress.contact_person || 'Customer'
+    const phone = shippingAddress.phone?.replace(/\s/g, '') || '0400000000'
+    // Combine address lines (line2 has villa/unit/apartment numbers)
+    const addressLine = [shippingAddress.line1, shippingAddress.line2].filter(Boolean).join(', ')
+      || shippingAddress.address || 'N/A'
 
     // aliexpress.trade.buy.placeorder — creates real order on AliExpress
     const orderRequest = {
       logistics_address: {
-        address: shippingAddress.line1 || shippingAddress.address || 'N/A',
+        address: addressLine,
         city: shippingAddress.city || 'N/A',
         country: countryCode,
         contact_person: fullName,

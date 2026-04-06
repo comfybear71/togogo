@@ -270,10 +270,13 @@ export default async function handler(req, res) {
                       )
                       if (stripeSession?.shipping_details?.address) {
                         const sa = stripeSession.shipping_details
+                        // Combine line1 + line2 for full address (villa/unit numbers)
+                        const fullAddress = [sa.address.line1, sa.address.line2].filter(Boolean).join(', ')
                         shippingAddr = {
                           ...shippingAddr,
-                          name: order.customer_name || sa.name || shippingAddr.name || '',
-                          line1: sa.address.line1 || shippingAddr.line1 || '',
+                          name: sa.name || order.customer_name || shippingAddr.name || '',
+                          line1: fullAddress || shippingAddr.line1 || '',
+                          line2: sa.address.line2 || shippingAddr.line2 || '',
                           city: sa.address.city || shippingAddr.city || '',
                           state: sa.address.state || shippingAddr.state || '',
                           zip: sa.address.postal_code || shippingAddr.zip || '',
