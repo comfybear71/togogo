@@ -64,10 +64,12 @@ export default async function handler(req, res) {
 
     // 3. Orders
     const { rows: orders } = await sql`
-      SELECT id, user_id, product_title, sale_price, supplier_cost, quantity,
-             platform_fee, store_owner_payout, status, customer_name, customer_email,
-             shipping_address, supplier_order_id, tracking_number, tracking_url,
-             stripe_payment_intent, stripe_checkout_session, notes, created_at, updated_at
+      SELECT id, user_id, product_title, sale_price, supplier_cost, profit,
+             quantity, commission, commission_rate, status,
+             customer_name, customer_email, shipping_address,
+             supplier_order_id, tracking_number, tracking_url,
+             stripe_payment_intent, stripe_checkout_session, notes,
+             created_at, updated_at
       FROM user_orders ORDER BY created_at DESC
     `
     tables.orders = orders
