@@ -48,6 +48,7 @@ export default function StorefrontPage({ subdomain }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
   const [priceRange, setPriceRange] = useState('')
+  const [sortBy, setSortBy] = useState('newest')
   const cart = useCart(subdomain)
   const loadingRef = useRef(false)
   const PRODUCTS_PER_PAGE = 30
@@ -116,7 +117,7 @@ export default function StorefrontPage({ subdomain }) {
 
   const filteredProducts = useMemo(() => {
     if (!allProducts.length) return []
-    return allProducts.filter((p) => {
+    let filtered = allProducts.filter((p) => {
       if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
       if (selectedCategory && p.category !== selectedCategory) return false
       if (priceRange === 'under10' && p.price >= 10) return false
@@ -125,7 +126,13 @@ export default function StorefrontPage({ subdomain }) {
       if (priceRange === 'over50' && p.price < 50) return false
       return true
     })
-  }, [allProducts, searchQuery, selectedCategory, priceRange])
+    if (sortBy === 'price-low') filtered = [...filtered].sort((a, b) => a.price - b.price)
+    else if (sortBy === 'price-high') filtered = [...filtered].sort((a, b) => b.price - a.price)
+    else if (sortBy === 'bestsellers') filtered = [...filtered].sort((a, b) => (b.ordersCount || b.totalSold || 0) - (a.ordersCount || a.totalSold || 0))
+    else if (sortBy === 'rating') filtered = [...filtered].sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    else if (sortBy === 'discount') filtered = [...filtered].sort((a, b) => (b.discountPercent || 0) - (a.discountPercent || 0))
+    return filtered
+  }, [allProducts, searchQuery, selectedCategory, priceRange, sortBy])
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
@@ -297,9 +304,38 @@ export default function StorefrontPage({ subdomain }) {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-8">
-        {/* Search + Filters */}
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center overflow-hidden">
+      {/* Category Bar — horizontal scroll like AliExpress */}
+      {storeData.categories?.length > 0 && (
+        <div className="border-b border-white/[0.06] bg-[#0c1222]">
+          <div className="mx-auto max-w-7xl px-4">
+            <div className="flex items-center gap-1 overflow-x-auto py-3 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+              <button
+                onClick={() => setSelectedCategory('')}
+                className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                  !selectedCategory ? 'text-white bg-[#FF6B35]' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                For you
+              </button>
+              {storeData.categories.slice(0, 20).map((c) => (
+                <button
+                  key={c.name}
+                  onClick={() => setSelectedCategory(selectedCategory === c.name ? '' : c.name)}
+                  className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
+                    selectedCategory === c.name ? 'text-white bg-[#FF6B35]' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                  }`}
+                >
+                  {(c.name || '').replace('&', ' & ')}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-7xl px-4 py-6">
+        {/* Search + Sort */}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center overflow-hidden">
           <div className="relative flex-1 min-w-0">
             <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.textMuted}`} />
             <input
@@ -311,21 +347,19 @@ export default function StorefrontPage({ subdomain }) {
               style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight, fontSize: '16px' }}
             />
           </div>
-          {storeData.categories.length > 0 && (
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
-              style={{ borderColor: theme.accentLight, fontSize: '16px' }}
-            >
-              <option value="">All Categories</option>
-              {storeData.categories.map((c) => (
-                <option key={c.name || c} value={c.name || c}>
-                  {c.name || c}{c.count ? ` (${c.count})` : ''}
-                </option>
-              ))}
-            </select>
-          )}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
+            style={{ borderColor: theme.accentLight, fontSize: '16px' }}
+          >
+            <option value="newest">Newest</option>
+            <option value="bestsellers">Bestsellers</option>
+            <option value="price-low">Price: Low → High</option>
+            <option value="price-high">Price: High → Low</option>
+            <option value="rating">Top Rated</option>
+            <option value="discount">Biggest Discounts</option>
+          </select>
         </div>
 
         {/* Price Range Filters */}
