@@ -308,16 +308,35 @@ export default function StorefrontPage({ subdomain }) {
       {storeData.categories?.length > 0 && (
         <div className="border-b border-white/[0.06] bg-[#0c1222]">
           <div className="mx-auto max-w-7xl px-4">
-            <div className="flex items-center gap-1 overflow-x-auto py-3 scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+            <div className="flex items-center gap-1 overflow-x-auto py-3" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
               <button
                 onClick={() => setSelectedCategory('')}
-                className={`flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                className={`scrollbar-hide flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
                   !selectedCategory ? 'text-white bg-[#FF6B35]' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
                 For you
               </button>
-              {storeData.categories.slice(0, 20).map((c) => (
+              {storeData.categories.slice(0, 20).map((c) => {
+                const catEmojis = {
+                  'Home & Garden': '🏡', 'Home Improvement': '🔨', 'Computer & Office': '💻',
+                  'Beauty & Health': '💄', 'Automobiles, Parts & Accessories': '🚗',
+                  'Shoes': '👟', 'Apparel Accessories': '👒', 'Toys & Hobbies': '🧸',
+                  'Consumer Electronics': '📱', 'Sports Shoes,Clothing&Accessories': '⚽',
+                  'Phones & Telecommunications Accessories': '📞',
+                  'Luggage & Bags': '👜', 'Sports & Entertainment': '🏋️',
+                  'Mother & Kids': '👶', 'Tools': '🔧', 'Electronic Components & Supplies': '🔌',
+                  'Lights & Lighting': '💡', 'Jewelry & Accessories': '💍',
+                  "Men's Clothing": '👔', "Women's Clothing": '👗',
+                  'Kitchen': '🍳', 'Pet': '🐕', 'Audio': '🎧',
+                  'Office & School Supplies': '📎', 'Hair Extensions & Wigs': '💇',
+                  'Furniture': '🪑', 'Security & Protection': '🔒',
+                  'Underwear & Sleepwears': '🩱', 'Novelty & Special Use': '🎭',
+                  'Weddings & Events': '💒', 'Food': '🍔',
+                }
+                const emoji = catEmojis[c.name] || '🛍️'
+                return (
                 <button
                   key={c.name}
                   onClick={() => setSelectedCategory(selectedCategory === c.name ? '' : c.name)}
@@ -325,9 +344,9 @@ export default function StorefrontPage({ subdomain }) {
                     selectedCategory === c.name ? 'text-white bg-[#FF6B35]' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                   }`}
                 >
-                  {(c.name || '').replace('&', ' & ')}
+                  {emoji} {(c.name || '').replace('&', ' & ')}
                 </button>
-              ))}
+              )})}
             </div>
           </div>
         </div>
@@ -343,15 +362,15 @@ export default function StorefrontPage({ subdomain }) {
               placeholder="Search products..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
-              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight, fontSize: '16px' }}
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-1 focus:ring-white/20`}
+              style={{ borderColor: theme.accentLight, fontSize: '16px' }}
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
-            style={{ borderColor: theme.accentLight, fontSize: '16px' }}
+            className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-1 focus:ring-white/20`}
+            style={{ borderColor: theme.accentLight, fontSize: '16px', backgroundColor: '#111827' }}
           >
             <option value="newest">Newest</option>
             <option value="bestsellers">Bestsellers</option>
