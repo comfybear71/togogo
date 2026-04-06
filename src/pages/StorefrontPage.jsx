@@ -323,8 +323,14 @@ export default function StorefrontPage({ subdomain }) {
       {storeData.categories?.length > 0 && (
         <div className="border-b border-white/[0.06] bg-[#0c1222]">
           <div className="mx-auto max-w-7xl px-4">
-            <div className="flex items-center gap-1 overflow-x-auto py-3" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
+            <div className="flex items-center gap-1 overflow-x-auto py-3 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <style>{`
+                .category-scroll::-webkit-scrollbar { height: 4px; }
+                .category-scroll::-webkit-scrollbar-track { background: transparent; }
+                .category-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+                .category-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.3); }
+                .category-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.15) transparent; }
+              `}</style>
               <button
                 onClick={() => setSelectedCategory('')}
                 className={`scrollbar-hide flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
@@ -381,15 +387,15 @@ export default function StorefrontPage({ subdomain }) {
                 clearTimeout(searchTimerRef.current)
                 searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500)
               }}
-              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-1 focus:ring-white/20`}
-              style={{ borderColor: theme.accentLight, fontSize: '16px' }}
+              className="w-full rounded-xl border border-white/[0.1] py-2.5 pl-10 pr-4 text-base text-white bg-[#111827] focus:outline-none focus:border-white/[0.3] placeholder-slate-500"
+              style={{ fontSize: '16px' }}
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-1 focus:ring-white/20`}
-            style={{ borderColor: theme.accentLight, fontSize: '16px', backgroundColor: '#111827' }}
+            className="w-full sm:w-auto rounded-xl border border-white/[0.1] px-4 py-2.5 text-base text-white bg-[#111827] focus:outline-none focus:border-white/[0.3]"
+            style={{ fontSize: '16px' }}
           >
             <option value="newest">Newest</option>
             <option value="bestsellers">Bestsellers</option>
