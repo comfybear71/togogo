@@ -663,7 +663,22 @@ import {
 ### AE-Logistics
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Logistics/shipping APIs |
+| `aliexpress.asf.local2local.sub.declareship` | DBS packaging and ship (supports split sub-order) |
+| `aliexpress.asf.dbs.declareship` | DBS declare Ship |
+| `aliexpress.asf.local2local.self.pickup.declareship` | Local self pick up declare ship |
+| `aliexpress.asf.dbs.declare.ship.modify` | Modify DBS declare Ship |
+| `aliexpress.asf.shipment.pack` | Online packaging and shipment |
+| `aliexpress.asf.order.shipping.service.get` | Order Shipping Service Query |
+| `aliexpress.asf.package.shipping.service.get` | Package available shipping service query |
+| `aliexpress.asf.local2local.split.quantity.rts.pack` | Package for orders (supports split quantity) |
+| `aliexpress.asf.platform.logistics.document.query` | Platform logistics order document query |
+| `aliexpress.asf.platform.logistics.rts` | Platform logistics ready to ship |
+| `aliexpress.asf.platform.logistics.repack` | Platform logistics repack |
+| `aliexpress.asf.local.unreachable.preference.query` | Query Unreachable Preference |
+| `aliexpress.asf.seller.address.get` | Seller address query |
+| `aliexpress.asf.local.unreachable.preference.update` | Unreachable Preference Update |
+| `aliexpress.asf.local2local.transfer.to.offline` | Platform logistics transfer offline ship |
+| `aliexpress.asf.fulfillment.package.query` | Query fulfillment package details |
 
 ### AE-Aliexpress-Direct-Product
 | API | Description |
