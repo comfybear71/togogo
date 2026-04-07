@@ -783,7 +783,15 @@ import {
 ### AliExpress Direct Logistic
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Direct logistics APIs |
+| `aliexpress.asf.local.supply.shipping.service.get` | Local supply available shipping service query |
+| `aliexpress.asf.local.supply.batch.declareship` | Local supply batch declareship |
+| `aliexpress.asf.local.supply.declareship.modify` | Local supply modify declareship info |
+| `aliexpress.asf.local.supply.sub.declareship` | Local supply subDeclareship |
+| `aliexpress.asf.local.supply.split.quantity.rts.pack` | Packaging - support sub-order selection quantity |
+| `aliexpress.asf.local.supply.platform.logistics.document.query` | Platform logistics order document query |
+| `aliexpress.asf.local.supply.platform.logistics.rts` | Platform logistics ready to ship |
+| `aliexpress.asf.local.supply.platform.logistics.repack` | Platform logistics repack |
+| `aliexpress.asf.local.supply.seller.address.get` | Seller address query |
 
 ### AE-Product Management
 | API | Description |
