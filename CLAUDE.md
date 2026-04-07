@@ -146,10 +146,22 @@ If the user asks you to:
 **APIs used (DS = Dropshipping, no OAuth required):**
 - `aliexpress.ds.feedname.get` — returns 135 feeds with product counts
 - `aliexpress.ds.recommend.feed.get` — returns products from a feed (50/page)
+- `aliexpress.ds.order.create` — place order in DS business (triggers auto-pay)
+- `aliexpress.ds.order.tracking.get` — order tracking info
+- `aliexpress.ds.freight.query` — delivery/freight calculation
+- `aliexpress.ds.text.search` — text search for products
+- `aliexpress.ds.image.searchV2` — image search for products
 
 **APIs NOT available (InsufficientPermission):**
 - `aliexpress.affiliate.*` — app doesn't have affiliate permissions
 - `aliexpress.ds.product.get` — requires OAuth access_token
+
+**Auto-Pay Setup (DS Center):**
+- Auto-pay activated via PayPal (sfrench71@me.com) in DS Center
+- Two Visa cards linked: ****7080 (Wise) and ****2988 (ANZ)
+- Orders MUST use `aliexpress.ds.order.create` (not `trade.buy.placeorder`) for auto-pay to trigger
+- The old `trade.buy.placeorder` API creates orders but does NOT trigger DS auto-pay
+- `ds_extend_request` optional parameter may contain additional auto-pay flags
 
 **Product flow:**
 1. Cron job runs every 6 hours → fetches from 15+ feeds
@@ -227,10 +239,12 @@ If the user asks you to:
 - **Checkout:** + A$6 flat shipping (100% to ToGoGo)
 - **Commission:** 30% of profit (sale - wholesale)
 - **AliExpress "FREE" shipping:** Always charge min A$3 — they add ~US$1.99 at checkout
-- **AliExpress orders:** auto-created via `trade.buy.placeorder`, admin pays in bulk
+- **AliExpress orders:** auto-created via `aliexpress.ds.order.create` (DS API with auto-pay support)
 - **Fix existing prices:** `/api/admin/fix-prices` converts USD→AUD (safe to repeat)
 
 ### Needs Work:
+- ⚠️ **Auto-pay verification** — switched to `ds.order.create`, needs test order to confirm auto-pay triggers
+- ⚠️ `ds_extend_request` parameter — may need auto-pay flags if basic switch doesn't work
 - ⚠️ Checkout dark theme (still white background)
 - ⚠️ Storefront infinite scroll
 - ⚠️ Store owner product management

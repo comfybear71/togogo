@@ -1,14 +1,64 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-05 (Session 4 — Pricing SOLVED + admin improvements)
-**Session:** USD→AUD conversion fix, accurate pricing, admin product breakdown, duplicate fix
-**Branch:** claude/fix-image-crash-BiIj9 (PRODUCTION on Vercel)
-**Previous Session:** Session 3 (April 4) — Full e2e dropshipping automated
+**Last Updated:** 2026-04-08 (Session 6 — Auto-Pay API Switch)
+**Session:** AliExpress auto-pay investigation + API switch to ds.order.create
+**Branch:** claude/project-setup-docs-PLbC2
+**Previous Session:** Session 5 (April 7, CRASHED) — Auto-pay investigation
+**Previous Session:** Session 4 (April 5) — Pricing SOLVED + admin improvements
+**Production Branch:** claude/fix-image-crash-BiIj9 (on Vercel)
 
 ---
 
-## What Was Done This Session (Session 4 — April 5)
+## What Was Done This Session (Session 6 — April 8)
+
+### AliExpress Auto-Pay Investigation (carried over from crashed Session 5)
+
+**Problem:** Orders placed via API land in "Awaiting Payment" — Stuart has been paying ALL orders manually on AliExpress despite auto-pay being "activated".
+
+**Root Cause Found:**
+- Auto-pay IS activated in AliExpress DS Center (via PayPal: sfrench71@me.com)
+- Two Visa cards linked: ****7080 (Wise) and ****2988 (ANZ)
+- BUT: our code was using `aliexpress.trade.buy.placeorder` (old general trade API)
+- Auto-pay only triggers for orders created via `aliexpress.ds.order.create` (DS-specific API)
+- The API docs page title literally says "AE DS Order Create **and Pay** API"
+
+**Fix Applied:**
+- Switched `submitOrder()` in `api/_lib/suppliers.js` from `aliexpress.trade.buy.placeorder` to `aliexpress.ds.order.create`
+- Same `param_place_order_request4_open_api_d_t_o` parameter structure — no other changes needed
+- Updated response parsing: now checks `aliexpress_ds_order_create_response` (with fallback)
+- Added raw response logging for debugging in Vercel logs
+
+**Status: NEEDS TESTING**
+- The API switch is committed but NOT yet in production
+- Need to merge branch to production, then place a test order
+- Check AliExpress to see if the order auto-pays via PayPal
+- If it doesn't auto-pay, the `ds_extend_request` optional parameter may contain auto-pay flags
+
+### AliExpress DS API Documentation Found
+Full API list at: https://openservice.aliexpress.com/doc/api.htm#/api?cid=21038
+Key DS APIs available:
+- `aliexpress.ds.order.create` — place order (with auto-pay)
+- `aliexpress.ds.order.tracking.get` — order tracking
+- `aliexpress.ds.freight.query` — freight/shipping calculation
+- `aliexpress.ds.text.search` — product text search
+- `aliexpress.ds.image.searchV2` — product image search
+- `aliexpress.ds.category.get` — category listing
+- `aliexpress.ds.product.specialinfo.get` — special product info
+- `aliexpress.ds.product.wholesale.get` — wholesale pricing
+- `aliexpress.ds.member.benefit.get` — DS member benefits
+- Also: "AE-UIC-IPAY" section exists in sidebar — may be payment-related API
+
+### What the Crashed Session 5 Confirmed (April 7)
+- 10 items shipped, 1 to be shipped (Smart Glasses), 1 unpaid (vacuum expired)
+- Smart Glasses order showed "Payment completed on: Apr 7, 2026" but Stuart confirmed he manually paid all
+- Auto-pay transaction history showed charges to both Visa cards
+- DS Center showed auto-pay "In service" with step 4: "Create API payment requests"
+- Auto-pay is via PayPal (sfrench71@me.com) — authorized for API-initiated charges
+
+---
+
+## What Was Done Session 4 (April 5)
 
 ### ROOT CAUSE FOUND: API Returns USD Not AUD
 - AliExpress API **ignores** `target_currency: 'AUD'` — returns USD values
@@ -80,7 +130,7 @@ EXAMPLE (Scissors US$2.42):
 
 ---
 
-## Current State (April 5, 2026)
+## Current State (April 8, 2026)
 
 ### Fully Working:
 - ✅ Full e2e: customer pays → AliExpress order auto-created
@@ -98,6 +148,10 @@ EXAMPLE (Scissors US$2.42):
 - ✅ 4 active stores: stu, jum, stuie, annies-shop
 - ✅ ~350 products with accurate pricing
 - ✅ Mobile-friendly storefronts
+
+### Awaiting Testing:
+- ⏳ **Auto-pay via ds.order.create** — API switched, needs test order after merge to production
+- ⏳ `ds_extend_request` parameter — fallback if basic switch doesn't trigger auto-pay
 
 ### Pricing Config:
 - **Exchange rate:** `usd_to_aud_rate` in admin_settings (default 1.45)
@@ -117,6 +171,31 @@ EXAMPLE (Scissors US$2.42):
 | togogo.me/api/cron/import-products?secret=JWT_SECRET | Import 30 products with accurate pricing |
 | togogo.me/auth?logout=true | Force logout |
 | aliexpress.com/p/order/index.html | Pay AliExpress orders |
+| inbusiness.aliexpress.com/web/autoPay | AliExpress auto-pay settings |
+| openservice.aliexpress.com/doc/api.htm#/api?cid=21038 | AliExpress DS API documentation |
+
+---
+
+## Critical Knowledge for Future Sessions
+
+### Auto-Pay — THE FULL STORY
+1. Stuart manually paid ALL AliExpress orders until Session 6
+2. Auto-pay was "activated" in DS Center via PayPal but never triggered
+3. Root cause: code used `trade.buy.placeorder` (old API) instead of `ds.order.create` (DS API)
+4. Fix: switched to `ds.order.create` — same params, just different endpoint
+5. If auto-pay STILL doesn't work after testing, investigate:
+   - `ds_extend_request` parameter (optional, may have auto-pay flags)
+   - "AE-UIC-IPAY" API section in the docs sidebar
+   - Whether PayPal needs to be set as default payment method in the API call
+6. AliExpress DS Center URL: inbusiness.aliexpress.com/web/autoPay
+
+### The 36-Hour Incident (April 2, 2026)
+- A Claude session destroyed the production branch
+- NEVER push to main/master directly
+- NEVER do blanket reverts
+- ALWAYS work on feature branches
+- ALWAYS test on Vercel preview URL before merging
+- This is why SAFETY-RULES.md and the safety protocol in CLAUDE.md exist
 
 ---
 
