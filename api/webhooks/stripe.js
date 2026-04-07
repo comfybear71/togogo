@@ -303,6 +303,7 @@ export default async function handler(req, res) {
                       quantity: order.quantity || 1,
                       orderAmount,
                       promotionCode: couponCode || undefined,
+                      orderId: order.id,
                       shippingAddress: {
                         ...shippingAddr,
                         name: order.customer_name || shippingAddr.name || '',

@@ -197,7 +197,7 @@ export async function getProductDetails(productId) {
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
-export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount, promotionCode }) {
+export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount, promotionCode, orderId }) {
   try {
     // Resolve SKU attr if not provided
     let resolvedSkuAttr = skuId || ''
@@ -242,6 +242,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
         logistics_service_name: shippingMethod,
         order_memo: 'ToGoGo dropship order',
       }],
+      out_order_id: orderId || undefined,
     }
 
     // Add promotion/coupon code if available
