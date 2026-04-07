@@ -138,14 +138,17 @@ export default async function handler(req, res) {
 
           try {
             // Update order with payment intent and shipping address from Stripe
+            const customerPhone = session.customer_details?.phone || ''
+            console.log(`[Webhook] Customer phone from checkout: "${customerPhone}"`)
             const shippingAddress = shippingDetails.address ? JSON.stringify({
               name: shippingDetails.name || '',
-              line1: shippingDetails.address.line1 || '',
+              line1: [shippingDetails.address.line1, shippingDetails.address.line2].filter(Boolean).join(', '),
               line2: shippingDetails.address.line2 || '',
               city: shippingDetails.address.city || '',
               state: shippingDetails.address.state || '',
               postcode: shippingDetails.address.postal_code || '',
               country: shippingDetails.address.country || 'AU',
+              phone: customerPhone,
             }) : null
 
             await sql`
@@ -272,6 +275,12 @@ export default async function handler(req, res) {
                         const sa = stripeSession.shipping_details
                         // Combine line1 + line2 for full address (villa/unit numbers)
                         const fullAddress = [sa.address.line1, sa.address.line2].filter(Boolean).join(', ')
+                        // Phone: try multiple sources
+                        const rawPhone = stripeSession.customer_details?.phone
+                          || sa.phone
+                          || shippingAddr.phone
+                          || ''
+                        console.log(`[Webhook] Raw phone from Stripe: "${rawPhone}", customer_details: ${JSON.stringify(stripeSession.customer_details?.phone)}, shipping: ${JSON.stringify(sa.phone)}`)
                         shippingAddr = {
                           ...shippingAddr,
                           name: sa.name || order.customer_name || shippingAddr.name || '',
@@ -281,7 +290,7 @@ export default async function handler(req, res) {
                           state: sa.address.state || shippingAddr.state || '',
                           zip: sa.address.postal_code || shippingAddr.zip || '',
                           country: sa.address.country || shippingAddr.country || 'AU',
-                          phone: stripeSession.customer_details?.phone || shippingAddr.phone || '',
+                          phone: rawPhone,
                         }
                         console.log(`[Webhook] Stripe shipping: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
                       }
