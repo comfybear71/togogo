@@ -733,7 +733,13 @@ import {
 ### AE-Category&Attributes
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Category and attribute management |
+| `aliexpress.category.redefining.getchildattributesresultbypostcateidandpath` | Get child attributes of a post category |
+| `aliexpress.category.tree.list` | Obtain sub category info under a specific category |
+| `aliexpress.category.itemQualification.list` | Product qualification information |
+| `aliexpress.category.redefining.queryCascadeProperties` | Query cascade properties under category |
+| `aliexpress.solution.sku.attribute.query` | Query SKU attribute info for a category |
+| `aliexpress.solution.seller.category.tree.query` | Seller category tree query |
+| `aliexpress.category.qualifications.list` | Query qualifications by category |
 
 ### AE-Refund&return
 | API | Description |
