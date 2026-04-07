@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     // Get all orders that have been submitted to AliExpress and aren't in a final state
     const { rows: orders } = await sql`
       SELECT id, supplier_order_id, status, product_title, customer_name, customer_email,
-             user_id, tracking_number, notes, stripe_payment_intent, sale_price
+             user_id, tracking_number, notes, stripe_payment_intent, sale_price, created_at
       FROM user_orders
       WHERE supplier_order_id IS NOT NULL
         AND status IN ('processing', 'shipped', 'pending')
@@ -38,7 +38,18 @@ export default async function handler(req, res) {
       LIMIT 50
     `
 
-    console.log(`[SyncOrders] Checking ${orders.length} active AliExpress orders`)
+    // Also get stale pending orders (no AE order ID, older than 20 days)
+    const { rows: staleOrders } = await sql`
+      SELECT id, status, product_title, customer_name, customer_email,
+             stripe_payment_intent, sale_price, created_at
+      FROM user_orders
+      WHERE (supplier_order_id IS NULL OR supplier_order_id = '')
+        AND status IN ('pending', 'pending_payment')
+        AND created_at < NOW() - INTERVAL '20 days'
+      LIMIT 20
+    `
+
+    console.log(`[SyncOrders] Checking ${orders.length} active AliExpress orders, ${staleOrders.length} stale pending orders`)
 
     const results = {
       checked: 0,
@@ -46,7 +57,40 @@ export default async function handler(req, res) {
       shipped: 0,
       delivered: 0,
       cancelled: 0,
+      staleCancelled: 0,
       errors: 0,
+    }
+
+    // Auto-cancel stale pending orders (never submitted to AliExpress, older than 20 days)
+    for (const stale of staleOrders) {
+      try {
+        await sql`
+          UPDATE user_orders
+          SET status = 'cancelled',
+              notes = ${'Auto-cancelled: order older than 20 days, never submitted to AliExpress'},
+              updated_at = NOW()
+          WHERE id = ${stale.id}
+        `
+        results.staleCancelled++
+        console.log(`[SyncOrders] Auto-cancelled stale order ${stale.id}: ${stale.product_title} (created ${stale.created_at})`)
+
+        // Auto-refund if payment was made
+        if (stale.stripe_payment_intent) {
+          try {
+            const refund = await stripe.refunds.create({
+              payment_intent: stale.stripe_payment_intent,
+              reason: 'requested_by_customer',
+            })
+            console.log(`[SyncOrders] Refund issued for stale order ${stale.id}: ${refund.id}`)
+            await sql`UPDATE user_orders SET status = 'refunded', notes = notes || ' | Auto-refund: ' || ${refund.id} WHERE id = ${stale.id}`
+          } catch (refErr) {
+            console.error(`[SyncOrders] Refund failed for stale ${stale.id}:`, refErr.message)
+          }
+        }
+      } catch (err) {
+        console.error(`[SyncOrders] Failed to cancel stale order ${stale.id}:`, err.message)
+        results.errors++
+      }
     }
 
     for (const order of orders) {
@@ -171,10 +215,21 @@ export default async function handler(req, res) {
           }
 
         } else if (aeStatus.includes('deliver') || aeStatus === 'delivered' || aeStatus === 'completed') {
-          newStatus = 'delivered'
-          notes = `Delivered — ${tracking.logisticsCompany || ''}`
-          results.delivered++
-          shouldUpdate = true
+          // FINISH/COMPLETED can mean delivered OR cancelled/expired
+          // Only mark as delivered if there's a tracking number (proof it shipped)
+          if (tracking.trackingNumber || order.tracking_number) {
+            newStatus = 'delivered'
+            notes = `Delivered — ${tracking.logisticsCompany || ''} tracking: ${tracking.trackingNumber || order.tracking_number || ''}`
+            results.delivered++
+            shouldUpdate = true
+          } else {
+            // No tracking = likely cancelled/expired, not actually delivered
+            newStatus = 'cancelled'
+            notes = `AliExpress order finished without tracking — likely cancelled or expired (unpaid)`
+            results.cancelled++
+            shouldUpdate = true
+            console.log(`[SyncOrders] Order ${order.id} marked cancelled: FINISH status but no tracking number`)
+          }
 
           // Trigger payout to store owner now that order is delivered
           try {
