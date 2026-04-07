@@ -702,12 +702,15 @@ import {
 ### AE-Custmize
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Customization APIs |
+| `aliexpress.customize.product.info.query` | Customize product info query |
+| `aliexpress.customize.product.template.query` | Customize product template query |
+| `aliexpress.customize.product.info.audit.result.query` | Query customize info audit result |
+| `aliexpress.customize.product.info.create` | Save product customize info |
 
 ### AE-KoreanCrossborder-Product
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Korean cross-border product APIs |
+| (empty or no APIs listed) | Korean cross-border product APIs |
 
 ### AE-Dropshipper (OUR MAIN APIS)
 | API | Description | Status |
