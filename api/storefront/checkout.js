@@ -157,7 +157,7 @@ export default async function handler(req, res) {
       const qty = item.quantity
       const salePrice = item.salePrice * qty
       const supplierCost = item.supplierCost * qty
-      const commission = Math.round(salePrice * commissionRate * 100) / 100
+      const commission = Math.round((salePrice - supplierCost) * commissionRate * 100) / 100
 
       try {
         await sql`
