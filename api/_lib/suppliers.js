@@ -252,9 +252,25 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 
     console.log(`[AliExpress] Placing DS order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
 
+    // ds_extend_request: contains auto-pay trigger (try_to_pay)
+    const dsExtendRequest = {
+      payment: {
+        pay_currency: 'USD',
+        try_to_pay: 'true',
+      },
+    }
+
+    // Add promotion to ds_extend_request if available
+    if (promotionCode) {
+      dsExtendRequest.promotion = { promotion_activity_id: promotionCode }
+    }
+
     const params = {
       param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
+      ds_extend_request: JSON.stringify(dsExtendRequest),
     }
+
+    console.log(`[AliExpress] ds_extend_request: ${JSON.stringify(dsExtendRequest)}`)
 
     const data = await callAuthenticatedAPI('aliexpress.ds.order.create', params)
 
