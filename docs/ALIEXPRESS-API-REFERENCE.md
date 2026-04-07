@@ -732,7 +732,9 @@ import {
 ### AE-Image
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Image processing APIs |
+| `aliexpress.photobank.redefining.listimagepagination` | Paged query images in photobank |
+| `aliexpress.photobank.redefining.uploadimageforsdk` | Upload images to photo bank |
+| `aliexpress.photobank.redefining.delunusephot` | Delete unreferenced images |
 
 ### AE-Seller
 | API | Description |
