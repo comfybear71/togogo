@@ -130,64 +130,129 @@ EXAMPLE (Scissors US$2.42):
 
 ---
 
+### New APIs & Endpoints Added This Session
+
+**AliExpress API Changes:**
+- `aliexpress.ds.order.create` — switched from `trade.buy.placeorder` (enables auto-pay)
+- `ds_extend_request.payment.try_to_pay = "true"` — the auto-pay trigger flag
+- `ds_extend_request.payment.pay_currency = "USD"` — payment currency
+- `ds_extend_request.trade_extra_param.business_model = "wholesale"` — for bulk orders (10+)
+- `out_order_id` — idempotent order ID passed from ToGoGo order UUID
+- `getWholesalePricing()` — new function for `aliexpress.ds.product.wholesale.get`
+- `getDSMemberBenefits()` — new function for `aliexpress.ds.member.benefit.get`
+- `callAPI()` — now exported for use in admin endpoints
+
+**New API Endpoints:**
+- `/api/admin/feeds?secret=JWT` — lists all 135 AliExpress feeds with deal/discount highlighting
+- `/api/admin/ds-level?secret=JWT` — shows DS membership level, benefits, and order stats
+- `/api/products/wholesale?id=PRODUCT_ID` — wholesale/bulk pricing tiers for any product
+
+**New Documentation:**
+- `docs/ALIEXPRESS-API-REFERENCE.md` — comprehensive reference of ALL 172 AliExpress APIs across 16 categories, with full parameter docs for implemented APIs
+
+**DS Developer Registration:**
+- Stuart's app is registered as "Dropshipping (individual)" — status: Review Approved
+- `aliexpress.ds.member.orderdata.submit` fails with "publisher not registered" — may need platform-level registration
+- DS Level discounts: Level C (~2%), Level B (~3-4%), Level A (~5%+) — worth pursuing
+
+### Session 6 Incident — UI Broke at 5am
+- Stuart said goodnight, Claude kept making UI changes
+- Attempted to rebuild storefront hero/carousel from scratch instead of merging from master
+- 7 bad commits: white screen → Store Not Found → multiple failed fixes
+- **Root cause:** Branch didn't have master's code; should have run `git merge master` first
+- **Fix:** Finally merged master properly which restored all UI features
+- **New safety rules added to SAFETY-RULES.md** to prevent this from happening again
+
+---
+
 ## Current State (April 8, 2026)
 
 ### Fully Working:
-- ✅ Full e2e: customer pays → AliExpress order auto-created
-- ✅ **Accurate AUD pricing** with USD→AUD conversion
+- ✅ **AUTO-PAY WORKING** — `ds.order.create` + `try_to_pay: "true"` (confirmed April 8)
+- ✅ Full e2e autonomous dropshipping (customer pays → AE order → auto-pay → ships)
+- ✅ AliExpress-style storefront (hero, carousel, sticky categories, infinite scroll)
+- ✅ Accurate AUD pricing with USD→AUD conversion
 - ✅ Real shipping costs (minimum A$3, no more fake FREE)
 - ✅ Configurable exchange rate from admin settings
 - ✅ Admin product breakdown: API Price, Ship, Tax, Wholesale, Sale, Profit, ToGoGo
-- ✅ Store filter on admin products (deduplicated unique view)
-- ✅ Price range filters on storefronts
-- ✅ 3 email notifications per order
+- ✅ Server-side product filtering (price range, category, sort, search)
+- ✅ Redis caching (Upstash, 2-min TTL)
+- ✅ Smart coupon system (auto-picks best AUAP code per order value)
+- ✅ 3 email notifications per order (customer, store owner, admin)
 - ✅ Store customer tracking with phone
-- ✅ Duplicate order prevention
-- ✅ Product import cron (30/run, real shipping, AUD conversion)
+- ✅ Duplicate order prevention (idempotency via `out_order_id`)
+- ✅ Product import cron (every 6hrs, 30/run, real shipping, AUD conversion)
 - ✅ Order sync cron (tracking, auto-refund on cancellation)
+- ✅ Daily database backup cron (2am AEST, 7-day retention in Redis)
 - ✅ 4 active stores: stu, jum, stuie, annies-shop
-- ✅ ~350 products with accurate pricing
-- ✅ Mobile-friendly storefronts
-
-### Awaiting Testing:
-- ⏳ **Auto-pay via ds.order.create** — API switched, needs test order after merge to production
-- ⏳ `ds_extend_request` parameter — fallback if basic switch doesn't trigger auto-pay
+- ✅ 3,430+ unique products (13,880 total across 4 stores)
+- ✅ Mobile-friendly dark theme storefronts
+- ✅ 172 AliExpress APIs fully documented
 
 ### Pricing Config:
 - **Exchange rate:** `usd_to_aud_rate` in admin_settings (default 1.45)
 - **Commission:** 30% of profit in `platform_fee_percent` (admin_settings)
-- **Shipping fee:** A$6 flat per order (hardcoded in checkout.js)
+- **Shipping fee:** A$6 flat per order (100% to ToGoGo)
 - **Markup:** 1.5x on wholesale (hardcoded in import cron)
 - **Min shipping:** A$3 per product (hardcoded in import cron)
+- **Coupons:** Smart system auto-picks best AUAP code (hardcoded tiers in webhook)
 
 ### Important URLs:
 
 | URL | Purpose |
 |-----|---------|
 | togogo.me/admin | Admin panel |
-| togogo.me/admin/products | Products with pricing breakdown |
-| togogo.me/api/admin/fix-prices?secret=JWT_SECRET | Convert USD→AUD (one-time, safe to repeat) |
-| togogo.me/api/admin/price-check?id=ID&secret=JWT_SECRET | Price breakdown for any product |
-| togogo.me/api/cron/import-products?secret=JWT_SECRET | Import 30 products with accurate pricing |
+| togogo.me/admin/products | Products with pricing breakdown + import panel |
+| togogo.me/admin/orders | Orders with "Sync AliExpress" button |
+| togogo.me/api/admin/feeds?secret=JWT | List all 135 AliExpress feeds |
+| togogo.me/api/admin/ds-level?secret=JWT | DS membership level and benefits |
+| togogo.me/api/products/wholesale?id=ID | Wholesale pricing for a product |
+| togogo.me/api/admin/fix-prices?secret=JWT | Convert USD→AUD (safe to repeat) |
+| togogo.me/api/cron/backup-db?secret=JWT | Manual database backup |
 | togogo.me/auth?logout=true | Force logout |
-| aliexpress.com/p/order/index.html | Pay AliExpress orders |
 | inbusiness.aliexpress.com/web/autoPay | AliExpress auto-pay settings |
 | openservice.aliexpress.com/doc/api.htm#/api?cid=21038 | AliExpress DS API documentation |
+| ds.aliexpress.com | AliExpress DS Center |
 
 ---
 
 ## Critical Knowledge for Future Sessions
 
-### Auto-Pay — THE FULL STORY
-1. Stuart manually paid ALL AliExpress orders until Session 6
-2. Auto-pay was "activated" in DS Center via PayPal but never triggered
-3. Root cause: code used `trade.buy.placeorder` (old API) instead of `ds.order.create` (DS API)
-4. Fix: switched to `ds.order.create` — same params, just different endpoint
-5. If auto-pay STILL doesn't work after testing, investigate:
-   - `ds_extend_request` parameter (optional, may have auto-pay flags)
-   - "AE-UIC-IPAY" API section in the docs sidebar
-   - Whether PayPal needs to be set as default payment method in the API call
-6. AliExpress DS Center URL: inbusiness.aliexpress.com/web/autoPay
+### Auto-Pay — SOLVED
+1. API: `aliexpress.ds.order.create` (NOT `trade.buy.placeorder`)
+2. Key parameter: `ds_extend_request.payment.try_to_pay = "true"`
+3. Payment currency: `ds_extend_request.payment.pay_currency = "USD"`
+4. Auto-pay method: PayPal (sfrench71@me.com) in DS Center
+5. Backup cards: ****7080 (Wise) and ****2988 (ANZ)
+6. Bulk orders (10+): `ds_extend_request.trade_extra_param.business_model = "wholesale"`
+7. Idempotency: `out_order_id` set to ToGoGo order UUID
+
+### AliExpress APIs — HIGH VALUE (implement next)
+1. `aliexpress.ds.text.search` — product keyword search for store owners
+2. `aliexpress.ds.image.searchV2` — image-based product search
+3. `aliexpress.ds.freight.query` — better shipping cost calculation
+4. `aliexpress.ds.order.tracking.get` — enhanced order tracking
+5. `aliexpress.ds.member.benefit.get` — DS level/discount dashboard (added, needs testing)
+
+### AliExpress APIs — MEDIUM VALUE
+6. `aliexpress.ds.category.get` — category browser
+7. `aliexpress.ds.product.wholesale.get` — bulk pricing (added, needs testing)
+8. `aliexpress.ds.feed.itemids.get` — efficient batch imports
+9. `aliexpress.issue.issuelist.get` + `issue.detail.get` — dispute monitoring
+
+### DS Level Discounts — TO DO
+- `aliexpress.ds.member.orderdata.submit` fails: "This publisher is not registered"
+- Stuart's app IS registered as Dropshipping (individual) — Review Approved
+- May need to register as Dropshipping (Corporation) or contact ds-sourcing@aliexpress.com
+- DS Level C ($1k+ orders) = ~2% off, Level B = ~3-4%, Level A = ~5%+
+
+### The Session 6 Incident (April 8, 2026)
+- Claude made UI changes at 5am after user signed off
+- 7 bad commits broke the live storefront (white screen → Store Not Found)
+- Fixed by merging master which had all the UI features
+- **RULE: NEVER make changes after user signs off**
+- **RULE: ALWAYS `git merge master` at start of session**
+- **RULE: NEVER rebuild UI from scratch — merge from working branch**
 
 ### The 36-Hour Incident (April 2, 2026)
 - A Claude session destroyed the production branch
@@ -195,11 +260,10 @@ EXAMPLE (Scissors US$2.42):
 - NEVER do blanket reverts
 - ALWAYS work on feature branches
 - ALWAYS test on Vercel preview URL before merging
-- This is why SAFETY-RULES.md and the safety protocol in CLAUDE.md exist
 
 ---
 
-## Next Session — UI Design + Features (THE FUN STUFF!)
+## Next Session — Features to Build
 
 ### Store Features:
 1. Similar products below item

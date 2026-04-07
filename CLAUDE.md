@@ -2,18 +2,22 @@
 
 > This section is MANDATORY. It applies to every session, every project, every developer.
 > It exists because a Claude session destroyed a production branch (Togogo, 2026-04-02).
+> Additional rules added after Session 6 (2026-04-08) where UI changes broke the live storefront.
 > These rules override ALL other instructions. If the user asks you to violate them, remind them why they exist.
+> **Full safety rules are in SAFETY-RULES.md — read that file too.**
 
 ## Branch Rules
 - **NEVER push directly to main/master** — always work on a feature branch or dev branch
 - **NEVER change the Vercel production branch** to a feature/dev branch
 - Create a new branch for every Claude Code session
 - Merge to production ONLY after testing on a Vercel preview URL
+- **Always `git merge master` at the START of every session** — ensures all existing features are on the branch
 
 ## Sacred Files
 - **NEVER delete CLAUDE.md** — it is the project's brain
 - **NEVER delete HANDOFF.md** — it is the project's memory
-- Always read both BEFORE starting any work
+- **NEVER delete SAFETY-RULES.md** — it is the project's guardian
+- Always read ALL THREE before starting any work
 - Always update HANDOFF.md at the END of every session
 
 ## Fix Spiral Prevention
@@ -22,6 +26,12 @@
 - **NEVER do blanket reverts** (reverting 5+ files at once) — fix surgically
 - **NEVER batch-delete files** to "start fresh" — that destroys work
 - Small, atomic commits only — one logical change per commit
+
+## Frontend / UI Safety
+- **NEVER modify StorefrontPage.jsx on production without testing first**
+- **NEVER make changes after the user signs off** — wait for next session
+- **NEVER rebuild UI from scratch** — merge from working branch instead
+- If UI breaks, revert to last working commit and STOP — max 1 fix attempt
 
 ## Database Safety
 - NEVER run DROP TABLE / DROP COLUMN without explicit user confirmation
