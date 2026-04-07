@@ -274,9 +274,45 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
     }
 
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
+    const aeOrderId = result.order_list?.number?.[0] || result.order_id || result.ae_order_id
+
+    // Step 2: Trigger auto-pay — call payment API to charge the authorized PayPal/card
+    // Without this, orders sit in "Awaiting Payment" even with auto-pay activated
+    if (aeOrderId) {
+      try {
+        // Try multiple payment API endpoints
+        const payApis = [
+          'aliexpress.trade.order.pay',
+          'aliexpress.ds.order.pay',
+          'aliexpress.trade.pay.order',
+        ]
+        let paySuccess = false
+        for (const payApi of payApis) {
+          try {
+            const payResult = await callAuthenticatedAPI(payApi, {
+              order_id: String(aeOrderId),
+              pay_type: 'autopay',
+            })
+            console.log(`[AliExpress] Auto-pay (${payApi}): ${JSON.stringify(payResult).slice(0, 300)}`)
+            if (payResult && !payResult.error_response) {
+              paySuccess = true
+              break
+            }
+          } catch (payErr) {
+            console.log(`[AliExpress] Auto-pay ${payApi} failed: ${payErr.message}`)
+          }
+        }
+        if (!paySuccess) {
+          console.log(`[AliExpress] Auto-pay APIs not available — order ${aeOrderId} may need manual payment`)
+        }
+      } catch (autoPayErr) {
+        console.error(`[AliExpress] Auto-pay error for ${aeOrderId}:`, autoPayErr.message)
+      }
+    }
+
     return {
       success: true,
-      orderId: result.order_list?.number?.[0] || result.order_id || result.ae_order_id,
+      orderId: aeOrderId,
       orderData: result,
     }
   } catch (err) {
