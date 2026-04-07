@@ -130,10 +130,19 @@ export default function StorefrontPage({ subdomain }) {
   }, [subdomain])
 
   // Reload when filters change (server-side filtering)
+  // Don't flash the page — load in background and swap products smoothly
+  const [filterLoading, setFilterLoading] = useState(false)
+  const filterAbortRef = useRef(null)
+
   useEffect(() => {
     if (!storeData) return
-    setLoading(true)
-    fetch(buildUrl(1))
+    // Abort previous filter request
+    if (filterAbortRef.current) filterAbortRef.current.abort()
+    const controller = new AbortController()
+    filterAbortRef.current = controller
+
+    setFilterLoading(true)
+    fetch(buildUrl(1), { signal: controller.signal })
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (data) {
@@ -143,8 +152,8 @@ export default function StorefrontPage({ subdomain }) {
           if (data.pagination) setStoreData(prev => prev ? { ...prev, pagination: data.pagination } : prev)
         }
       })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      .catch((err) => { if (err.name !== 'AbortError') console.error(err) })
+      .finally(() => setFilterLoading(false))
   }, [selectedCategory, priceRange, sortBy, searchQuery])
 
   // Load more products
@@ -341,7 +350,7 @@ export default function StorefrontPage({ subdomain }) {
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className={`min-h-screen ${theme.pageBg}`} style={{ overflowX: 'clip' }}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} searchInput={searchInput} onSearchChange={(e) => { setSearchInput(e.target.value); clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 500) }} />
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} searchInput={searchInput} onSearchChange={(e) => { setSearchInput(e.target.value); clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 1000) }} />
 
       {/* New Arrivals — horizontal scroll like AliExpress */}
       {allProducts.length > 0 && (
@@ -508,10 +517,13 @@ export default function StorefrontPage({ subdomain }) {
           </div>
         ) : (
           <>
-          <h2 className="text-xl font-bold text-white mb-4">
-            {selectedCategory ? `${selectedCategory}` : 'More to love'}
-          </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-bold text-white">
+              {selectedCategory ? `${selectedCategory}` : 'More to love'}
+            </h2>
+            {filterLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+          </div>
+          <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 transition-opacity duration-200 ${filterLoading ? 'opacity-50' : 'opacity-100'}`}>
             {filteredProducts.map((product) => {
               const price = product.price || 0
               const originalPrice = product.originalPrice || 0
