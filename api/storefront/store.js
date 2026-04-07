@@ -1,21 +1,7 @@
 // Public storefront API — serves store info + products by subdomain
 // No auth required — this is the customer-facing store
-// Supports pagination: ?page=1&limit=20 for infinite scroll
 import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
-import { Redis } from '@upstash/redis'
-
-// Redis caching (optional — works with Upstash REST API)
-// Needs UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (https:// format)
-// Falls back gracefully if not configured
-let redis = null
-try {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL
-  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN
-  if (restUrl && restToken) {
-    redis = new Redis({ url: restUrl, token: restToken })
-  }
-} catch { /* Redis optional — storefront works without it */ }
 
 export default async function handler(req, res) {
   // CORS for subdomain requests
@@ -56,63 +42,14 @@ export default async function handler(req, res) {
 
     const store = stores[0]
 
-    // Pagination params
-    const page = Math.max(1, parseInt(req.query.page) || 1)
-    const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 30))
-    const offset = (page - 1) * limit
-    const category = req.query.category || ''
-    const priceRange = req.query.priceRange || ''
-    const sortBy = req.query.sort || 'newest'
-    const search = req.query.search || ''
-
-    // Build WHERE conditions
-    let whereExtra = ''
-    if (category) whereExtra += ` AND category = '${category.replace(/'/g, "''")}'`
-    if (priceRange === 'under10') whereExtra += ' AND sale_price < 10'
-    else if (priceRange === '10to20') whereExtra += ' AND sale_price >= 10 AND sale_price < 20'
-    else if (priceRange === '20to50') whereExtra += ' AND sale_price >= 20 AND sale_price < 50'
-    else if (priceRange === 'over50') whereExtra += ' AND sale_price >= 50'
-    if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
-
-    // Build ORDER BY
-    let orderBy = 'created_at DESC'
-    if (sortBy === 'price-low') orderBy = 'sale_price ASC'
-    else if (sortBy === 'price-high') orderBy = 'sale_price DESC'
-    else if (sortBy === 'bestsellers') orderBy = 'COALESCE(orders_count, 0) DESC, COALESCE(total_sold, 0) DESC'
-    else if (sortBy === 'rating') orderBy = 'COALESCE(product_rating, 0) DESC'
-    else if (sortBy === 'discount') orderBy = 'COALESCE(discount_percent, 0) DESC'
-
-    // Try Redis cache (cache per store+page+filters, 2 min TTL)
-    const cacheKey = `store:${subdomain}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
-    if (redis && page > 0) {
-      try {
-        const cached = await redis.get(cacheKey)
-        if (cached) {
-          console.log(`[Storefront] Cache hit: ${cacheKey}`)
-          return res.json(typeof cached === 'string' ? JSON.parse(cached) : cached)
-        }
-      } catch { /* cache miss, continue */ }
-    }
-
-    // Get total product count (with filters applied)
-    const countResult = await sql.query(
-      `SELECT COUNT(*) as total FROM user_products WHERE user_id = $1 AND is_active = true${whereExtra}`,
-      [store.owner_id]
-    )
-    const totalProducts = parseInt(countResult.rows[0].total)
-
-    // Get the store owner's products — paginated with filters and sort
-    const productResult = await sql.query(
-      `SELECT id, title, description, image, images, supplier, supplier_cost,
-             sale_price, category, total_sold, created_at, supplier_product_id,
-             product_rating, orders_count, original_price, discount_percent
+    // Get the store owner's custom products
+    const { rows: ownerProducts } = await sql`
+      SELECT id, title, description, image, images, supplier, supplier_cost,
+             sale_price, category, total_sold, created_at, supplier_product_id
       FROM user_products
-      WHERE user_id = $1 AND is_active = true${whereExtra}
-      ORDER BY ${orderBy}
-      LIMIT $2 OFFSET $3`,
-      [store.owner_id, limit, offset]
-    )
-    const ownerProducts = productResult.rows
+      WHERE user_id = ${store.owner_id} AND is_active = true
+      ORDER BY RANDOM()
+    `
 
     let products = ownerProducts.map((p) => {
       // Safely parse images — could be array, string, or null from Postgres TEXT[]
@@ -134,10 +71,6 @@ export default async function handler(req, res) {
       supplierProductId: p.supplier_product_id || '',
       category: p.category || 'General',
       totalSold: p.total_sold || 0,
-      rating: parseFloat(p.product_rating) || 0,
-      ordersCount: p.orders_count || 0,
-      originalPrice: parseFloat(p.original_price) || 0,
-      discountPercent: p.discount_percent || 0,
       createdAt: p.created_at,
     }})
 
@@ -171,32 +104,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // Get ALL categories with counts (not just current page)
-    const { rows: catRows } = await sql`
-      SELECT category, COUNT(*) as count FROM user_products
-      WHERE user_id = ${store.owner_id} AND is_active = true
-      GROUP BY category ORDER BY count DESC
-    `
-    const categories = catRows.map(r => ({ name: r.category || 'General', count: parseInt(r.count) }))
+    // Get categories with counts for filtering
+    const catCounts = {}
+    for (const p of products) {
+      const cat = p.category || 'General'
+      catCounts[cat] = (catCounts[cat] || 0) + 1
+    }
+    const categories = Object.entries(catCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
 
-    // Get price range counts
-    const { rows: priceRows } = await sql`
-      SELECT
-        COUNT(*) FILTER (WHERE sale_price < 10) as under10,
-        COUNT(*) FILTER (WHERE sale_price >= 10 AND sale_price < 20) as range10to20,
-        COUNT(*) FILTER (WHERE sale_price >= 20 AND sale_price < 50) as range20to50,
-        COUNT(*) FILTER (WHERE sale_price >= 50) as over50
-      FROM user_products
-      WHERE user_id = ${store.owner_id} AND is_active = true
-    `
-    const priceRanges = priceRows[0] ? {
-      under10: parseInt(priceRows[0].under10) || 0,
-      '10to20': parseInt(priceRows[0].range10to20) || 0,
-      '20to50': parseInt(priceRows[0].range20to50) || 0,
-      over50: parseInt(priceRows[0].over50) || 0,
-    } : {}
-
-    const response = {
+    return res.json({
       store: {
         id: store.id,
         name: store.store_name,
@@ -209,22 +127,7 @@ export default async function handler(req, res) {
       },
       products,
       categories,
-      priceRanges,
-      pagination: {
-        page,
-        limit,
-        totalProducts,
-        totalPages: Math.ceil(totalProducts / limit),
-        hasMore: offset + products.length < totalProducts,
-      },
-    }
-
-    // Cache in Redis (2 min TTL)
-    if (redis) {
-      try { await redis.set(cacheKey, JSON.stringify(response), { ex: 120 }) } catch { /* non-critical */ }
-    }
-
-    return res.json(response)
+    })
   } catch (err) {
     console.error('Storefront API error:', err)
     return res.status(500).json({ error: 'Failed to load store' })
