@@ -138,14 +138,17 @@ export default async function handler(req, res) {
 
           try {
             // Update order with payment intent and shipping address from Stripe
+            const customerPhone = session.customer_details?.phone || ''
+            console.log(`[Webhook] Customer phone from checkout: "${customerPhone}"`)
             const shippingAddress = shippingDetails.address ? JSON.stringify({
               name: shippingDetails.name || '',
-              line1: shippingDetails.address.line1 || '',
+              line1: [shippingDetails.address.line1, shippingDetails.address.line2].filter(Boolean).join(', '),
               line2: shippingDetails.address.line2 || '',
               city: shippingDetails.address.city || '',
               state: shippingDetails.address.state || '',
               postcode: shippingDetails.address.postal_code || '',
               country: shippingDetails.address.country || 'AU',
+              phone: customerPhone,
             }) : null
 
             await sql`
@@ -197,11 +200,12 @@ export default async function handler(req, res) {
                 FROM user_orders WHERE platform_order_id = ${orderRef}
               `
               if (orderItems.length > 0) {
-                const customerName = orderItems[0].customer_name
                 const customerEmail = orderItems[0].customer_email
+                const customerName = orderItems[0].customer_name || (customerEmail ? customerEmail.split('@')[0] : 'Customer')
                 const storeUserId = orderItems[0].user_id
                 const items = orderItems.map(o => ({ title: o.product_title, price: parseFloat(o.sale_price), quantity: o.quantity || 1 }))
-                const total = items.reduce((s, i) => s + i.price * i.quantity, 0)
+                // sale_price in DB is already total (unit_price × qty), so don't multiply again
+                const total = items.reduce((s, i) => s + i.price, 0) + 6 // +$6 shipping
 
                 // Get store name
                 const { rows: storeRows } = await sql`SELECT id, store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
@@ -270,15 +274,24 @@ export default async function handler(req, res) {
                       )
                       if (stripeSession?.shipping_details?.address) {
                         const sa = stripeSession.shipping_details
+                        // Combine line1 + line2 for full address (villa/unit numbers)
+                        const fullAddress = [sa.address.line1, sa.address.line2].filter(Boolean).join(', ')
+                        // Phone: try multiple sources
+                        const rawPhone = stripeSession.customer_details?.phone
+                          || sa.phone
+                          || shippingAddr.phone
+                          || ''
+                        console.log(`[Webhook] Raw phone from Stripe: "${rawPhone}", customer_details: ${JSON.stringify(stripeSession.customer_details?.phone)}, shipping: ${JSON.stringify(sa.phone)}`)
                         shippingAddr = {
                           ...shippingAddr,
-                          name: order.customer_name || sa.name || shippingAddr.name || '',
-                          line1: sa.address.line1 || shippingAddr.line1 || '',
+                          name: sa.name || order.customer_name || shippingAddr.name || '',
+                          line1: fullAddress || shippingAddr.line1 || '',
+                          line2: sa.address.line2 || shippingAddr.line2 || '',
                           city: sa.address.city || shippingAddr.city || '',
                           state: sa.address.state || shippingAddr.state || '',
                           zip: sa.address.postal_code || shippingAddr.zip || '',
                           country: sa.address.country || shippingAddr.country || 'AU',
-                          phone: stripeSession.customer_details?.phone || shippingAddr.phone || '',
+                          phone: rawPhone,
                         }
                         console.log(`[Webhook] Stripe shipping: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
                       }
@@ -289,12 +302,18 @@ export default async function handler(req, res) {
                     // Log the final address being used
                     console.log(`[Webhook] Address for AE: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
 
-                    // Get active coupon code from admin settings
-                    let couponCode = ''
-                    try {
-                      const { rows: couponRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_coupon_code'`
-                      if (couponRows[0]?.value) couponCode = couponRows[0].value
-                    } catch { /* no coupon */ }
+                    // Smart coupon: pick the best AUAP code based on order value
+                    // These are AliExpress platform codes (ends Apr 8, new ones always come)
+                    const COUPON_TIERS = [
+                      { code: 'AUAP35', minOrder: 280 },
+                      { code: 'AUAP23', minOrder: 175 },
+                      { code: 'AUAP15', minOrder: 116 },
+                      { code: 'AUAP12', minOrder: 85 },
+                      { code: 'AUAP06', minOrder: 43 },
+                      { code: 'AUAP03', minOrder: 23 },
+                    ]
+                    // orderAmount is in AUD — pick the highest discount that qualifies
+                    const couponCode = COUPON_TIERS.find(t => orderAmount >= t.minOrder)?.code || 'AUAP03'
 
                     console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})${couponCode ? ' with coupon: ' + couponCode : ''}`)
                     const result = await submitOrder({

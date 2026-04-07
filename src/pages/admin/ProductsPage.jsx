@@ -27,6 +27,8 @@ export default function ProductsPage() {
   const [pagination, setPagination] = useState({ totalProducts: 0, totalPages: 0 });
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [cooldown, setCooldown] = useState(0);
+  const [megaImporting, setMegaImporting] = useState(false);
+  const [megaProgress, setMegaProgress] = useState('');
   const ITEMS_PER_PAGE = 50;
 
   const fetchProducts = useCallback(async (pg = page, search = searchQuery, cat = categoryFilter, store = storeFilter) => {
@@ -84,23 +86,66 @@ export default function ProductsPage() {
     }
   }
 
+  async function handleMegaImport() {
+    if (megaImporting || importing) return;
+    setMegaImporting(true);
+    setImportResult(null);
+    let totalNew = 0;
+    const categories = IMPORT_CATEGORIES.filter(c => c.term); // skip Random Mix
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
+      setMegaProgress(`${cat.emoji} ${cat.label} (${i + 1}/${categories.length}) — ${totalNew} new products so far`);
+      try {
+        const token = localStorage.getItem('togogo-token');
+        const url = `/api/cron/import-products?secret=${token}&term=${encodeURIComponent(cat.term)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.success) totalNew += (data.newProducts || 0);
+      } catch {}
+      // 5 second pause between categories to avoid rate limiting
+      if (i < categories.length - 1) {
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+    setMegaProgress('');
+    setMegaImporting(false);
+    setImportResult({ success: true, newProducts: totalNew, stores: 4, catalogSize: totalNew });
+    fetchProducts(1, '', '');
+    // Start cooldown
+    setCooldown(30);
+    const timer = setInterval(() => {
+      setCooldown(prev => { if (prev <= 1) { clearInterval(timer); return 0; } return prev - 1; });
+    }, 1000);
+  }
+
   const IMPORT_CATEGORIES = [
     { term: '', label: 'Random Mix', emoji: '🎲' },
+    // Ladies Fashion
+    { term: 'dress', label: "Women's Dresses", emoji: '👗' },
+    { term: 'womens tops', label: 'Tops & Blouses', emoji: '👚' },
+    { term: 'womens jeans', label: 'Jeans', emoji: '👖' },
+    { term: 'skirt', label: 'Skirts', emoji: '🩱' },
+    { term: 'womens pants', label: "Women's Pants", emoji: '👖' },
+    { term: 'knitwear women', label: 'Knitwear', emoji: '🧶' },
+    { term: 'womens jacket', label: "Women's Jackets", emoji: '🧥' },
+    { term: 'lingerie', label: 'Lingerie', emoji: '🩱' },
+    { term: 'bikini', label: 'Swimwear', emoji: '👙' },
+    { term: 'leggings', label: 'Leggings', emoji: '🩳' },
+    { term: 'handbag', label: 'Handbags', emoji: '👜' },
+    { term: 'womens shoes', label: "Women's Shoes", emoji: '👠' },
+    // General
+    { term: 'jewelry', label: 'Jewelry', emoji: '💍' },
+    { term: 'beauty', label: 'Beauty', emoji: '💄' },
+    { term: 'makeup brush', label: 'Makeup', emoji: '💅' },
     { term: 'toys', label: 'Toys', emoji: '🧸' },
     { term: 'home garden', label: 'Home & Garden', emoji: '🏡' },
     { term: 'computer', label: 'Computer', emoji: '💻' },
-    { term: 'jewelry', label: 'Jewelry', emoji: '💍' },
-    { term: 'beauty', label: 'Beauty', emoji: '💄' },
     { term: 'sports', label: 'Sports', emoji: '⚽' },
     { term: 'consumer electronics', label: 'Electronics', emoji: '📱' },
     { term: 'shoes', label: 'Shoes', emoji: '👟' },
     { term: 'lights', label: 'Lights', emoji: '💡' },
     { term: 'mother kids', label: 'Mother & Kids', emoji: '👶' },
     { term: 'mens clothing', label: "Men's Clothing", emoji: '👔' },
-    { term: 'dress', label: "Women's Dresses", emoji: '👗' },
-    { term: 'leggings', label: 'Leggings', emoji: '🩳' },
-    { term: 'handbag', label: 'Handbags', emoji: '👜' },
-    { term: 'bikini', label: 'Swimwear', emoji: '👙' },
     { term: 'kitchen gadget', label: 'Kitchen', emoji: '🍳' },
     { term: 'pet', label: 'Pets', emoji: '🐕' },
     { term: 'car accessories', label: 'Car', emoji: '🚗' },
@@ -108,7 +153,6 @@ export default function ProductsPage() {
     { term: 'phone case', label: 'Phone Cases', emoji: '📱' },
     { term: 'tablet stand', label: 'Tablet', emoji: '📲' },
     { term: 'led light', label: 'LED Lights', emoji: '🔦' },
-    { term: 'makeup brush', label: 'Makeup', emoji: '💅' },
   ];
 
   async function handleAction(id, action) {
@@ -167,8 +211,25 @@ export default function ProductsPage() {
       {/* Import Panel */}
       {showImportPanel && (
         <div className="rounded-2xl border border-white/[0.06] bg-[#111] p-5">
-          <h3 className="text-sm font-bold text-white mb-3">Import Products by Category</h3>
-          <p className="text-xs text-zinc-500 mb-4">Each click imports ~30 products with accurate AUD pricing. 30 second cooldown between imports.</p>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white">Import Products by Category</h3>
+              <p className="text-xs text-zinc-500 mt-1">Each click imports ~20 products with accurate freight pricing. 30 second cooldown between imports.</p>
+            </div>
+            <button
+              onClick={handleMegaImport}
+              disabled={megaImporting || importing || cooldown > 0}
+              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+            >
+              {megaImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+              {megaImporting ? 'Importing...' : 'Import ALL Categories'}
+            </button>
+          </div>
+          {megaProgress && (
+            <div className="rounded-xl p-3 text-sm bg-purple-500/10 text-purple-400 mb-3">
+              {megaProgress}
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 mb-4">
             {IMPORT_CATEGORIES.map(({ term, label, emoji }) => (
               <button
@@ -198,8 +259,8 @@ export default function ProductsPage() {
       {importResult && (
         <div className={`rounded-xl p-3 text-sm ${importResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
           {importResult.success
-            ? `Imported ${importResult.totalImported} products from AliExpress across ${importResult.stores} stores`
-            : `Import failed: ${importResult.error || importResult.message}`}
+            ? `Imported ${importResult.newProducts || importResult.totalImported || 0} new products across ${importResult.stores || 0} stores (${importResult.catalogSize || importResult.totalImported || 0} total)`
+            : `Import failed: ${importResult.error || importResult.message || 'Unknown error'}`}
         </div>
       )}
 

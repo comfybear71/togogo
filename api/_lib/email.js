@@ -47,7 +47,7 @@ export function orderConfirmationEmail({ orderRef, items, total, storeName, cust
     <tr>
       <td style="padding:8px;border-bottom:1px solid #333">${i.title}</td>
       <td style="padding:8px;border-bottom:1px solid #333;text-align:center">${i.quantity}</td>
-      <td style="padding:8px;border-bottom:1px solid #333;text-align:right">$${(i.price * i.quantity).toFixed(2)}</td>
+      <td style="padding:8px;border-bottom:1px solid #333;text-align:right">$${i.price.toFixed(2)}</td>
     </tr>
   `).join('')
 

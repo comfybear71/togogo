@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import {
   Users, ShoppingBag, Package, DollarSign, AlertTriangle,
-  TrendingUp, Trophy, Clock, Star, Loader2,
+  TrendingUp, Trophy, Clock, Star, Loader2, Database, RefreshCw,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -27,6 +27,26 @@ function getAuthHeaders() {
 }
 
 export default function DashboardPage() {
+  const [backingUp, setBackingUp] = useState(false)
+  const [backupResult, setBackupResult] = useState(null)
+
+  async function handleBackup() {
+    if (backingUp) return
+    setBackingUp(true)
+    setBackupResult(null)
+    try {
+      const token = localStorage.getItem('togogo-token')
+      const res = await fetch(`${API_BASE}/api/cron/backup-db?secret=${token}`)
+      const data = await res.json()
+      setBackupResult(data)
+      setTimeout(() => setBackupResult(null), 10000)
+    } catch (err) {
+      setBackupResult({ error: err.message })
+    } finally {
+      setBackingUp(false)
+    }
+  }
+
   const [stats, setStats] = useState({
     totalUsers: 0,
     activeListings: 0,
@@ -72,7 +92,23 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-white">Admin Dashboard</h1>
           <p className="text-zinc-500">Here's what's happening today.</p>
         </div>
+        <button
+          onClick={handleBackup}
+          disabled={backingUp}
+          className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2.5 text-sm text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+        >
+          {backingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+          {backingUp ? 'Backing up...' : 'Backup Database'}
+        </button>
       </div>
+
+      {backupResult && (
+        <div className={`rounded-xl p-3 text-sm ${backupResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
+          {backupResult.success
+            ? `Backup complete (${backupResult.sizeMB}MB) — ${backupResult.counts?.products || 0} products, ${backupResult.counts?.orders || 0} orders, ${backupResult.counts?.users || 0} users. ${backupResult.backupsAvailable} backups stored.`
+            : `Backup failed: ${backupResult.error || 'Unknown error'}`}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
