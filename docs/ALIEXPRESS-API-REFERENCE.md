@@ -710,7 +710,13 @@ import {
 ### AE-KoreanCrossborder-Product
 | API | Description |
 |-----|-------------|
-| (empty or no APIs listed) | Korean cross-border product APIs |
+| `aliexpress.offer.local.cb.product.prices.edit` | Local CrossBorder - Product Price Edit |
+| `aliexpress.offer.local.cb.product.status.update` | Local CrossBorder - Product Status Update |
+| `aliexpress.offer.local.cb.product.edit` | Local CrossBorder - Product Edit |
+| `aliexpress.offer.local.cb.products.list` | Local CrossBorder - Product list query |
+| `aliexpress.offer.local.cb.product.post` | Local CrossBorder - Product post |
+| `aliexpress.offer.local.cb.products.stock.edit` | Local CrossBorder - Edit Stock |
+| `aliexpress.offer.local.cb.product.query` | Local CrossBorder - Product detail query |
 
 ### AE-Dropshipper (OUR MAIN APIS)
 | API | Description | Status |
