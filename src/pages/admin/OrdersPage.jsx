@@ -14,6 +14,7 @@ import {
   Package,
   XCircle,
   Loader2,
+  RefreshCw,
 } from 'lucide-react';
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -50,8 +51,28 @@ export default function OrdersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   useEffect(() => { fetchOrders(); }, []);
+
+  async function handleSyncOrders() {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const token = localStorage.getItem('togogo-token');
+      const res = await fetch(`${API_BASE}/api/cron/sync-orders?secret=${token}`);
+      const data = await res.json();
+      setSyncResult(data);
+      if (data.success) fetchOrders();
+      setTimeout(() => setSyncResult(null), 8000);
+    } catch (err) {
+      setSyncResult({ error: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function fetchOrders() {
     try {
@@ -103,10 +124,29 @@ export default function OrdersPage() {
           <h1 className="text-3xl font-bold text-white">Orders & Finance</h1>
           <p className="text-zinc-500">Manage orders, disputes, and financial transactions.</p>
         </div>
-        <button className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#FF6B35]/90">
-          <Download className="h-4 w-4" /> Export CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleSyncOrders}
+            disabled={syncing}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2.5 text-sm text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync AliExpress'}
+          </button>
+          <button className="flex items-center gap-2 rounded-xl bg-[#FF6B35] px-4 py-2.5 text-sm font-medium text-white hover:bg-[#FF6B35]/90">
+            <Download className="h-4 w-4" /> Export CSV
+          </button>
+        </div>
       </div>
+
+      {/* Sync result banner */}
+      {syncResult && (
+        <div className={`rounded-xl p-3 text-sm ${syncResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
+          {syncResult.success
+            ? `Synced ${syncResult.checked} orders — ${syncResult.shipped} shipped, ${syncResult.delivered} delivered, ${syncResult.cancelled} cancelled, ${syncResult.updated} updated`
+            : `Sync failed: ${syncResult.error || 'Unknown error'}`}
+        </div>
+      )}
 
       {/* Financial Summary */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

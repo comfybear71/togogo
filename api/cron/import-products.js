@@ -6,12 +6,25 @@ import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpress, getProductDetails, calculateFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
-  // Auth: only allow Vercel cron or secret
+  // Auth: allow Vercel cron, JWT_SECRET as query param, or admin JWT token
   const authHeader = req.headers.authorization
   const cronSecret = process.env.CRON_SECRET
   const querySecret = req.query.secret
 
-  if (authHeader !== `Bearer ${cronSecret}` && querySecret !== process.env.JWT_SECRET) {
+  let authorized = false
+  if (authHeader === `Bearer ${cronSecret}`) authorized = true
+  if (querySecret === process.env.JWT_SECRET) authorized = true
+
+  // Also allow admin users via JWT token passed as ?secret=
+  if (!authorized && querySecret) {
+    try {
+      const { verifyToken } = await import('../_lib/auth.js')
+      const payload = verifyToken(querySecret)
+      if (payload && payload.role === 'admin') authorized = true
+    } catch {}
+  }
+
+  if (!authorized) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
@@ -58,10 +71,49 @@ export default async function handler(req, res) {
 
     // Custom term via ?term= parameter, or random selection
     const customTerm = req.query.term || ''
+
+    // Expand single terms into multiple variations for more results
+    const termVariations = {
+      'dress': ['dress', 'summer dress', 'maxi dress', 'party dress', 'casual dress', 'mini dress', 'evening dress', 'floral dress'],
+      'womens tops': ['women blouse', 'women t-shirt', 'crop top', 'tank top women', 'camisole', 'women shirt', 'peplum top', 'tunic'],
+      'womens jeans': ['women jeans', 'skinny jeans women', 'wide leg jeans', 'mom jeans', 'ripped jeans women', 'high waist jeans'],
+      'skirt': ['skirt', 'midi skirt', 'mini skirt', 'pleated skirt', 'denim skirt', 'wrap skirt', 'pencil skirt', 'long skirt'],
+      'womens pants': ['women pants', 'palazzo pants', 'wide leg pants women', 'cargo pants women', 'culottes', 'women trousers'],
+      'knitwear women': ['women sweater', 'cardigan women', 'pullover women', 'knit top', 'turtleneck women', 'women vest knit'],
+      'womens jacket': ['women jacket', 'blazer women', 'women coat', 'denim jacket women', 'windbreaker women', 'puffer jacket women'],
+      'lingerie': ['lingerie set', 'bra set', 'women underwear', 'nightgown', 'sleepwear women', 'pajama set women', 'silk robe'],
+      'womens shoes': ['women heels', 'women sandals', 'women boots', 'ballet flats', 'women sneakers', 'platform shoes', 'mules women'],
+      'toys': ['toys', 'kids toys', 'baby toys', 'educational toy', 'plush toy', 'building blocks', 'action figure'],
+      'home garden': ['home decor', 'garden tools', 'wall art', 'vase', 'cushion cover', 'curtain', 'rug'],
+      'computer': ['computer', 'laptop stand', 'USB hub', 'webcam', 'monitor stand', 'mouse pad', 'SSD'],
+      'jewelry': ['jewelry', 'necklace', 'earrings', 'bracelet', 'ring', 'pendant', 'chain'],
+      'beauty': ['beauty', 'makeup', 'skincare', 'face mask', 'lipstick', 'foundation', 'nail art'],
+      'sports': ['sports', 'yoga mat', 'fitness', 'water bottle', 'resistance band', 'gym gloves', 'running'],
+      'consumer electronics': ['electronics', 'smart watch', 'wireless charger', 'power bank', 'camera', 'drone', 'VR'],
+      'shoes': ['shoes', 'sneakers', 'sandals', 'boots', 'slippers', 'loafers', 'heels'],
+      'lights': ['lights', 'LED strip', 'desk lamp', 'fairy lights', 'night light', 'solar light', 'ceiling light'],
+      'mother kids': ['baby clothes', 'maternity', 'kids shoes', 'baby blanket', 'stroller', 'baby bottle'],
+      'mens clothing': ['mens shirt', 'mens jacket', 'mens pants', 'mens hoodie', 'mens shorts', 'mens suit'],
+      'leggings': ['leggings', 'yoga pants', 'workout leggings', 'high waist pants', 'gym leggings'],
+      'handbag': ['handbag', 'tote bag', 'crossbody bag', 'clutch', 'wallet', 'backpack women'],
+      'bikini': ['bikini', 'swimsuit', 'one piece swimsuit', 'beach cover up', 'swim shorts'],
+      'kitchen gadget': ['kitchen gadget', 'cooking tools', 'baking', 'food storage', 'knife set', 'cutting board'],
+      'pet': ['pet toys', 'dog collar', 'cat bed', 'pet clothes', 'aquarium', 'bird cage'],
+      'car accessories': ['car accessories', 'car phone holder', 'car charger', 'car seat cover', 'dash cam'],
+      'headphones': ['headphones', 'earbuds', 'bluetooth speaker', 'microphone', 'gaming headset'],
+      'phone case': ['phone case', 'screen protector', 'phone holder', 'phone charger', 'phone ring'],
+      'tablet stand': ['tablet stand', 'tablet case', 'stylus pen', 'tablet keyboard'],
+      'led light': ['LED light', 'RGB light', 'neon sign', 'grow light', 'flashlight', 'lantern'],
+      'makeup brush': ['makeup brush', 'makeup sponge', 'eyelash', 'eyebrow', 'concealer', 'mascara'],
+    }
+
     let selectedTerms
     if (customTerm) {
-      selectedTerms = [customTerm]
-      console.log(`[Cron] Custom search: "${customTerm}"`)
+      // Use variations if available, otherwise just the custom term
+      const variations = termVariations[customTerm.toLowerCase()] || [customTerm]
+      // Limit to 4 variations to stay within Vercel timeout
+      selectedTerms = variations.slice(0, 4)
+      console.log(`[Cron] Custom search: "${customTerm}" → ${selectedTerms.length} variations`)
     } else {
       const shuffled = [...allTerms].sort(() => Math.random() - 0.5)
       selectedTerms = shuffled.slice(0, 8)
@@ -69,24 +121,27 @@ export default async function handler(req, res) {
 
     console.log(`[Cron] Searching: ${selectedTerms.join(', ')}`)
 
-    // Fetch products from feed (fast — bulk)
+    // Fetch products from feed — try multiple pages for more variety
     let allProducts = []
     const seen = new Set()
     const { rows: existingRows } = await sql`SELECT DISTINCT supplier_product_id FROM user_products LIMIT 10000`
     const existingIds = new Set(existingRows.map(r => r.supplier_product_id))
 
     for (const term of selectedTerms) {
-      try {
-        const products = await searchAliExpress(term, 1)
-        for (const p of products) {
-          const pid = p.productId || p.id
-          if (!seen.has(pid) && !existingIds.has(pid)) {
-            seen.add(pid)
-            allProducts.push(p)
+      // Try pages 1 and 2 for more results
+      for (const page of [1, 2]) {
+        try {
+          const products = await searchAliExpress(term, page)
+          for (const p of products) {
+            const pid = p.productId || p.id
+            if (!seen.has(pid) && !existingIds.has(pid)) {
+              seen.add(pid)
+              allProducts.push(p)
+            }
           }
+        } catch (err) {
+          console.error(`[Cron] Error fetching "${term}" page ${page}:`, err.message)
         }
-      } catch (err) {
-        console.error(`[Cron] Error fetching "${term}":`, err.message)
       }
     }
 
@@ -94,8 +149,9 @@ export default async function handler(req, res) {
       return res.json({ success: true, message: 'No new products found', currentCount })
     }
 
-    // Process up to 30 products per run with accurate pricing
-    const batch = allProducts.slice(0, 30)
+    // Process up to 20 products per run with accurate pricing
+    // Keep batch small to stay within Vercel 60s timeout (freight API is slow)
+    const batch = allProducts.slice(0, 20)
     console.log(`[Cron] ${allProducts.length} new products found, processing ${batch.length} with accurate pricing`)
 
     let totalImported = 0
@@ -112,23 +168,29 @@ export default async function handler(req, res) {
 
       if (aeId && !aeId.includes('-')) {
         try {
-          // Get product details for real cost
-          const details = await getProductDetails(aeId)
-          if (details) {
-            realProductCost = details.cost || p.cost || 0
-          }
-
-          // Use freight calculator for EXACT shipping cost to AU
-          const freightOptions = await calculateFreight(aeId, 1, 'AU')
-          if (freightOptions && freightOptions.length > 0) {
-            // Find cheapest shipping option
-            const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
-            shippingCost = cheapest.cost
-            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+          // Race against a 5s timeout to avoid Vercel function timeout
+          const enrichResult = await Promise.race([
+            (async () => {
+              const details = await getProductDetails(aeId)
+              if (details) realProductCost = details.cost || p.cost || 0
+              const freightOptions = await calculateFreight(aeId, 1, 'AU')
+              if (freightOptions && freightOptions.length > 0) {
+                const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
+                shippingCost = cheapest.cost
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+              } else {
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using min)`)
+              }
+              return 'ok'
+            })(),
+            new Promise(r => setTimeout(() => r('timeout'), 5000))
+          ])
+          if (enrichResult === 'timeout') {
+            console.log(`[Cron] ${aeId}: enrichment timed out, using defaults`)
+            enrichFailed++
           } else {
-            console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using $2 min)`)
+            enriched++
           }
-          enriched++
         } catch (err) {
           console.error(`[Cron] Enrichment failed for ${aeId}:`, err.message)
           enrichFailed++
@@ -166,14 +228,18 @@ export default async function handler(req, res) {
               user_id, title, description, image, images, supplier,
               supplier_product_id, supplier_cost, sale_price,
               api_price, shipping_cost, tax_amount,
-              price_currency, category, is_active
+              price_currency, category, is_active,
+              product_rating, orders_count, original_price, discount_percent
             ) VALUES (
               ${store.user_id}, ${p.title}, ${p.title},
               ${p.image || ''}, ${imgArray},
               ${'AliExpress'}, ${p.productId || p.id},
               ${wholesaleCost}, ${salePrice},
               ${productCostAUD}, ${shippingAUD}, ${taxAUD},
-              ${'AUD'}, ${p.category || 'General'}, true
+              ${'AUD'}, ${p.category || 'General'}, true,
+              ${p.rating || 0}, ${p.orders || 0},
+              ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
+              ${p.discount || 20}
             )
           `
           totalImported++

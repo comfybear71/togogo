@@ -219,13 +219,16 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
 
     // Map country and state
     const countryCode = mapCountryToISO(shippingAddress.country || 'AU')
-    const fullName = shippingAddress.name || 'Customer'
-    const phone = shippingAddress.phone || '0400000000'
+    const fullName = shippingAddress.name || shippingAddress.contact_person || 'Customer'
+    const phone = shippingAddress.phone?.replace(/\s/g, '') || '0400000000'
+    // Combine address lines (line2 has villa/unit/apartment numbers)
+    const addressLine = [shippingAddress.line1, shippingAddress.line2].filter(Boolean).join(', ')
+      || shippingAddress.address || 'N/A'
 
     // aliexpress.trade.buy.placeorder — creates real order on AliExpress
     const orderRequest = {
       logistics_address: {
-        address: shippingAddress.line1 || shippingAddress.address || 'N/A',
+        address: addressLine,
         city: shippingAddress.city || 'N/A',
         country: countryCode,
         contact_person: fullName,
@@ -271,9 +274,45 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
     }
 
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
+    const aeOrderId = result.order_list?.number?.[0] || result.order_id || result.ae_order_id
+
+    // Step 2: Trigger auto-pay — call payment API to charge the authorized PayPal/card
+    // Without this, orders sit in "Awaiting Payment" even with auto-pay activated
+    if (aeOrderId) {
+      try {
+        // Try multiple payment API endpoints
+        const payApis = [
+          'aliexpress.trade.order.pay',
+          'aliexpress.ds.order.pay',
+          'aliexpress.trade.pay.order',
+        ]
+        let paySuccess = false
+        for (const payApi of payApis) {
+          try {
+            const payResult = await callAuthenticatedAPI(payApi, {
+              order_id: String(aeOrderId),
+              pay_type: 'autopay',
+            })
+            console.log(`[AliExpress] Auto-pay (${payApi}): ${JSON.stringify(payResult).slice(0, 300)}`)
+            if (payResult && !payResult.error_response) {
+              paySuccess = true
+              break
+            }
+          } catch (payErr) {
+            console.log(`[AliExpress] Auto-pay ${payApi} failed: ${payErr.message}`)
+          }
+        }
+        if (!paySuccess) {
+          console.log(`[AliExpress] Auto-pay APIs not available — order ${aeOrderId} may need manual payment`)
+        }
+      } catch (autoPayErr) {
+        console.error(`[AliExpress] Auto-pay error for ${aeOrderId}:`, autoPayErr.message)
+      }
+    }
+
     return {
       success: true,
-      orderId: result.order_list?.number?.[0] || result.order_id || result.ae_order_id,
+      orderId: aeOrderId,
       orderData: result,
     }
   } catch (err) {
@@ -317,22 +356,87 @@ function mapCountryToISO(country) {
 
 export async function getOrderTracking(orderId) {
   try {
-    // Try the member order query API
-    const data = await callAuthenticatedAPI('aliexpress.ds.member.order.get', {
-      order_id: String(orderId),
-    })
+    // Try multiple API paths — AliExpress DS has different endpoints
+    let result = null
+    const apiPaths = [
+      { method: 'aliexpress.trade.ds.order.get', key: 'aliexpress_trade_ds_order_get_response', auth: false },
+      { method: 'aliexpress.ds.trade.order.get', key: 'aliexpress_ds_trade_order_get_response', auth: false },
+      { method: 'aliexpress.trade.ds.order.get', key: 'aliexpress_trade_ds_order_get_response', auth: true },
+    ]
 
-    const result = data?.aliexpress_ds_member_order_get_response?.result
-    if (!result) return null
+    for (const api of apiPaths) {
+      try {
+        const params = {
+          single_order_query: JSON.stringify({ order_id: Number(orderId) }),
+        }
+        const data = api.auth
+          ? await callAuthenticatedAPI(api.method, params)
+          : await callAPI(api.method, params)
+
+        // Try to find result in response (AliExpress nests results differently)
+        result = data?.[api.key]?.result
+          || data?.[api.key]?.data
+          || data?.result
+          || data?.data
+        if (result) {
+          console.log(`[AliExpress] Order ${orderId} found via ${api.method}`)
+          break
+        }
+      } catch (err) {
+        console.log(`[AliExpress] ${api.method} failed for ${orderId}: ${err.message}`)
+      }
+    }
+
+    // Fallback: try simple param format
+    if (!result) {
+      try {
+        const data = await callAPI('aliexpress.trade.ds.order.get', { order_id: String(orderId) })
+        result = data?.aliexpress_trade_ds_order_get_response?.result || data?.result
+        if (result) console.log(`[AliExpress] Order ${orderId} found via simple format`)
+      } catch (err) {
+        console.log(`[AliExpress] Simple format failed for ${orderId}: ${err.message}`)
+      }
+    }
+
+    if (!result) {
+      console.log(`[AliExpress] No tracking result for order ${orderId} — all API paths failed`)
+      return null
+    }
+
+    // AliExpress uses various status strings — map them all
+    const rawStatus = (result.order_status || result.logistics_status || '').toUpperCase()
+    console.log(`[AliExpress] Order ${orderId} raw status: ${rawStatus}, logistics: ${JSON.stringify(result.logistics_info_list || result.logistics_info || 'none').slice(0, 200)}`)
+
+    // Extract logistics info — can be in different locations
+    const logisticsInfo = result.logistics_info_list?.logistics_info_list?.[0]
+      || result.logistics_info_list?.[0]
+      || result.logistics_info
+      || {}
+
+    let status = rawStatus
+    // Map AliExpress statuses to our statuses
+    if (['WAIT_SELLER_SEND_GOODS', 'PLACE_ORDER_SUCCESS', 'IN_CANCEL', 'WAIT_BUYER_ACCEPT_GOODS'].includes(rawStatus)) {
+      if (rawStatus === 'WAIT_BUYER_ACCEPT_GOODS') status = 'shipped'
+      else if (rawStatus === 'IN_CANCEL') status = 'cancelled'
+      else status = 'processing'
+    } else if (['SELLER_SENT_GOODS', 'PARTIAL_SEND_GOODS', 'IN_TRANSIT'].includes(rawStatus) || logisticsInfo.tracking_number) {
+      status = 'shipped'
+    } else if (['FINISH', 'COMPLETED', 'BUYER_ACCEPT_GOODS'].includes(rawStatus)) {
+      status = 'delivered'
+    } else if (['FUND_PROCESSING', 'IN_ISSUE', 'IN_FROZEN'].includes(rawStatus)) {
+      status = 'processing'
+    } else if (['CANCELLED', 'CANCELED', 'CLOSED'].includes(rawStatus)) {
+      status = 'cancelled'
+    }
 
     return {
       orderId: result.order_id || orderId,
-      status: result.order_status || result.logistics_status || '',
-      trackingNumber: result.logistics_info?.tracking_number || '',
-      trackingUrl: result.logistics_info?.tracking_url || '',
-      logisticsCompany: result.logistics_info?.logistics_company || '',
-      shippedDate: result.send_goods_date || '',
-      estimatedDelivery: result.logistics_info?.estimated_delivery_time || '',
+      status,
+      trackingNumber: logisticsInfo.tracking_number || logisticsInfo.logistics_no || '',
+      trackingUrl: logisticsInfo.tracking_url || logisticsInfo.logistics_tracking_url || '',
+      logisticsCompany: logisticsInfo.logistics_company || logisticsInfo.logistics_service || '',
+      shippedDate: result.send_goods_date || logisticsInfo.send_goods_date || '',
+      estimatedDelivery: logisticsInfo.estimated_delivery_time || '',
       rawData: result,
     }
   } catch (err) {
