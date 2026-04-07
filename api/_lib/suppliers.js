@@ -45,7 +45,7 @@ function signRequest(params, appSecret) {
   return crypto.createHmac('sha256', appSecret).update(sorted).digest('hex').toUpperCase()
 }
 
-async function callAPI(method, params = {}) {
+export async function callAPI(method, params = {}) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
   const appSecret = process.env.ALIEXPRESS_APP_SECRET
   if (!appKey || !appSecret) {
