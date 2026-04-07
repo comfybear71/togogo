@@ -688,7 +688,16 @@ import {
 ### AE-Settlement
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Payment settlement APIs |
+| `aliexpress.trade.invoice.sellerInvoicingApplyInfo.get` | AE Tax: Invoice Request Query (Seller to Buyer) |
+| `aliexpress.fund.merchant.orderdetail` | AE Fund Order Detail |
+| `aliexpress.trade.tax.invoice.queryBrazilInvoiceInfo` | Brazil Seller Invoice Query |
+| `aliexpress.trade.tax.invoice.UploadBrazilInvoice` | Brazil seller invoice upload |
+| `aliexpress.trade.invoice.sellerInvoicingResult.push` | Settlement Tax: Merchant Returns Invoicing Results |
+| `aliexpress.trade.tax.hscode.queryRegulatoryAttributesInfoWithHsCode` | Query regulatory attributes with HS Code |
+| `aliexpress.trade.tax.hscode.selectRegulatoryAttributesOptions` | Select regulatory attributes options |
+| `aliexpress.fund.merchant.recipet.flowdetail.query` | Fund account income/expense flow detail query |
+| `aliexpress.fund.merchant.recipet.config.query` | Fund account income/expense config query |
+| `aliexpress.fund.merchant.recipet.debt.query` | Fund account debt query |
 
 ### AE-Custmize
 | API | Description |
