@@ -243,8 +243,7 @@ If the user asks you to:
 - **Fix existing prices:** `/api/admin/fix-prices` converts USD→AUD (safe to repeat)
 
 ### Needs Work:
-- ⚠️ **Auto-pay verification** — switched to `ds.order.create`, needs test order to confirm auto-pay triggers
-- ⚠️ `ds_extend_request` parameter — may need auto-pay flags if basic switch doesn't work
+- ✅ **Auto-pay WORKING** — `ds.order.create` + `ds_extend_request.payment.try_to_pay = "true"` confirmed April 8
 - ⚠️ Checkout dark theme (still white background)
 - ⚠️ Storefront infinite scroll
 - ⚠️ Store owner product management

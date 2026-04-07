@@ -29,14 +29,11 @@
 - Updated response parsing: now checks `aliexpress_ds_order_create_response` (with fallback)
 - Added raw response logging for debugging in Vercel logs
 
-**Status: TESTED — ds.order.create works but auto-pay does NOT trigger**
-- Merged to production and tested on April 8
-- Test order: TG-MNOXNDIO → AliExpress order **8210677106719621**
-- `aliexpress_ds_order_create_response` returned `is_success: true`
-- Order appeared on AliExpress but status was "To Pay" — had to pay manually with stored card
-- **CONCLUSION:** `ds.order.create` alone does NOT trigger auto-pay
-- **NEXT STEP:** Expand `ds_extend_request` parameter on API docs — likely contains auto-pay flag
-- DS Level report also failed: "This publisher is not registered" (separate issue)
+**Status: AUTO-PAY WORKING! (confirmed April 8, 2026)**
+- Test order TG-MNOZ9Z6D → AliExpress order **8210560128429621** — AUTO-PAID!
+- The key was `ds_extend_request.payment.try_to_pay = "true"`
+- Previous test (TG-MNOXNDIO / AE 8210677106719621) failed without this flag
+- Fully autonomous: customer pays → AE order created → AE auto-paid → ships to customer
 
 ### AliExpress DS API Documentation Found
 Full API list at: https://openservice.aliexpress.com/doc/api.htm#/api?cid=21038
