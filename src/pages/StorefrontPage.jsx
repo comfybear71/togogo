@@ -230,147 +230,53 @@ export default function StorefrontPage({ subdomain }) {
     </div>
   )
 
-  // Category emoji mapping
-  const CATEGORY_EMOJIS = {
-    'For you': '',
-    'Home & Garden': '🏡',
-    'Computer & Office': '💻',
-    'Consumer Electronics': '📱',
-    'Phones & Telecommunications': '📞',
-    'Phones & Telecommunications Accessories': '📞',
-    'Sports & Entertainment': '⚽',
-    'Toys & Hobbies': '🎮',
-    'Beauty & Health': '💄',
-    'Jewelry & Accessories': '💎',
-    'Women\'s Clothing': '👗',
-    'Men\'s Clothing': '👔',
-    'Mother & Kids': '👶',
-    'Shoes': '👟',
-    'Bags & Shoes': '👜',
-    'Luggage & Bags': '🧳',
-    'Automobiles & Motorcycles': '🚗',
-    'Lights & Lighting': '💡',
-    'Electronic Components & Supplies': '🔌',
-    'Tools': '🔧',
-    'Home Improvement': '🏠',
-    'Pet Supplies': '🐾',
-    'Hair Extensions & Wigs': '💇',
-    'Apparel Accessories': '🧢',
-    'Education & Office Supplies': '📚',
-    'Security & Protection': '🔒',
-    'Furniture': '🛋️',
-    'Watches': '⌚',
-  }
-  const getCategoryEmoji = (name) => {
-    for (const [key, emoji] of Object.entries(CATEGORY_EMOJIS)) {
-      if (name.toLowerCase().includes(key.toLowerCase())) return emoji
-    }
-    return '📦'
-  }
-
-  // Featured products (top 6 most expensive for carousel)
-  const featuredProducts = useMemo(() => {
-    if (!storeData?.products) return []
-    return [...storeData.products].sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 6)
-  }, [storeData?.products])
-
-  // Top categories for tabs
-  const topCategories = useMemo(() => {
-    if (!storeData?.categories) return []
-    return storeData.categories.slice(0, 6)
-  }, [storeData?.categories])
-
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} onTrackOrder={() => setView('orders')} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} onTrackOrder={() => setView('orders')} />
 
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] px-4 pt-6 pb-4">
+      {/* Hero */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] py-16 px-4 text-center">
         <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 50% 50%, ${theme.accent}40, transparent 70%)` }} />
-        <div className="relative flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-white leading-tight">New arrivals,<br/>great discounts</h1>
-          </div>
-          <div className="flex items-center gap-4 text-right text-sm">
-            <div><span className="font-bold text-white">{storeData.products.length}</span><br/><span className="text-slate-400 text-xs">products</span></div>
-            <span className="text-slate-600">•</span>
-            <div><span className="font-bold text-white">{storeData.categories.length}</span><br/><span className="text-slate-400 text-xs">categories</span></div>
-            <span className="text-slate-600">•</span>
-            <div><span className="font-bold text-green-400">A$6</span><br/><span className="text-slate-400 text-xs">shipping</span></div>
-          </div>
-        </div>
-
-        {/* Featured Products Carousel */}
-        {featuredProducts.length > 0 && (
-          <div className="relative -mx-1 overflow-x-auto scrollbar-hide pb-2">
-            <div className="flex gap-3 px-1" style={{ minWidth: 'max-content' }}>
-              {featuredProducts.map((product) => (
-                <div
-                  key={product.id}
-                  onClick={() => { setSelectedProduct(product); setView('product') }}
-                  className="relative flex-shrink-0 w-36 cursor-pointer group"
-                >
-                  <div className="relative aspect-square overflow-hidden rounded-xl bg-white/[0.05]">
-                    {product.image ? (
-                      <img src={product.image} alt={product.title} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center"><Package className="h-8 w-8 text-slate-600" /></div>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                      className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 shadow-lg transition-transform group-hover:scale-110"
-                    >
-                      <Plus className="h-4 w-4 text-slate-800" />
-                    </button>
-                  </div>
-                  <h3 className="mt-1.5 text-xs font-medium text-white line-clamp-2 leading-tight">{product.title}</h3>
-                  <p className="text-sm font-bold" style={{ color: theme.accent }}>A${(product.price || 0).toFixed(2)}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <h1 className="relative text-4xl font-extrabold tracking-tight md:text-5xl bg-gradient-to-r from-white via-slate-200 to-white bg-clip-text text-transparent animate-pulse" style={{ animationDuration: '3s' }}>
+          {store.name}
+        </h1>
+        <p className="relative mt-3 text-slate-400">Quality products, fast shipping</p>
       </div>
 
-      {/* Category Tabs + Price Filters (sticky) */}
-      <div className="sticky top-[52px] z-30 bg-[#0f172a] border-b border-white/[0.06]">
-        {/* Category tabs with emojis */}
-        <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-1 px-3 pt-2 pb-1" style={{ minWidth: 'max-content' }}>
-            <button
-              onClick={() => setSelectedCategory('')}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
-                selectedCategory === ''
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              style={selectedCategory === '' ? { backgroundColor: theme.accent } : {}}
-            >
-              For you
-            </button>
-            {topCategories.map((c) => {
-              const catName = c.name || c
-              const emoji = getCategoryEmoji(catName)
-              return (
-                <button
-                  key={catName}
-                  onClick={() => setSelectedCategory(catName)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
-                    selectedCategory === catName
-                      ? 'text-white'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                  style={selectedCategory === catName ? { backgroundColor: theme.accent } : {}}
-                >
-                  {emoji && <span className="mr-1">{emoji}</span>}{catName}
-                </button>
-              )
-            })}
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        {/* Search + Filters */}
+        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center overflow-hidden">
+          <div className="relative flex-1 min-w-0">
+            <Search className={`absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${theme.textMuted}`} />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full rounded-xl border py-2.5 pl-10 pr-4 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none focus:ring-2`}
+              style={{ borderColor: theme.accentLight, '--tw-ring-color': theme.accentLight, fontSize: '16px' }}
+            />
           </div>
+          {storeData.categories.length > 0 && (
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className={`w-full sm:w-auto rounded-xl border px-4 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`}
+              style={{ borderColor: theme.accentLight, fontSize: '16px' }}
+            >
+              <option value="">All Categories ({storeData.products.length})</option>
+              {storeData.categories.map((c) => (
+                <option key={c.name || c} value={c.name || c}>
+                  {c.name || c}{c.count ? ` (${c.count})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
-        {/* Price range filters */}
-        <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
+
+        {/* Price Range Filters */}
+        <div className="flex flex-wrap gap-2 mb-6">
           {[
             { key: '', label: 'All Prices' },
             { key: 'under10', label: 'Under $10' },
@@ -381,10 +287,10 @@ export default function StorefrontPage({ subdomain }) {
             <button
               key={key}
               onClick={() => setPriceRange(key)}
-              className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-all ${
+              className={`rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
                 priceRange === key
                   ? 'text-white'
-                  : 'text-slate-500 border border-white/[0.08] hover:border-white/[0.2]'
+                  : 'text-slate-400 border border-white/[0.08] hover:border-white/[0.2]'
               }`}
               style={priceRange === key ? { backgroundColor: theme.accent } : {}}
             >
@@ -392,10 +298,8 @@ export default function StorefrontPage({ subdomain }) {
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Products Grid */}
-      <div className="mx-auto max-w-7xl px-3 py-4">
+        {/* Products */}
         {filteredProducts.length === 0 ? (
           <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} py-16 text-center shadow-sm`}>
             <Package className="mx-auto h-16 w-16 text-gray-300 mb-3" />
@@ -409,7 +313,7 @@ export default function StorefrontPage({ subdomain }) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {filteredProducts.map((product) => (
               <div
                 key={product.id}
@@ -433,11 +337,13 @@ export default function StorefrontPage({ subdomain }) {
                   <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
                   <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
                   <div className="flex items-center justify-between">
-                    <p className={`text-lg font-bold`} style={{ color: theme.accent }}>A${(product.price || 0).toFixed(2)}</p>
+                    <p className={`text-lg font-bold ${theme.textPrimary}`}>A${(product.price || 0).toFixed(2)}</p>
                     <button
                       onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                      className="rounded-full p-2 transition-colors bg-white/[0.05] hover:bg-white/[0.15]"
-                      style={{ color: theme.accent }}
+                      className="rounded-lg p-2 transition-colors hover:text-white"
+                      style={{ backgroundColor: theme.accentLight, color: theme.accent }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = theme.accent; e.currentTarget.style.color = '#fff' }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = theme.accentLight; e.currentTarget.style.color = theme.accent }}
                     >
                       <Plus className="h-4 w-4" />
                     </button>
@@ -680,53 +586,41 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
   )
 }
 
-function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchQuery, onSearchChange }) {
+function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5">
-        <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
-          <Store className="h-4 w-4 text-white" />
-        </div>
-        {/* Search bar in header */}
-        {onSearchChange ? (
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery || ''}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full rounded-full border border-white/[0.08] bg-white/[0.05] py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/[0.2]"
-              style={{ fontSize: '16px' }}
-            />
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
+            <Store className="h-4 w-4 text-white" />
           </div>
-        ) : (
-          <span className="flex-1 text-lg font-bold text-white">{store.name}</span>
-        )}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-lg font-bold text-white">{store.name}</span>
+        </div>
+        <div className="flex items-center gap-2 sm:gap-3">
           {onTrackOrder && (
             <button
               onClick={onTrackOrder}
-              className="rounded-xl p-2 text-slate-400 hover:text-white transition-colors border border-white/[0.08]"
-              title="Track Order"
+              className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
             >
-              <Package className="h-4 w-4" />
+              <Package className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Track Order</span>
             </button>
           )}
           <a
             href="/auth"
-            className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs text-slate-300 hover:text-white transition-colors border border-white/[0.08]"
+            className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
           >
             Sign In
           </a>
           <button
             onClick={onCartClick}
-            className="relative flex items-center justify-center rounded-xl p-2 text-white transition-colors"
+            className="relative flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
             <ShoppingCart className="h-4 w-4" />
+            Cart
             {cart.count > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-red-500 min-w-[18px] h-[18px]">
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white bg-red-500">
                 {cart.count}
               </span>
             )}
