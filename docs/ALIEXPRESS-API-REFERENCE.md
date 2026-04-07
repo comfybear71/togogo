@@ -107,9 +107,28 @@
 }
 ```
 
-**`ds_extend_request` structure:** (NOT YET DOCUMENTED — needs expansion from API docs)
-- May contain auto-pay configuration flags
-- TODO: Click `>` arrow on API docs page to see fields
+**`ds_extend_request` structure (AUTO-PAY IS HERE):**
+
+```json
+{
+  "promotion": {
+    "promotion_channel_info": "promotionChannelInfo",
+    "promotion_activity_id": "dsCouponId from coupon query API"
+  },
+  "payment": {
+    "pay_currency": "USD",
+    "try_to_pay": "true"    // ← THIS TRIGGERS AUTO-PAY
+  },
+  "trade_extra_param": {
+    "business_model": "retail",   // "wholesale" or "retail" (default)
+    "customize_sku_map": {},      // key=sku_id, value=customize_id
+    "nat_addr": "",               // SA natAddr
+    "channel_strategy": ""        // channel_strategy
+  }
+}
+```
+
+**CRITICAL: `try_to_pay: "true"`** — This tells AliExpress to auto-charge the DS Center payment method (PayPal/card). Without this flag, orders are created but NOT paid.
 
 **Response:**
 
