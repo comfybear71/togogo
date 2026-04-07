@@ -737,7 +737,24 @@ import {
 ### AE-Seller
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Seller management APIs |
+| `aliexpress.merchant.product.post.limit` | Query product posting limit (CN seller only) |
+| `global.seller.channel.info.get` | Seller basic info and channel list query |
+| `aliexpress.merchant.manufacture.detail` | Manufacture detail |
+| `aliexpress.merchant.manufacture.list` | Manufacture list |
+| `aliexpress.merchant.Address.list` | Query address list |
+| `aliexpress.merchant.agreement.sign.list` | Query merchant agreement sign list |
+| `aliexpress.merchant.msr.detail` | Query MSR detail |
+| `aliexpress.merchant.msr.list` | Query MSR list |
+| `ae.merchant.assortment.seller.plan.chance.download.all` | Download all business opportunities |
+| `ae.merchant.assortment.seller.plan.chance.list` | Paginated opportunity info for a plan |
+| `ae.merchant.assortment.seller.arrangement.plan.list` | Business opportunity plan list |
+| `ae.merchant.assortment.seller.apply.all` | Batch supply application |
+| `ae.merchant.assortment.seller.plan.chance.download` | Download specific opportunity |
+| `ae.merchant.assortment.seller.plan.products.query` | Query plan enrollment status |
+| `aliexpress.merchant.private.file.get` | Query AE merchant private file |
+| `aliexpress.merchant.profile.get` | Query seller profile |
+| `aliexpress.merchant.diagnosis.query` | Query store diagnosis issue list |
+| `ae.merchant.assortment.seller.plan.dashboard` | Statistics data read (dashboard) |
 
 ### AE-Category&Attributes
 | API | Description |
