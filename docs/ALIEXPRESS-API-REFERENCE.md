@@ -624,3 +624,209 @@ import {
   fetchFeedProducts,      // aliexpress.ds.recommend.feed.get (internal)
 } from './_lib/suppliers.js'
 ```
+
+---
+
+## Complete API Catalog (All Categories)
+
+> Full list of every API available at openservice.aliexpress.com for our app.  
+> Documented from API docs screenshots on 2026-04-08.
+
+### System Tool (OAuth)
+| API | Description |
+|-----|-------------|
+| `system.oauth2.generateSecurityToken` | Generate security token |
+| `system.oauth2.generateToken` | Generate OAuth access token |
+| `system.oauth2.refreshSecurityToken` | Refresh security token |
+| `system.oauth2.refreshToken` | Refresh OAuth access token |
+
+### AE-Affiliate (NOT AVAILABLE — no affiliate permissions)
+| API | Description |
+|-----|-------------|
+| `aliexpress.affiliate.product.shipping.get` | Get product shipping info |
+| `aliexpress.affiliate.promotion.info.get` | Get promotion info |
+| `aliexpress.affiliate.sku.detail.get` | Get SKU product detail info |
+| `/aliexpress/xinghe/merchant/license/get` | Inquire business license |
+| `aliexpress.affiliate.link.generate` | Generate affiliate links |
+| `aliexpress.affiliate.category.get` | Get category list |
+| `aliexpress.affiliate.featuredpromo.get` | Get featured promo info |
+| `aliexpress.affiliate.featuredpromo.products.get` | Get featured promo products |
+| `aliexpress.affiliate.hotproduct.download` | Hot product download |
+| `aliexpress.affiliate.hotproduct.query` | Hot products query |
+| `aliexpress.affiliate.order.get` | Get order info |
+| `aliexpress.affiliate.order.list` | Get order list |
+| `aliexpress.affiliate.order.listbyindex` | Get order list by index |
+| `aliexpress.affiliate.productdetail.get` | Get product detail |
+| `aliexpress.affiliate.product.query` | Product search/query |
+| `aliexpress.affiliate.product.smartmatch` | Smart match products |
+
+### AE-Logistics
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Logistics/shipping APIs |
+
+### AE-Aliexpress-Direct-Product
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Direct product management |
+
+### AE-Settlement
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Payment settlement APIs |
+
+### AE-Custmize
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Customization APIs |
+
+### AE-KoreanCrossborder-Product
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Korean cross-border product APIs |
+
+### AE-Dropshipper (OUR MAIN APIS)
+| API | Description | Status |
+|-----|-------------|--------|
+| `aliexpress.ds.order.create` | AE DS Order Create and Pay API | **IMPLEMENTED** |
+| `aliexpress.ds.category.get` | Fetch AE category list | Available |
+| `aliexpress.ds.freight.query` | Delivery/Freight API | Available |
+| `aliexpress.ds.order.tracking.get` | DS Order Tracking | Available |
+| `aliexpress.ds.feed.itemids.get` | Fetch items with feedname | Available |
+| `aliexpress.logistics.buyer.freight.calculate` | Freight calculation interface | **IMPLEMENTED** |
+| `aliexpress.ds.image.searchV2` | Dropshipper image search v2 | Available |
+| `aliexpress.trade.ds.order.get` | Buyer query order details | Available |
+| `aliexpress.ds.member.benefit.get` | DS member benefit get | Available |
+| `aliexpress.ds.product.specialinfo.get` | Get products' special info | Available |
+| `aliexpress.ds.product.wholesale.get` | Product info for wholesale | Available |
+| `aliexpress.ds.product.get` | Product info query for DS | **IMPLEMENTED** |
+| `aliexpress.ds.search.event.report` | Search event report | Available |
+| `aliexpress.ds.text.search` | Text search for DS | Available |
+| `aliexpress.ds.feedname.get` | Get feed names | **IMPLEMENTED** |
+| `aliexpress.ds.recommend.feed.get` | Recommend feed get | **IMPLEMENTED** |
+
+### AE-Image
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Image processing APIs |
+
+### AE-Seller
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Seller management APIs |
+
+### AE-Category&Attributes
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Category and attribute management |
+
+### AE-Refund&return
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Refund and return handling |
+
+### AE-Freight (Shipment)
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Freight/shipment management |
+
+### AE-Order & Transaction
+| API | Description |
+|-----|-------------|
+| `aliexpress.trade.seller.order.decrypt` | Decryption of order details |
+| `aliexpress.solution.order.receiptinfo.get` | Get Order Receipt Info |
+| `aliexpress.solution.order.get` | Get order list |
+| `aliexpress.trade.seller.orderlist.get` | Order list query |
+| `aliexpress.trade.new.redefining.findorder` | Trade order details query |
+| `aliexpress.trade.redefining.verifycode` | Seller verify code |
+| `aliexpress.trade.redefining.confirmshipment` | semiChoice switch shipping method |
+| `aliexpress.trade.redefining.sendcode` | Send code |
+
+### AliExpress Direct Logistic
+| API | Description |
+|-----|-------------|
+| (expand to see full list) | Direct logistics APIs |
+
+### AE-Product Management
+| API | Description |
+|-----|-------------|
+| `aliexpress.solution.batch.product.price.update` | Batch product price update |
+| `aliexpress.product.ladder.price.calculate` | Calculate wholesale discount SKU prices |
+| `aliexpress.postproduct.redefining.createproductgroup` | Create product group |
+| `aliexpress.product.customize.font.query` | Custom product font/color query |
+| `aliexpress.distribution.product.post` | DistributionPublishForAEChannel |
+| `aliexpress.offer.redefining.supportwigupgrade` | Does it support wig size upgrade |
+| `aliexpress.solution.product.edit` | Edit Product API |
+| `aliexpress.solution.product.info.get` | Get Single Product Info |
+| `aliexpress.solution.product.list.get` | Get product list |
+| `aliexpress.product.productgroups.get` | Get current member's product grouping |
+| `aliexpress.postproduct.redefining.offlineaeproduct` | Goods off the shelf (delist) |
+| `aliexpress.product.customize.image.generate` | Graph/image generation interface |
+| `aliexpress.product.wholesale.supplySigned` | Merchants sign wholesale supply contracts |
+| `aliexpress.offer.redefining.supportsizeprop` | New/old size attributes support query |
+| `aliexpress.postproduct.redefining.onlineaeproduct` | Online AE product (list product) |
+| `aliexpress.solution.product.post` | Product posting API |
+| `aliexpress.product.customize.design.template.list` | Query custom design template list |
+| `aliexpress.product.ladder.price.update` | Set ladder prices for wholesale goods |
+| `aliexpress.postproduct.redefining.setgroups` | Set product group |
+| `aliexpress.customize.template.product.submit` | Submit new product customization info |
+| `aliexpress.solution.schema.product.instance.post` | Upload product based on JSON schema |
+| `aliexpress.customize.product.detail` | Customize product detail |
+| `aliexpress.customize.product.query` | Customize product query |
+| `aliexpress.customize.product.submit` | Customize product submit |
+| `aliexpress.solution.batch.product.delete` | Batch product delete |
+| `aliexpress.solution.batch.product.inventory.update` | Batch product inventory update |
+| `aliexpress.solution.feed.query` | Solution feed query |
+| `aliexpress.solution.feed.submit` | Solution feed submit |
+| `aliexpress.solution.hscode.query` | HS code query |
+| `aliexpress.solution.merchant.profile.get` | Merchant profile get |
+| `aliexpress.solution.schema.product.full.update` | Schema product full update |
+| `aliexpress.product.customize.template.delete` | Delete customize template |
+| `aliexpress.solution.product.schema.get` | Get product schema |
+| `aliexpress.sale.prop.sequence.list` | Get sale prop sequence |
+| `aliexpress.postproduct.redefining.getsizechartinfobytype` | Get size chart template by type |
+| `aliexpress.offer.redefining.supportnewsizechartlist` | Support new size chart template list |
+| `aliexpress.solution.product.multi.stock.update` | Local seller edit multi warehouse stock |
+| `aliexpress.product.bind.brandmanufacturer` | Product bind brand manufacturer/MSR EU ID |
+| `aliexpress.product.customize.data.query` | Query customization data in orders |
+| `aliexpress.product.customize.template.config` | Query customize template config |
+| `aliexpress.product.customize.template.detail` | Query customize template detail |
+| `aliexpress.product.customize.template.list` | Query customize template list |
+| `aliexpress.product.customize.design.template.detail` | Query design template content |
+| `aliexpress.solution.product.inventory.query` | Query product inventory (multi warehouse) |
+| `aliexpress.product.wholesale.query` | Query wholesale products |
+| `aliexpress.product.customize.template.save` | Save customize template |
+
+### AE_DSA
+| API | Description |
+|-----|-------------|
+| `global.dsa.ads.query` | DSA Ads Data Query |
+| `global.dsa.item.query` | DSA Item Data Query |
+| `global.dsa.pc.query` | DSA Punish Data Query |
+
+### AE-UIC-IPAY
+| API | Description |
+|-----|-------------|
+| (none) | **EMPTY — no APIs available** |
+
+### CSP-Seller
+| API | Description |
+|-----|-------------|
+| `global.seller.relation.query` | Obtain seller account list |
+
+---
+
+## Auto-Pay Summary
+
+**There is NO separate payment API.** AE-UIC-IPAY is empty. Auto-pay is triggered by:
+
+1. **Using `aliexpress.ds.order.create`** (not `trade.buy.placeorder`)
+2. **Having auto-pay activated** in DS Center (inbusiness.aliexpress.com/web/autoPay)
+3. **Payment method bound:** PayPal (sfrench71@me.com) or Visa cards
+4. The `ds_extend_request` optional parameter may contain additional auto-pay flags
+5. The API name literally says "Order Create **and Pay**" — payment is built into the create call
+
+**If auto-pay still doesn't trigger after switching to ds.order.create:**
+- Check `ds_extend_request` parameter fields (click `>` arrow on API docs page)
+- Ensure PayPal authorization hasn't expired in DS Center
+- Contact AliExpress Business Support with: "Orders placed via aliexpress.ds.order.create API still go to Awaiting Payment"
