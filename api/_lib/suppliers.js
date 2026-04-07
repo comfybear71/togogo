@@ -194,6 +194,43 @@ export async function getProductDetails(productId) {
 }
 
 // ============================================
+// WHOLESALE PRICING — aliexpress.ds.product.wholesale.get
+// ============================================
+
+export async function getWholesalePricing(productId) {
+  try {
+    const data = await callAuthenticatedAPI('aliexpress.ds.product.wholesale.get', {
+      product_id: String(productId),
+    })
+
+    const result = data?.aliexpress_ds_product_wholesale_get_response?.result
+    if (!result) {
+      console.log(`[AliExpress] No wholesale pricing for product ${productId}`)
+      return null
+    }
+
+    // Parse tier pricing (e.g., buy 10+ for $5, buy 50+ for $4)
+    const tiers = result?.wholesale_tier_list?.wholesale_tier_d_t_o || []
+
+    return {
+      productId: String(productId),
+      available: tiers.length > 0,
+      tiers: tiers.map(t => ({
+        minQty: parseInt(t.min_quantity || '0'),
+        maxQty: t.max_quantity ? parseInt(t.max_quantity) : null,
+        price: parseFloat(t.price?.amount || '0'),
+        currency: t.price?.currency_code || 'USD',
+        discount: t.discount || null,
+      })),
+      rawData: result,
+    }
+  } catch (err) {
+    console.error(`[AliExpress] Wholesale pricing failed for ${productId}:`, err.message)
+    return null
+  }
+}
+
+// ============================================
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
@@ -264,6 +301,12 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
     // Add promotion to ds_extend_request if available
     if (promotionCode) {
       dsExtendRequest.promotion = { promotion_activity_id: promotionCode }
+    }
+
+    // Use wholesale pricing model for bulk orders (10+)
+    if (quantity >= 10) {
+      dsExtendRequest.trade_extra_param = { business_model: 'wholesale' }
+      console.log(`[AliExpress] Bulk order (qty=${quantity}), using wholesale pricing`)
     }
 
     const params = {
