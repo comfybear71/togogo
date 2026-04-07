@@ -87,10 +87,10 @@ export default function StorefrontPage({ subdomain }) {
     return [...storeData.products].sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 6)
   }, [storeData?.products])
 
-  // Top categories for tabs
+  // Top categories for tabs — show ALL categories
   const topCategories = useMemo(() => {
     if (!storeData?.categories) return []
-    return storeData.categories.slice(0, 6)
+    return storeData.categories
   }, [storeData?.categories])
 
   // Category emoji mapping
