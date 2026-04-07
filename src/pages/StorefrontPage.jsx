@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
-  ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft,
-  Store, Truck, Shield, Loader2, CheckCircle, AlertCircle,
+  ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft, ChevronRight,
+  Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star,
 } from 'lucide-react'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 
@@ -38,79 +38,163 @@ function useCart(subdomain) {
 // ─── Main Storefront Component ────────────────────────────────────────────
 export default function StorefrontPage({ subdomain }) {
   const [storeData, setStoreData] = useState(null)
+  const [allProducts, setAllProducts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [view, setView] = useState('grid') // grid | product | cart | checkout | success | orders
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const searchTimerRef = useRef(null)
   const [selectedCategory, setSelectedCategory] = useState('')
   const [priceRange, setPriceRange] = useState('')
+  const [sortBy, setSortBy] = useState('newest')
   const cart = useCart(subdomain)
+  const loadingRef = useRef(false)
+  const PRODUCTS_PER_PAGE = 30
+
+  // Handle browser back button — return to grid instead of leaving site
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (e.state?.view) {
+        setView(e.state.view)
+        if (e.state.product) setSelectedProduct(e.state.product)
+      } else {
+        setView('grid')
+        setSelectedProduct(null)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    // Push initial state
+    if (!window.history.state?.view) {
+      window.history.replaceState({ view: 'grid' }, '')
+    }
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // When view changes, push to browser history
+  const navigateTo = useCallback((newView, product = null) => {
+    if (newView === 'product' && product) {
+      setSelectedProduct(product)
+      setView('product')
+      window.history.pushState({ view: 'product', product }, '')
+    } else if (newView === 'cart') {
+      setView('cart')
+      window.history.pushState({ view: 'cart' }, '')
+    } else if (newView === 'grid') {
+      setView('grid')
+      setSelectedProduct(null)
+      // Don't push — let popstate handle it, or replace
+    } else {
+      setView(newView)
+      window.history.pushState({ view: newView }, '')
+    }
+  }, [])
 
   // Always use midnight (dark) theme — stored in database, never localStorage
   const theme = getThemeById(storeData?.store?.themeId || 'midnight')
 
+  // Build API URL with filters
+  const buildUrl = useCallback((page) => {
+    const params = new URLSearchParams({
+      subdomain, page, limit: PRODUCTS_PER_PAGE,
+    })
+    if (selectedCategory) params.set('category', selectedCategory)
+    if (priceRange) params.set('priceRange', priceRange)
+    if (sortBy !== 'newest') params.set('sort', sortBy)
+    if (searchQuery) params.set('search', searchQuery)
+    return `${API_BASE}/api/storefront/store?${params}`
+  }, [subdomain, selectedCategory, priceRange, sortBy, searchQuery])
+
+  // Load initial page
   useEffect(() => {
-    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}`)
+    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=1&limit=${PRODUCTS_PER_PAGE}`)
       .then((r) => r.ok ? r.json() : Promise.reject('Store not found'))
-      .then((data) => setStoreData(data))
-      .catch(() => {
-        setStoreData(null)
+      .then((data) => {
+        setStoreData(data)
+        setAllProducts(data.products || [])
+        setHasMore(data.pagination?.hasMore || false)
+        setCurrentPage(1)
       })
+      .catch(() => { setStoreData(null) })
       .finally(() => setLoading(false))
 
-    // Check if returning from Stripe checkout
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('checkout') === 'success') {
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('checkout') === 'success') {
       setView('success')
       cart.clear()
-      // Clean up URL
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [subdomain])
 
-  const filteredProducts = useMemo(() => {
-    if (!storeData?.products) return []
-    return storeData.products.filter((p) => {
-      if (searchQuery && !p.title.toLowerCase().includes(searchQuery.toLowerCase())) return false
-      if (selectedCategory && p.category !== selectedCategory) return false
-      if (priceRange === 'under10' && p.price >= 10) return false
-      if (priceRange === '10to20' && (p.price < 10 || p.price >= 20)) return false
-      if (priceRange === '20to50' && (p.price < 20 || p.price >= 50)) return false
-      if (priceRange === 'over50' && p.price < 50) return false
-      return true
-    })
-  }, [storeData?.products, searchQuery, selectedCategory, priceRange])
+  // Reload when filters change (server-side filtering)
+  // Don't flash the page — load in background and swap products smoothly
+  const [filterLoading, setFilterLoading] = useState(false)
+  const filterAbortRef = useRef(null)
 
-  // Featured products (top 6 most expensive for carousel)
-  const featuredProducts = useMemo(() => {
-    if (!storeData?.products) return []
-    return [...storeData.products].sort((a, b) => (b.price || 0) - (a.price || 0)).slice(0, 6)
-  }, [storeData?.products])
+  useEffect(() => {
+    if (!storeData) return
+    // Abort previous filter request
+    if (filterAbortRef.current) filterAbortRef.current.abort()
+    const controller = new AbortController()
+    filterAbortRef.current = controller
 
-  // Top categories for tabs — show ALL categories
-  const topCategories = useMemo(() => {
-    if (!storeData?.categories) return []
-    return storeData.categories
-  }, [storeData?.categories])
+    setFilterLoading(true)
+    fetch(buildUrl(1), { signal: controller.signal })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setAllProducts(data.products || [])
+          setHasMore(data.pagination?.hasMore || false)
+          setCurrentPage(1)
+          if (data.pagination) setStoreData(prev => prev ? { ...prev, pagination: data.pagination } : prev)
+        }
+      })
+      .catch((err) => { if (err.name !== 'AbortError') console.error(err) })
+      .finally(() => setFilterLoading(false))
+  }, [selectedCategory, priceRange, sortBy, searchQuery])
 
-  // Category emoji mapping
-  const getCategoryEmoji = (name) => {
-    const CATEGORY_EMOJIS = {
-      'Home & Garden': '🏡', 'Computer & Office': '💻', 'Consumer Electronics': '📱',
-      'Phones & Telecommunications': '📞', 'Sports & Entertainment': '⚽',
-      'Toys & Hobbies': '🎮', 'Beauty & Health': '💄', 'Jewelry & Accessories': '💎',
-      'Women\'s Clothing': '👗', 'Men\'s Clothing': '👔', 'Mother & Kids': '👶',
-      'Shoes': '👟', 'Luggage & Bags': '🧳', 'Automobiles & Motorcycles': '🚗',
-      'Lights & Lighting': '💡', 'Electronic Components & Supplies': '🔌',
-      'Tools': '🔧', 'Home Improvement': '🏠', 'Pet Supplies': '🐾',
-      'Apparel Accessories': '🧢', 'Education & Office Supplies': '📚',
-      'Furniture': '🛋️', 'Watches': '⌚',
+  // Load more products
+  const loadMore = useCallback(() => {
+    if (loadingRef.current || !hasMore) return
+    loadingRef.current = true
+    setLoadingMore(true)
+    const nextPage = currentPage + 1
+    fetch(buildUrl(nextPage))
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data?.products?.length) {
+          setAllProducts(prev => [...prev, ...data.products])
+          setHasMore(data.pagination?.hasMore || false)
+          setCurrentPage(nextPage)
+          // Update categories from full data
+          if (data.categories) {
+            setStoreData(prev => prev ? { ...prev, categories: data.categories } : prev)
+          }
+        } else {
+          setHasMore(false)
+        }
+      })
+      .catch(() => { setHasMore(false) })
+      .finally(() => { setLoadingMore(false); loadingRef.current = false })
+  }, [subdomain, currentPage, hasMore])
+
+  // Infinite scroll listener
+  useEffect(() => {
+    if (view !== 'grid') return
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+        loadMore()
+      }
     }
-    for (const [key, emoji] of Object.entries(CATEGORY_EMOJIS)) {
-      if (name.toLowerCase().includes(key.toLowerCase())) return emoji
-    }
-    return '📦'
-  }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [view, loadMore])
+
+  // Products are now filtered and sorted server-side
+  const filteredProducts = allProducts
 
   // ─── Loading ──────────────────────────────────────────────────────
   if (loading) return (
@@ -186,8 +270,10 @@ export default function StorefrontPage({ subdomain }) {
       cart={cart}
       theme={theme}
       subdomain={subdomain}
-      onBack={() => setView('grid')}
-      onCartClick={() => setView('cart')}
+      allProducts={allProducts}
+      onSelectProduct={(p) => navigateTo('product', p)}
+      onBack={() => window.history.back()}
+      onCartClick={() => navigateTo('cart')}
     />
   )
 
@@ -263,120 +349,160 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
-    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => setView('cart')} onTrackOrder={() => setView('orders')} searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+    <div className={`min-h-screen ${theme.pageBg}`} style={{ overflowX: 'clip' }}>
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} searchInput={searchInput} onSearchChange={(e) => { setSearchInput(e.target.value); clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 1000) }} />
 
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] px-4 pt-6 pb-4">
-        <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 50% 50%, ${theme.accent}40, transparent 70%)` }} />
-        <div className="relative flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-extrabold text-white leading-tight">New arrivals,<br/>great discounts</h1>
-          </div>
-          <div className="flex items-center gap-4 text-right text-sm">
-            <div><span className="font-bold text-white">{storeData.products.length}</span><br/><span className="text-slate-400 text-xs">products</span></div>
-            <span className="text-slate-600">•</span>
-            <div><span className="font-bold text-white">{storeData.categories.length}</span><br/><span className="text-slate-400 text-xs">categories</span></div>
-            <span className="text-slate-600">•</span>
-            <div><span className="font-bold text-green-400">A$6</span><br/><span className="text-slate-400 text-xs">shipping</span></div>
-          </div>
-        </div>
-
-        {/* Featured Products Carousel */}
-        {featuredProducts.length > 0 && (
-          <div className="relative -mx-1 overflow-x-auto scrollbar-hide pb-2">
-            <div className="flex gap-3 px-1" style={{ minWidth: 'max-content' }}>
-              {featuredProducts.map((product) => (
-                <div
-                  key={product.id}
-                  onClick={() => { setSelectedProduct(product); setView('product') }}
-                  className="relative flex-shrink-0 w-36 cursor-pointer group"
-                >
-                  <div className="relative aspect-square overflow-hidden rounded-xl bg-white/[0.05]">
-                    {product.image ? (
-                      <img src={product.image} alt={product.title} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center"><Package className="h-8 w-8 text-slate-600" /></div>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                      className="absolute bottom-2 right-2 rounded-full bg-white/90 p-1.5 shadow-lg transition-transform group-hover:scale-110"
-                    >
-                      <Plus className="h-4 w-4 text-slate-800" />
-                    </button>
+      {/* New Arrivals — horizontal scroll like AliExpress */}
+      {allProducts.length > 0 && (
+        <div className="bg-gradient-to-b from-[#0f172a] to-[#0c1222] px-4 py-6">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">New arrivals, great discounts</h2>
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span>{storeData.pagination?.totalProducts || allProducts.length} products</span>
+                <span>•</span>
+                <span>{storeData.categories?.length || 0} categories</span>
+                <span>•</span>
+                <span className="text-emerald-400">A$6 shipping</span>
+              </div>
+            </div>
+            <div className="relative group">
+              <div className="flex gap-3 overflow-x-auto pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }} id="newArrivalsScroll">
+                {allProducts.slice(0, 15).map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => navigateTo('product', p)}
+                    className="flex-shrink-0 w-[140px] sm:w-[160px] cursor-pointer"
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-xl bg-gray-100 mb-1.5">
+                      {p.image && <img src={p.image} alt={p.title} className="h-full w-full object-cover" />}
+                      {p.discountPercent > 0 && (
+                        <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">-{p.discountPercent}%</div>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); cart.add(p) }}
+                        className="absolute bottom-2 right-2 rounded-full p-1.5 bg-white/80 hover:bg-white shadow text-gray-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-white line-clamp-2 leading-tight mb-0.5">{p.title}</p>
+                    {p.ordersCount > 0 && <p className="text-[10px] text-slate-500">{p.ordersCount}+ sold</p>}
+                    <p className="text-sm font-bold text-red-500">A${(p.price || 0).toFixed(2)}</p>
                   </div>
-                  <h3 className="mt-1.5 text-xs font-medium text-white line-clamp-2 leading-tight">{product.title}</h3>
-                  <p className="text-sm font-bold" style={{ color: theme.accent }}>A${(product.price || 0).toFixed(2)}</p>
-                </div>
-              ))}
+                ))}
+              </div>
+              {/* Left/right scroll buttons */}
+              <button
+                onClick={() => document.getElementById('newArrivalsScroll')?.scrollBy({ left: -300, behavior: 'smooth' })}
+                className="absolute left-0 top-0 h-[140px] sm:h-[160px] w-10 flex items-center justify-center bg-black/30 hover:bg-black/50 text-white rounded-l-xl opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => document.getElementById('newArrivalsScroll')?.scrollBy({ left: 300, behavior: 'smooth' })}
+                className="absolute right-0 top-0 h-[140px] sm:h-[160px] w-10 flex items-center justify-center bg-black/30 hover:bg-black/50 text-white rounded-r-xl opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Category Tabs + Price Filters (sticky) */}
-      <div className="sticky top-[52px] z-30 bg-[#0f172a] border-b border-white/[0.06]">
-        {/* Category tabs with emojis */}
-        <div className="overflow-x-auto scrollbar-hide">
-          <div className="flex gap-1 px-3 pt-2 pb-1" style={{ minWidth: 'max-content' }}>
-            <button
-              onClick={() => setSelectedCategory('')}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
-                selectedCategory === ''
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              style={selectedCategory === '' ? { backgroundColor: theme.accent } : {}}
-            >
-              For you
-            </button>
-            {topCategories.map((c) => {
-              const catName = c.name || c
-              const emoji = getCategoryEmoji(catName)
-              return (
+      {/* Category Bar — horizontal scroll like AliExpress */}
+      {storeData.categories?.length > 0 && (
+        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[49px] z-30">
+          <div className="mx-auto max-w-7xl px-4">
+            {/* Category tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <style>{`
+                .category-scroll::-webkit-scrollbar { height: 6px; }
+                .category-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 6px; }
+                .category-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 6px; }
+                .category-scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+                .category-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) rgba(255,255,255,0.05); }
+              `}</style>
+              <button
+                onClick={() => setSelectedCategory('')}
+                className={`scrollbar-hide flex-shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-all ${
+                  !selectedCategory ? 'text-white bg-[#FF6B35]' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                For you
+              </button>
+              {storeData.categories.slice(0, 20).map((c) => {
+                const catEmojis = {
+                  'Home & Garden': '🏡', 'Home Improvement': '🔨', 'Computer & Office': '💻',
+                  'Beauty & Health': '💄', 'Automobiles, Parts & Accessories': '🚗',
+                  'Shoes': '👟', 'Apparel Accessories': '👒', 'Toys & Hobbies': '🧸',
+                  'Consumer Electronics': '📱', 'Sports Shoes,Clothing&Accessories': '⚽',
+                  'Phones & Telecommunications Accessories': '📞',
+                  'Luggage & Bags': '👜', 'Sports & Entertainment': '🏋️',
+                  'Mother & Kids': '👶', 'Tools': '🔧', 'Electronic Components & Supplies': '🔌',
+                  'Lights & Lighting': '💡', 'Jewelry & Accessories': '💍',
+                  "Men's Clothing": '👔', "Women's Clothing": '👗',
+                  'Kitchen': '🍳', 'Pet': '🐕', 'Audio': '🎧',
+                  'Office & School Supplies': '📎', 'Hair Extensions & Wigs': '💇',
+                  'Furniture': '🪑', 'Security & Protection': '🔒',
+                  'Underwear & Sleepwears': '🩱', 'Novelty & Special Use': '🎭',
+                  'Weddings & Events': '💒', 'Food': '🍔',
+                }
+                const emoji = catEmojis[c.name] || '🛍️'
+                return (
                 <button
-                  key={catName}
-                  onClick={() => setSelectedCategory(catName)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
-                    selectedCategory === catName
-                      ? 'text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                  key={c.name}
+                  onClick={() => setSelectedCategory(selectedCategory === c.name ? '' : c.name)}
+                  className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${
+                    selectedCategory === c.name ? 'text-white bg-[#FF6B35]' : 'text-slate-400 hover:text-white hover:bg-white/[0.06]'
                   }`}
-                  style={selectedCategory === catName ? { backgroundColor: theme.accent } : {}}
                 >
-                  {emoji && <span className="mr-1">{emoji}</span>}{catName}
+                  {emoji} {(c.name || '').replace('&', ' & ')}
                 </button>
-              )
-            })}
+              )})}
+            </div>
+            {/* Price filters + Sort — in sticky bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {[
+                { key: '', label: 'All Prices' },
+                { key: 'under10', label: `Under $10${storeData.priceRanges?.under10 ? ` (${storeData.priceRanges.under10})` : ''}` },
+                { key: '10to20', label: `$10–$20${storeData.priceRanges?.['10to20'] ? ` (${storeData.priceRanges['10to20']})` : ''}` },
+                { key: '20to50', label: `$20–$50${storeData.priceRanges?.['20to50'] ? ` (${storeData.priceRanges['20to50']})` : ''}` },
+                { key: 'over50', label: `$50+${storeData.priceRanges?.over50 ? ` (${storeData.priceRanges.over50})` : ''}` },
+              ].map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setPriceRange(key)}
+                  className={`flex-shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+                    priceRange === key
+                      ? 'text-white bg-[#FF6B35]'
+                      : 'text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="flex-shrink-0 ml-auto rounded-full border border-white/[0.1] px-3 py-1 text-[11px] text-slate-400 bg-transparent"
+                style={{ outline: 'none', colorScheme: 'dark' }}
+              >
+                <option value="newest">Newest</option>
+                <option value="bestsellers">Bestsellers</option>
+                <option value="price-low">Price: Low → High</option>
+                <option value="price-high">Price: High → Low</option>
+                <option value="rating">Top Rated</option>
+                <option value="discount">Biggest Discounts</option>
+              </select>
+            </div>
           </div>
         </div>
-        {/* Price range filters */}
-        <div className="flex gap-1.5 px-3 pb-2 overflow-x-auto scrollbar-hide">
-          {[
-            { key: '', label: 'All Prices' },
-            { key: 'under10', label: 'Under $10' },
-            { key: '10to20', label: '$10–$20' },
-            { key: '20to50', label: '$20–$50' },
-            { key: 'over50', label: '$50+' },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setPriceRange(key)}
-              className={`rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap transition-all ${
-                priceRange === key
-                  ? 'text-white'
-                  : 'text-slate-500 border border-white/[0.08] hover:border-white/[0.2]'
-              }`}
-              style={priceRange === key ? { backgroundColor: theme.accent } : {}}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
 
-      {/* Products Grid */}
-      <div className="mx-auto max-w-7xl px-3 py-4">
+      <div className="mx-auto max-w-7xl px-4 py-4">
+
+        {/* Products */}
         {filteredProducts.length === 0 ? (
           <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} py-16 text-center shadow-sm`}>
             <Package className="mx-auto h-16 w-16 text-gray-300 mb-3" />
@@ -390,14 +516,30 @@ export default function StorefrontPage({ subdomain }) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {filteredProducts.map((product) => (
+          <>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-bold text-white">
+              {selectedCategory ? `${selectedCategory}` : 'More to love'}
+            </h2>
+            {filterLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}
+          </div>
+          <div className={`grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 transition-opacity duration-200 ${filterLoading ? 'opacity-50' : 'opacity-100'}`}>
+            {filteredProducts.map((product) => {
+              const price = product.price || 0
+              const originalPrice = product.originalPrice || 0
+              const discount = product.discountPercent || (originalPrice > price ? Math.round((1 - price / originalPrice) * 100) : 0)
+              const rating = product.rating || 0
+              const soldCount = product.ordersCount || product.totalSold || 0
+              const savings = originalPrice > price ? (originalPrice - price) : 0
+
+              return (
               <div
                 key={product.id}
-                onClick={() => { setSelectedProduct(product); setView('product') }}
-                className={`group cursor-pointer overflow-hidden rounded-2xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-md`}
+                onClick={() => navigateTo('product', product)}
+                className={`group cursor-pointer overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5`}
               >
-                <div className="aspect-square overflow-hidden bg-gray-100">
+                {/* Image with discount badge */}
+                <div className="relative aspect-square overflow-hidden bg-gray-100">
                   {product.image ? (
                     <img
                       src={product.image}
@@ -409,24 +551,83 @@ export default function StorefrontPage({ subdomain }) {
                       <Package className="h-12 w-12 text-gray-300" />
                     </div>
                   )}
+                  {/* Discount badge */}
+                  {discount > 0 && (
+                    <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+                      -{discount}%
+                    </div>
+                  )}
+                  {/* Quick add button */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); cart.add(product) }}
+                    className="absolute bottom-2 right-2 rounded-full p-2 shadow-lg transition-all opacity-0 group-hover:opacity-100 bg-white/90 hover:bg-white text-gray-700 hover:text-black"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-                <div className="p-3">
-                  <p className={`text-xs ${theme.textMuted} mb-0.5`}>{product.category}</p>
-                  <h3 className={`text-sm font-medium ${theme.textPrimary} line-clamp-2 mb-2`}>{product.title}</h3>
-                  <div className="flex items-center justify-between">
-                    <p className={`text-lg font-bold`} style={{ color: theme.accent }}>A${(product.price || 0).toFixed(2)}</p>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                      className="rounded-full p-2 transition-colors bg-white/[0.05] hover:bg-white/[0.15]"
-                      style={{ color: theme.accent }}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+
+                {/* Product info */}
+                <div className="p-2.5">
+                  <h3 className={`text-xs font-medium ${theme.textPrimary} line-clamp-2 mb-1.5 leading-tight`}>{product.title}</h3>
+
+                  {/* Price section */}
+                  <div className="mb-1">
+                    <span className="text-lg font-bold text-red-500">A${price.toFixed(2)}</span>
+                    {originalPrice > price && (
+                      <span className={`text-xs ${theme.textMuted} line-through ml-1.5`}>A${originalPrice.toFixed(2)}</span>
+                    )}
+                  </div>
+
+                  {/* Savings callout */}
+                  {savings > 0 && (
+                    <p className="text-xs text-green-500 font-medium mb-1">Save A${savings.toFixed(2)}</p>
+                  )}
+
+                  {/* Rating + sold */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {rating > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                        <span className={`text-xs ${theme.textMuted}`}>{rating >= 1 ? rating.toFixed(1) : (rating * 5).toFixed(1)}</span>
+                      </div>
+                    )}
+                    {soldCount > 0 && (
+                      <span className={`text-xs ${theme.textMuted}`}>{soldCount >= 1000 ? `${(soldCount/1000).toFixed(1)}k` : soldCount}+ sold</span>
+                    )}
+                  </div>
+
+                  {/* Shipping badge */}
+                  <div className="mt-1.5">
+                    <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
+                      <Truck className="h-3 w-3" /> A$6 shipping
+                    </span>
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
+          </>
+        )}
+
+        {/* Loading more / infinite scroll indicator */}
+        {loadingMore && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+            <span className="ml-2 text-sm text-slate-400">Loading more products...</span>
+          </div>
+        )}
+        {hasMore && !loadingMore && filteredProducts.length > 0 && (
+          <div className="flex justify-center py-6">
+            <button
+              onClick={loadMore}
+              className="rounded-full px-6 py-2 text-sm font-medium border border-white/[0.1] text-slate-400 hover:text-white hover:border-white/[0.3] transition-all"
+            >
+              Load more products
+            </button>
+          </div>
+        )}
+        {!hasMore && allProducts.length > PRODUCTS_PER_PAGE && (
+          <p className="text-center py-6 text-xs text-slate-500">You've seen all {allProducts.length} products</p>
         )}
       </div>
 
@@ -442,7 +643,7 @@ export default function StorefrontPage({ subdomain }) {
 
 // ─── Store Header ─────────────────────────────────────────────────────────
 // ─── Product Detail View — fetches full details from AliExpress DS API ──
-function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onCartClick }) {
+function ProductDetailView({ product, store, cart, theme, subdomain, allProducts = [], onSelectProduct, onBack, onCartClick }) {
   const [details, setDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(true)
   const [selectedVariant, setSelectedVariant] = useState(null)
@@ -631,6 +832,31 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
               <p className="text-xs text-slate-500 mb-4">Sold by: {details.store.name}</p>
             )}
 
+            {/* Shipping estimate */}
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-[#1e293b] border border-white/[0.06]">
+              <Truck className="h-5 w-5 text-emerald-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-white font-medium">A$6 flat shipping to Australia</p>
+                <p className="text-xs text-slate-400">Estimated delivery: 15–25 business days</p>
+              </div>
+            </div>
+
+            {/* Deal tag */}
+            {(product.discountPercent > 30 || product.ordersCount > 100) && (
+              <div className="flex items-center gap-2 mb-4">
+                {product.discountPercent > 30 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 text-red-400 text-xs font-medium px-2.5 py-1">
+                    🔥 Deal — {product.discountPercent}% off
+                  </span>
+                )}
+                {product.ordersCount > 100 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#FF6B35]/10 text-[#FF6B35] text-xs font-medium px-2.5 py-1">
+                    ⭐ Popular — {product.ordersCount}+ sold
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Add to Cart */}
             <button
               onClick={() => { cart.add({ ...product, price: displayPrice }); onCartClick() }}
@@ -656,58 +882,101 @@ function ProductDetailView({ product, store, cart, theme, subdomain, onBack, onC
             )}
           </div>
         )}
+
+        {/* Similar Products */}
+        {allProducts.length > 0 && (() => {
+          const similar = allProducts
+            .filter(p => p.id !== product.id && p.category === product.category)
+            .slice(0, 12)
+          const alsoLike = similar.length < 6
+            ? allProducts.filter(p => p.id !== product.id && !similar.find(s => s.id === p.id)).slice(0, 12 - similar.length)
+            : []
+          const showProducts = [...similar, ...alsoLike]
+          if (showProducts.length === 0) return null
+          return (
+            <div className="mt-10">
+              <h3 className="text-lg font-bold text-white mb-4">You may also like</h3>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                {showProducts.map(p => {
+                  const discount = p.discountPercent || 0
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => { onSelectProduct?.(p); window.scrollTo(0, 0) }}
+                      className="cursor-pointer overflow-hidden rounded-xl bg-[#1e293b] border border-white/[0.06] hover:shadow-lg hover:-translate-y-0.5 transition-all"
+                    >
+                      <div className="relative aspect-square overflow-hidden bg-gray-100">
+                        {p.image && <img src={p.image} alt={p.title} className="h-full w-full object-cover" />}
+                        {discount > 0 && (
+                          <div className="absolute top-1.5 left-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">-{discount}%</div>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <h4 className="text-xs text-white line-clamp-2 mb-1">{p.title}</h4>
+                        <span className="text-sm font-bold text-red-500">A${(p.price || 0).toFixed(2)}</span>
+                        {p.ordersCount > 0 && <span className="text-[10px] text-slate-500 ml-1">{p.ordersCount}+ sold</span>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
 }
 
-function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchQuery, onSearchChange }) {
+function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInput, onSearchChange }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5">
-        <div className="flex-shrink-0 flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
-          <Store className="h-4 w-4 text-white" />
+      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
+            <Store className="h-4 w-4 text-white" />
+          </div>
+          <span className="text-lg font-bold text-white hidden sm:inline">{store.name}</span>
         </div>
         {/* Search bar in header */}
-        {onSearchChange ? (
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery || ''}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full rounded-full border border-white/[0.08] bg-white/[0.05] py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/[0.2]"
-              style={{ fontSize: '16px' }}
-            />
-          </div>
-        ) : (
-          <span className="flex-1 text-lg font-bold text-white">{store.name}</span>
-        )}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={searchInput}
+            onChange={onSearchChange}
+            className="w-full rounded-full border border-white/[0.12] py-2 pl-10 pr-4 text-sm text-white bg-white/[0.06] placeholder-slate-500"
+            style={{ fontSize: '16px', outline: 'none' }}
+            onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
+            onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
+          />
+        </div>
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {onTrackOrder && (
             <button
               onClick={onTrackOrder}
-              className="rounded-xl p-2 text-slate-400 hover:text-white transition-colors border border-white/[0.08]"
-              title="Track Order"
+              className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
             >
-              <Package className="h-4 w-4" />
+              <Package className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Track Order</span>
             </button>
           )}
           <a
             href="/auth"
-            className="flex items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs text-slate-300 hover:text-white transition-colors border border-white/[0.08]"
+            className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
           >
             Sign In
           </a>
           <button
             onClick={onCartClick}
-            className="relative flex items-center justify-center rounded-xl p-2 text-white transition-colors"
+            className="relative flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 text-sm font-medium text-white transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
             <ShoppingCart className="h-4 w-4" />
+            <span className="hidden sm:inline">Cart</span>
             {cart.count > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full text-[10px] font-bold text-white bg-red-500 min-w-[18px] h-[18px]">
+              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white bg-red-500">
                 {cart.count}
               </span>
             )}
