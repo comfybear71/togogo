@@ -738,7 +738,11 @@ import {
 ### AE-Refund&return
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Refund and return handling |
+| `aliexpress.issue.detail.get` | Retrieve Dispute Details |
+| `aliexpress.issue.issuelist.get` | Retrieve Dispute List |
+| `aliexpress.issue.image.upload` | Seller upload dispute evidence image |
+| `aliexpress.issue.solution.agree` | Seller agree to dispute solution |
+| `aliexpress.issue.solution.save` | Seller add/reject/modify dispute solution |
 
 ### AE-Freight (Shipment)
 | API | Description |
