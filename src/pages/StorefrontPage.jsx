@@ -688,17 +688,21 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchQuer
           <Store className="h-4 w-4 text-white" />
         </div>
         {/* Search bar in header */}
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full rounded-full border border-white/[0.08] bg-white/[0.05] py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/[0.2]"
-            style={{ fontSize: '16px' }}
-          />
-        </div>
+        {onSearchChange ? (
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search products..."
+              value={searchQuery || ''}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full rounded-full border border-white/[0.08] bg-white/[0.05] py-2 pl-9 pr-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-white/[0.2]"
+              style={{ fontSize: '16px' }}
+            />
+          </div>
+        ) : (
+          <span className="flex-1 text-lg font-bold text-white">{store.name}</span>
+        )}
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {onTrackOrder && (
             <button
