@@ -743,7 +743,11 @@ import {
 ### AE-Freight (Shipment)
 | API | Description |
 |-----|-------------|
-| (expand to see full list) | Freight/shipment management |
+| `aliexpress.freight.redefining.querySellerIntention` | AI freight template seller preference query |
+| `aliexpress.freight.redefining.queryInIsvGray` | AI freight template grayscale query |
+| `aliexpress.freight.redefining.recommendFreightTemplate` | AI freight template recommendation |
+| `aliexpress.freight.redefining.createFreightTemplate` | AI freight template adoption/create |
+| `aliexpress.freight.redefining.listfreighttemplate` | List all freight/shipping templates |
 
 ### AE-Order & Transaction
 | API | Description |
