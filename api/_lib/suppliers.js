@@ -222,7 +222,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
     const fullName = shippingAddress.name || 'Customer'
     const phone = shippingAddress.phone || '0400000000'
 
-    // aliexpress.trade.buy.placeorder — creates real order on AliExpress
+    // aliexpress.ds.order.create — DS-specific order API (triggers auto-pay)
     const orderRequest = {
       logistics_address: {
         address: shippingAddress.line1 || shippingAddress.address || 'N/A',
@@ -250,16 +250,19 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       console.log(`[AliExpress] Applying promo code: ${promotionCode}`)
     }
 
-    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
+    console.log(`[AliExpress] Placing DS order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
 
     const params = {
       param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
     }
 
-    const data = await callAuthenticatedAPI('aliexpress.trade.buy.placeorder', params)
+    const data = await callAuthenticatedAPI('aliexpress.ds.order.create', params)
+
+    console.log(`[AliExpress] DS order.create raw response: ${JSON.stringify(data).slice(0, 500)}`)
 
     // Response can be in different formats depending on API version
-    const result = data?.aliexpress_trade_buy_placeorder_response?.result
+    const result = data?.aliexpress_ds_order_create_response?.result
+      || data?.aliexpress_trade_buy_placeorder_response?.result
       || data?.result
     if (!result) {
       console.error('[AliExpress] Order placement failed:', JSON.stringify(data).slice(0, 500))
