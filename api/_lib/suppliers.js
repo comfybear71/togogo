@@ -490,6 +490,31 @@ export async function reportOrderForDSLevel({ productId, orderId, orderAmount, s
 }
 
 // ============================================
+// DS MEMBER BENEFITS — check DS level and available discounts
+// ============================================
+
+export async function getDSMemberBenefits() {
+  try {
+    const data = await callAuthenticatedAPI('aliexpress.ds.member.benefit.get', {})
+
+    console.log(`[AliExpress] DS member benefits response: ${JSON.stringify(data).slice(0, 500)}`)
+
+    const result = data?.aliexpress_ds_member_benefit_get_response?.result
+      || data?.aliexpress_ds_member_benefit_get_response
+      || data
+
+    return {
+      success: true,
+      benefits: result,
+      rawData: data,
+    }
+  } catch (err) {
+    console.error('[AliExpress] DS member benefits error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ============================================
 // DETAILED TRACKING — full tracking events for shipped orders
 // ============================================
 
