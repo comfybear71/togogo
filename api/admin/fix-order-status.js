@@ -23,6 +23,26 @@ export default async function handler(req, res) {
          OR (status = 'delivered' AND profit < 1)
       ORDER BY created_at DESC
     `
+
+    // If ?fix_all=true, cancel all suspicious orders at once
+    if (req.query.fix_all === 'true') {
+      const { rowCount } = await sql`
+        UPDATE user_orders
+        SET status = 'cancelled',
+            profit = 0,
+            commission = 0,
+            notes = COALESCE(notes, '') || ' | Bulk cancelled: delivered with no tracking (never shipped)',
+            updated_at = NOW()
+        WHERE status = 'delivered'
+          AND (tracking_number IS NULL OR tracking_number = '')
+      `
+      return res.json({
+        success: true,
+        cancelled: rowCount,
+        note: 'All orders marked "delivered" with no tracking have been cancelled with $0 profit',
+      })
+    }
+
     return res.json({
       suspiciousOrders: rows.length,
       orders: rows.map(o => ({
@@ -36,7 +56,7 @@ export default async function handler(req, res) {
         salePrice: o.sale_price,
         supplierCost: o.supplier_cost,
       })),
-      usage: 'Add ?order_id=UUID&status=cancelled to fix a specific order',
+      usage: 'Add ?fix_all=true to cancel all suspicious orders, or ?order_id=UUID&status=cancelled for one',
     })
   }
 
