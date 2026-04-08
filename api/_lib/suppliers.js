@@ -551,6 +551,94 @@ export async function calculateFreight(productId, quantity = 1, countryCode = 'A
 }
 
 // ============================================
+// DS FREIGHT QUERY — aliexpress.ds.freight.query
+// DS-specific freight calculation (may work without OAuth unlike the logistics API)
+// ============================================
+
+export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1, skuId = '') {
+  try {
+    const params = {
+      product_id: String(productId),
+      country_code: countryCode,
+      product_num: String(quantity),
+      send_goods_country_code: 'CN',
+      ...(skuId ? { sku_id: String(skuId) } : {}),
+    }
+
+    // Try without OAuth first, then with
+    let data
+    try {
+      data = await callAPI('aliexpress.ds.freight.query', params)
+    } catch {
+      data = await callAuthenticatedAPI('aliexpress.ds.freight.query', params)
+    }
+
+    console.log(`[AliExpress] DS freight query for ${productId}: ${JSON.stringify(data).slice(0, 500)}`)
+
+    const result = data?.aliexpress_ds_freight_query_response?.result
+      || data?.result
+    if (!result) return null
+
+    const options = result.freight_list?.freight || result.aeop_freight_calculate_result_for_buyer_d_t_o_list?.aeop_freight_calculate_result_for_buyer_dto || []
+
+    return options.map(o => ({
+      serviceName: o.service_name || o.logistics_service_name || '',
+      cost: parseFloat(o.freight?.amount || o.shipping_fee || '0'),
+      currency: o.freight?.currency_code || o.currency || 'USD',
+      estimatedDays: o.estimated_delivery_time || o.delivery_time || '',
+      trackingAvailable: o.tracking_available === true || o.tracking_available === 'true',
+    }))
+  } catch (err) {
+    console.error('[AliExpress] DS freight query error:', err.message)
+    return null
+  }
+}
+
+// ============================================
+// DS ORDER TRACKING — aliexpress.ds.order.tracking.get
+// DS-specific tracking endpoint (alternative to trade.ds.order.get)
+// ============================================
+
+export async function getDSOrderTracking(orderId) {
+  try {
+    const params = { order_id: String(orderId) }
+
+    let data
+    try {
+      data = await callAuthenticatedAPI('aliexpress.ds.order.tracking.get', params)
+    } catch {
+      data = await callAPI('aliexpress.ds.order.tracking.get', params)
+    }
+
+    console.log(`[AliExpress] DS tracking for ${orderId}: ${JSON.stringify(data).slice(0, 500)}`)
+
+    const result = data?.aliexpress_ds_order_tracking_get_response?.result
+      || data?.result
+    if (!result) return null
+
+    // Extract tracking details
+    const trackingInfo = result.tracking_info_list?.tracking_info || result.details?.details || []
+
+    return {
+      orderId: String(orderId),
+      trackingNumber: result.tracking_number || result.logistics_no || '',
+      logisticsCompany: result.logistics_company || result.service_name || '',
+      trackingUrl: result.official_website || result.tracking_url || '',
+      events: Array.isArray(trackingInfo) ? trackingInfo.map(e => ({
+        description: e.event_desc || e.description || '',
+        date: e.signed_date || e.event_date || '',
+        status: e.status || '',
+        location: e.address || e.location || '',
+      })) : [],
+      rawData: result,
+    }
+  } catch (err) {
+    console.error('[AliExpress] DS tracking error:', err.message)
+    return null
+  }
+}
+
+// ============================================
 // DS LEVEL REPORTING — report orders to build DS level for automatic discounts
 // Level C ($1k+) = ~2% off, Level B = ~3-4%, Level A = ~5%+
 // ============================================
