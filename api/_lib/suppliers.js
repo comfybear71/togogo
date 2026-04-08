@@ -384,10 +384,22 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
           || orderData?.result
         if (orderResult) {
           // Extract the actual cost — can be in different fields
-          const totalAmount = parseFloat(orderResult.total_product_amount || orderResult.pay_amount || orderResult.order_amount || '0')
+          // pay_amount = total charged to card/PayPal (includes product + shipping + tax)
+          // If pay_amount not available, sum up the parts
+          const payAmount = parseFloat(orderResult.pay_amount || '0')
+          const productAmount = parseFloat(orderResult.total_product_amount || orderResult.product_amount || '0')
           const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
-          realCostUSD = totalAmount + shippingAmount
-          console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (product: $${totalAmount}, shipping: $${shippingAmount})`)
+          const taxAmount = parseFloat(orderResult.tax_amount || '0')
+
+          if (payAmount > 0) {
+            // Best: use the actual total charged (includes everything)
+            realCostUSD = payAmount
+            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (pay_amount — total charged inc. tax)`)
+          } else {
+            // Fallback: sum the parts
+            realCostUSD = productAmount + shippingAmount + taxAmount
+            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (product: $${productAmount}, shipping: $${shippingAmount}, tax: $${taxAmount})`)
+          }
         }
       } catch (costErr) {
         console.log(`[AliExpress] Could not query order cost for ${aeOrderId}: ${costErr.message}`)
