@@ -867,6 +867,15 @@ const POOL_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 // Best feeds for an Australian dropshipping store
 const PRIORITY_FEEDS = [
+  // Deal & discount feeds (cheapest/best value products)
+  'AEB_WholesalePriceGood_20241205',
+  'AEB_US_LocalStock_Choice_20240830',
+  'AEB_Topseller_PriceRange0~20$',
+  'AEB_Topseller_PriceRange0_20',
+  // Large curated selections
+  'AEB_Shoplazza_SelectedItems_20241011',
+  'AEB_i69_FullCategory_TopSellers_20241225',
+  // Category bestsellers
   'DS_Global_topsellers',
   'DS_ConsumerElectronics_bestsellers',
   'DS_Home&Kitchen_bestsellers',
@@ -874,14 +883,18 @@ const PRIORITY_FEEDS = [
   'DS_Sports&Outdoors_bestsellers',
   'DS_Automobile&Accessories_bestsellers',
   'DS_NewArrivals',
-  'AEB_Topseller_PriceRange0_20',
+  // AU-specific & home
   'AEB_AU_HomeImprovement&Furniture&Lights&Tools&Luggage',
+  'AEB_US_Home&Garden_TopSellers',
+  'AEB_US_Lighting_TopSellers',
+  'AEB_US_Furniture_TopSellers',
+  // More categories
   'AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210',
-  'AEB_i69_FullCategory_TopSellers_20241225',
   'AEB_CETagItems_20241017',
   'AEB_EAN Items',
   'DS_ElectronicComponents_bestsellers',
   'DS_BoxingDayEssentials',
+  'AEB_SurpriseBox_TechKidsWomen_20241024',
 ]
 
 async function getProductPool() {
