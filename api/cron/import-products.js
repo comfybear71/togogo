@@ -3,7 +3,7 @@
 // Each run fetches from different feeds to build variety over time
 // ACCURATE PRICING: fetches real shipping cost via freight calculator API
 import { sql, ensureSchema } from '../_lib/db.js'
-import { searchAliExpress, getProductDetails, calculateFreight } from '../_lib/suppliers.js'
+import { searchAliExpress, getProductDetails, calculateFreight, queryDSFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // Auth: allow Vercel cron, JWT_SECRET as query param, or admin JWT token
@@ -173,13 +173,22 @@ export default async function handler(req, res) {
             (async () => {
               const details = await getProductDetails(aeId)
               if (details) realProductCost = details.cost || p.cost || 0
-              const freightOptions = await calculateFreight(aeId, 1, 'AU')
+              // Try DS freight first, then old freight API, then product details shipping
+              let freightOptions = await queryDSFreight(aeId, 'AU', 1)
+              if (!freightOptions || freightOptions.length === 0) {
+                freightOptions = await calculateFreight(aeId, 1, 'AU')
+              }
               if (freightOptions && freightOptions.length > 0) {
                 const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
                 shippingCost = cheapest.cost
-                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName})`)
+              } else if (details?.shipping?.length > 0) {
+                // Fallback: use shipping from product details
+                const cheapest = details.shipping.reduce((min, s) => s.shippingFee < min.shippingFee ? s : min, details.shipping[0])
+                shippingCost = cheapest.shippingFee
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (from product details)`)
               } else {
-                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using min)`)
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using $0 — real cost captured at order time)`)
               }
               return 'ok'
             })(),
@@ -206,9 +215,8 @@ export default async function handler(req, res) {
         if (rateRows[0]) usdToAud = parseFloat(rateRows[0].value) || 1.45
       } catch { /* use default */ }
       const productCostAUD = realProductCost * usdToAud
-      // Freight calculator returns USD — convert to AUD with minimum A$3
-      const minShipping = 3.00
-      const shippingAUD = Math.max(shippingCost * usdToAud, minShipping)
+      // Freight returns USD — convert to AUD. No minimum — real cost captured at order time
+      const shippingAUD = Math.round(shippingCost * usdToAud * 100) / 100
       // NO separate tax — AliExpress charges tax at their checkout, included in the total
       // supplier_cost = product + shipping (what we actually pay)
       const taxAUD = 0
