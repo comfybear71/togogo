@@ -665,7 +665,23 @@ export async function reportOrderForDSLevel({ productId, orderId, orderAmount, s
       paytime,
     }
 
-    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+    // Try the DS-specific API first, fall back to alternative names
+    let data
+    try {
+      data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+    } catch (err) {
+      console.log(`[AliExpress] DS Level: primary API failed (${err.message}), trying without OAuth...`)
+      try {
+        data = await callAPI('aliexpress.ds.member.orderdata.submit', params)
+      } catch (err2) {
+        console.log(`[AliExpress] DS Level: non-OAuth also failed (${err2.message})`)
+        data = null
+      }
+    }
+
+    if (!data) {
+      return { success: false, error: 'All API attempts failed' }
+    }
 
     const result = data?.aliexpress_ds_member_orderdata_submit_response?.result
     if (result?.is_success || result?.success) {
