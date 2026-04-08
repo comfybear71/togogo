@@ -42,6 +42,21 @@ export default async function handler(req, res) {
     `
 
     // Recalculate ALL AUD products: supplier_cost = api_price + shipping (NO tax — AliExpress handles tax)
+    // Remove fake $3.00 minimum shipping — it was hardcoded, not real
+    // Real shipping from API would be values like $2.89, $4.12 etc, not exactly $3.00
+    const { rowCount: shippingFixed } = await sql`
+      UPDATE user_products
+      SET shipping_cost = 0, updated_at = NOW()
+      WHERE price_currency = 'AUD' AND shipping_cost = 3.00 AND api_price > 0
+    `
+
+    // Also remove any shipping that was the old AUD-converted minimum ($3.00 * 1.45 = $4.35)
+    await sql`
+      UPDATE user_products
+      SET shipping_cost = 0, updated_at = NOW()
+      WHERE price_currency = 'AUD' AND shipping_cost = 4.35 AND api_price > 0
+    `.catch(() => {})
+
     const { rowCount: fixedCount } = await sql`
       UPDATE user_products
       SET
@@ -68,11 +83,12 @@ export default async function handler(req, res) {
     return res.json({
       success: true,
       usdToAudConverted: rowCount,
+      fakeShippingRemoved: shippingFixed,
       supplierCostFixed: fixedCount,
       rate: `1 USD = ${rate} AUD`,
       markup: `${markup}x`,
       formula: `supplier_cost = api_price_AUD + shipping_AUD (no tax), sale_price = supplier_cost × ${markup}`,
-      note: 'supplier_cost = what we pay AliExpress (product + shipping). No separate tax — AliExpress handles tax at their checkout.'
+      note: 'Removed fake $3 shipping. Real shipping captured at order time from AliExpress pay_amount.'
     })
   } catch (err) {
     return res.status(500).json({ error: err.message })
