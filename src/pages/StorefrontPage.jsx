@@ -1161,7 +1161,7 @@ function fixDescriptionImages(html) {
     // Strip dark inline text colours that are invisible on dark background
     .replace(/color\s*:\s*(#[0-3][0-9a-f]{5}|#[0-3][0-9a-f]{2}|rgb\s*\(\s*[0-9]{1,2}\s*,\s*[0-9]{1,2}\s*,\s*[0-9]{1,2}\s*\)|black)/gi, 'color: #e2e8f0')
     // Strip background-color that could clash with dark theme
-    .replace(/background-color\s*:\s*(#[f-9][0-9a-f]{5}|#[f-9][0-9a-f]{2}|white|rgb\s*\(\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*\))/gi, 'background-color: transparent')
+    .replace(/background-color\s*:\s*(#[9a-f][0-9a-f]{5}|#[9a-f][0-9a-f]{2}|white|rgb\s*\(\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*\))/gi, 'background-color: transparent')
 }
 
 function ProductImageGallery({ product }) {
