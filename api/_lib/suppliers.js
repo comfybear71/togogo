@@ -559,7 +559,8 @@ export async function calculateFreight(productId, quantity = 1, countryCode = 'A
       }),
     }
 
-    const data = await callAPI('aliexpress.logistics.buyer.freight.calculate', params)
+    // AliExpress now requires OAuth token for freight calculation
+    const data = await callAuthenticatedAPI('aliexpress.logistics.buyer.freight.calculate', params)
 
     const result = data?.aliexpress_logistics_buyer_freight_calculate_response?.result
     if (!result?.success) {
