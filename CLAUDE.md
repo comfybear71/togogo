@@ -27,6 +27,13 @@
 - **NEVER batch-delete files** to "start fresh" — that destroys work
 - Small, atomic commits only — one logical change per commit
 
+## Data Integrity — NO FAKE DATA
+- **NEVER use hardcoded/estimated values when real data is available from an API**
+- **NEVER add fake tax, fake shipping, or fake costs** — only use what AliExpress actually charges
+- `supplier_cost` = real AliExpress charge (`pay_amount` from API). No estimates, no formulas.
+- If you can't get the real number, use 0 — the real value is captured at order time
+- **Pricing errors destroy the business** — store owners lose trust, customers get overcharged
+
 ## Frontend / UI Safety
 - **NEVER modify StorefrontPage.jsx on production without testing first**
 - **NEVER make changes after the user signs off** — wait for next session

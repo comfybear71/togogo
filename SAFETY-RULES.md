@@ -36,6 +36,17 @@
 - If a UI change causes a white screen or "Store Not Found", IMMEDIATELY revert to the last working commit and STOP making changes
 - **Maximum 1 UI fix attempt** — if it doesn't work, revert and wait for next session
 
+## Data Integrity — NO FAKE DATA (NEW — added after Session 7 pricing incident)
+- **NEVER use hardcoded/estimated values when real data is available from an API**
+- **NEVER add fake tax, fake shipping, or fake costs** — only use what AliExpress actually charges
+- **NEVER invent numbers** — if you don't have the real data, use 0 and capture the real value later
+- All prices, costs, shipping, and profit MUST reflect reality
+- `supplier_cost` = what AliExpress actually charges (product + shipping + tax — one number from `pay_amount`)
+- `sale_price` = supplier_cost × markup (configurable, no hidden additions)
+- If an API can give you the real number, USE IT — don't estimate
+- Pricing errors destroy trust: store owners see wrong profit, customers get overcharged, platform loses money
+- **When in doubt, ask the user** — don't guess at business-critical numbers
+
 ## Database Safety
 - NEVER run DROP TABLE / DROP COLUMN without explicit user confirmation
 - ALTER TABLE ADD COLUMN is safe (additive)
@@ -73,3 +84,4 @@ If the user asks you to:
 |------|--------------|------------|------------|
 | 2026-04-02 | Production branch destroyed | Claude pushed bad code to master | Branch rules, fix spiral prevention |
 | 2026-04-08 | UI features disappeared, then white screen, then "Store Not Found" | New branch didn't have master's code; attempted rebuild instead of merge; kept making changes after user signed off | Frontend safety, session discipline, merge master rule |
+| 2026-04-08 | Store owner profit showed $0.49 instead of ~$4.62, then went negative (-$4.74) | Fake 18% tax added on top of AliExpress prices (double tax), supplier_cost double-converted by fix-prices, hardcoded $3 minimum shipping instead of real freight | Data integrity rules: no fake data, no estimated costs, use real API values |
