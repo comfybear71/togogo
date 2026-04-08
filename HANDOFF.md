@@ -1,13 +1,9 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-08 (Session 7 — Pricing fixes, shared catalog, deal feeds)
-**Previous:** Session 6 — Auto-Pay API Switch
-**Session:** AliExpress auto-pay investigation + API switch to ds.order.create
-**Branch:** claude/project-setup-docs-PLbC2
-**Previous Session:** Session 5 (April 7, CRASHED) — Auto-pay investigation
-**Previous Session:** Session 4 (April 5) — Pricing SOLVED + admin improvements
-**Production Branch:** claude/fix-image-crash-BiIj9 (on Vercel)
+**Last Updated:** 2026-04-08 (End of Session 7)
+**Branch:** claude/project-setup-docs-PLbC2 (PRODUCTION on Vercel)
+**GitHub:** https://github.com/comfybear71/togogo
 
 ---
 
@@ -197,37 +193,49 @@ EXAMPLE (Scissors US$2.42):
 
 ---
 
-## Current State (April 8, 2026)
+## Current State (April 8, 2026 — End of Session 7)
 
 ### Fully Working:
 - ✅ **AUTO-PAY WORKING** — `ds.order.create` + `try_to_pay: "true"` (confirmed April 8)
 - ✅ Full e2e autonomous dropshipping (customer pays → AE order → auto-pay → ships)
-- ✅ AliExpress-style storefront (hero, carousel, sticky categories, infinite scroll)
-- ✅ Accurate AUD pricing with USD→AUD conversion
-- ✅ Real shipping costs (minimum A$3, no more fake FREE)
-- ✅ Configurable exchange rate from admin settings
-- ✅ Admin product breakdown: API Price, Ship, Tax, Wholesale, Sale, Profit, ToGoGo
-- ✅ Server-side product filtering (price range, category, sort, search)
+- ✅ **Shared product catalog** — one set of products, all stores pull from it (no duplication)
+- ✅ AliExpress-style storefront (hero, carousel, categories, infinite scroll, server-side filtering)
+- ✅ Real AliExpress cost captured at order time via `pay_amount` (100% accurate profit)
+- ✅ Configurable pricing from Admin → Settings → Pricing & Shipping
+- ✅ Free shipping to customers (shipping fee set to $0)
+- ✅ ToGoGo branded logo on store headers
 - ✅ Redis caching (Upstash, 2-min TTL)
 - ✅ Smart coupon system (auto-picks best AUAP code per order value)
 - ✅ 3 email notifications per order (customer, store owner, admin)
-- ✅ Store customer tracking with phone
 - ✅ Duplicate order prevention (idempotency via `out_order_id`)
-- ✅ Product import cron (every 6hrs, 30/run, real shipping, AUD conversion)
+- ✅ Product import cron (every 6hrs, 20/run, real freight via OAuth, shared catalog)
 - ✅ Order sync cron (tracking, auto-refund on cancellation)
 - ✅ Daily database backup cron (2am AEST, 7-day retention in Redis)
+- ✅ 25 priority feeds including wholesale/deal/Choice feeds
+- ✅ 172 AliExpress APIs fully documented in docs/ALIEXPRESS-API-REFERENCE.md
 - ✅ 4 active stores: stu, jum, stuie, annies-shop
-- ✅ 3,430+ unique products (13,880 total across 4 stores)
-- ✅ Mobile-friendly dark theme storefronts
-- ✅ 172 AliExpress APIs fully documented
+- ✅ ~5,500 unique products
 
-### Pricing Config:
-- **Exchange rate:** `usd_to_aud_rate` in admin_settings (default 1.45)
-- **Commission:** 30% of profit in `platform_fee_percent` (admin_settings)
-- **Shipping fee:** A$6 flat per order (100% to ToGoGo)
-- **Markup:** 1.5x on wholesale (hardcoded in import cron)
-- **Min shipping:** A$3 per product (hardcoded in import cron)
-- **Coupons:** Smart system auto-picks best AUAP code (hardcoded tiers in webhook)
+### Current Pricing Settings (Admin → Settings → Pricing & Shipping):
+- **Markup:** 1.25x (configurable via `default_markup`)
+- **Shipping fee:** $0 (configurable via `shipping_fee_aud`)
+- **Commission:** 10% of profit (configurable via `platform_fee_percent`)
+- **Exchange rate:** 1.45 USD→AUD (configurable via `usd_to_aud_rate`)
+- **Min shipping per product:** $3.00 (safety buffer for import estimates)
+- **Coupon:** AUAP03
+
+### Current Pricing Formula:
+```
+IMPORT TIME:
+  supplier_cost = (product_USD × 1.45) + (shipping_USD × 1.45)
+  sale_price = supplier_cost × 1.25
+  No tax added — AliExpress handles tax at their checkout
+
+ORDER TIME (overwrites import estimate with real data):
+  supplier_cost = pay_amount × 1.45 (exact AliExpress charge inc. shipping + tax)
+  profit = (sale_price - real_supplier_cost) × 90% (store owner)
+  commission = (sale_price - real_supplier_cost) × 10% (ToGoGo)
+```
 
 ### Important URLs:
 
@@ -295,35 +303,47 @@ EXAMPLE (Scissors US$2.42):
 
 ---
 
-## Next Session — Features to Build
+## URGENT BUGS TO FIX FIRST (before any features)
+
+1. **Under $10 filter showing wrong products** — price filter + DISTINCT ON dedup conflict. Filters apply after dedup but may still have edge cases. Test thoroughly after Redis cache expires (2 min).
+2. **Category bar ("For you" buttons) going under the nav bar** — sticky top offset is 57px, may need adjustment. Test on mobile and desktop.
+3. **Pages slow to load / cold start issues** — all pages including admin settings, profile, storefront. Neon DB cold start + ensureSchema() running on every request.
+4. **Admin products page ToGoGo column** — hardcoded 10% commission instead of reading from DB setting.
+5. **Hardcoded values in frontend** — some values don't read from admin_settings DB. Need to pass settings from API to frontend.
+
+---
+
+## FEATURES TO BUILD (Stuart's priority list)
+
+### Client Store Settings (TOP PRIORITY — Stuart asked for this 3 hours ago):
+1. **Client can set their own profit margin** — e.g., 1.1x, 1.25x, 1.5x per store
+2. **Client can toggle dark/light mode** on their store
+3. **Client can control what's shown** — choose product categories, price ranges
+4. Database: `store_settings` JSONB column already added to `user_stores` table
+5. Needs: API endpoint for client settings + UI on the profile/My Store page
+
+### Admin Panel Improvements:
+6. Admin profit dashboard (all stores + subscriptions combined revenue)
+7. Customers page (all customer data across stores)
+8. Admin products: read commission from DB not hardcoded
 
 ### Store Features:
-1. Similar products below item
-2. Store themes (theme library for owners)
-3. Consistent branding (homepage logo style on stores)
-4. Store owner controls (name, products, style, AI images via Grok)
-5. Promotional codes & referral system
-6. Client profit percentage control (owners set their own markup)
-7. Purchase feedback animations (animated ToGoGo logo)
-8. Custom logos for stores (upload/generate)
-9. Custom domain purchases (buy URL through ToGoGo)
+9. Store themes (theme library for owners to choose from)
+10. Store owner controls (name, products, style, AI images via Grok)
+11. Promotional codes & referral system
+12. Purchase feedback animations
+13. Custom logos for stores (upload/generate)
+14. Custom domain purchases
+15. Checkout dark theme (still white background)
 
-### Admin Features:
-10. Admin profit dashboard (all stores + subscriptions combined)
-11. Better product search (sortable columns, advanced filters)
-12. AI assistant for store owners (branding, products, pricing help)
-13. "Awaiting AE Payment" page with direct links
-14. Customers page (all customer data across stores)
-
-### Existing:
-15. Checkout dark theme
-16. Dynamic shipping (if AE shipping > $6, charge more)
-17. Flexible subscriptions (promos, half-price trials)
-18. Infinite scroll on storefronts
-19. Order tracking page for customers
+### Technical Improvements:
+16. Page load speed — consider removing ensureSchema() from hot paths, add connection pooling
+17. Delete duplicate products from DB (shared catalog means old per-store copies are waste)
+18. Frontend should read pricing settings from API instead of hardcoded values
 
 ---
 
 ## Comprehensive Platform Docs
 
 Full documentation at: `docs/TOGOGO-HOW-IT-WORKS.md`
+AliExpress API reference: `docs/ALIEXPRESS-API-REFERENCE.md`
