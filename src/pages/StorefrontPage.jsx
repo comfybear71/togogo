@@ -874,11 +874,12 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
             {details.description.includes('<') ? (
               <div
-                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words [&_*]:!text-slate-300 [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_strong]:!text-white [&_b]:!text-white"
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words [&_*]:!text-slate-200 [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_strong]:!text-white [&_b]:!text-white [&_p]:!text-slate-200 [&_li]:!text-slate-200 [&_span]:!text-slate-200 [&_td]:!text-slate-200 [&_th]:!text-white [&_a]:!text-[#FF6B35]"
+                style={{ colorScheme: 'dark', color: '#e2e8f0' }}
                 dangerouslySetInnerHTML={{ __html: fixDescriptionImages(details.description) }}
               />
             ) : (
-              <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
+              <p className="text-sm text-slate-200 leading-relaxed">{details.description}</p>
             )}
           </div>
         )}
@@ -1146,7 +1147,6 @@ function fixDescriptionImages(html) {
     // Move data-src to src (AliExpress lazy loading)
     .replace(/<img([^>]*?)data-src="([^"]+)"([^>]*?)>/gi, (match, before, url, after) => {
       const fixedUrl = url.startsWith('//') ? 'https:' + url : url
-      // Remove any existing empty/placeholder src
       const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
       return `<img${cleaned} src="${fixedUrl}">`
     })
@@ -1158,6 +1158,10 @@ function fixDescriptionImages(html) {
       const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
       return `<img${cleaned} src="${fixedUrl}">`
     })
+    // Strip dark inline text colours that are invisible on dark background
+    .replace(/color\s*:\s*(#[0-3][0-9a-f]{5}|#[0-3][0-9a-f]{2}|rgb\s*\(\s*[0-9]{1,2}\s*,\s*[0-9]{1,2}\s*,\s*[0-9]{1,2}\s*\)|black)/gi, 'color: #e2e8f0')
+    // Strip background-color that could clash with dark theme
+    .replace(/background-color\s*:\s*(#[f-9][0-9a-f]{5}|#[f-9][0-9a-f]{2}|white|rgb\s*\(\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*\))/gi, 'background-color: transparent')
 }
 
 function ProductImageGallery({ product }) {
