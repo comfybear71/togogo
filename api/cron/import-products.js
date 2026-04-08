@@ -233,32 +233,30 @@ export default async function handler(req, res) {
       // Skip products over A$1000
       if (salePrice > 1000) continue
 
-      // Import into all stores
-      for (const store of stores) {
-        try {
-          const imgArray = Array.isArray(p.images) ? p.images : []
-          await sql`
-            INSERT INTO user_products (
-              user_id, title, description, image, images, supplier,
-              supplier_product_id, supplier_cost, sale_price,
-              api_price, shipping_cost, tax_amount,
-              price_currency, category, is_active,
-              product_rating, orders_count, original_price, discount_percent
-            ) VALUES (
-              ${store.user_id}, ${p.title}, ${p.title},
-              ${p.image || ''}, ${imgArray},
-              ${'AliExpress'}, ${p.productId || p.id},
-              ${wholesaleCost}, ${salePrice},
-              ${productCostAUD}, ${shippingAUD}, ${taxAUD},
-              ${'AUD'}, ${p.category || 'General'}, true,
-              ${p.rating || 0}, ${p.orders || 0},
-              ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
-              ${p.discount || 20}
-            )
-          `
-          totalImported++
-        } catch { /* skip duplicates */ }
-      }
+      // Import ONCE into shared catalog (use first store's user_id for DB constraint)
+      try {
+        const imgArray = Array.isArray(p.images) ? p.images : []
+        await sql`
+          INSERT INTO user_products (
+            user_id, title, description, image, images, supplier,
+            supplier_product_id, supplier_cost, sale_price,
+            api_price, shipping_cost, tax_amount,
+            price_currency, category, is_active,
+            product_rating, orders_count, original_price, discount_percent
+          ) VALUES (
+            ${stores[0].user_id}, ${p.title}, ${p.title},
+            ${p.image || ''}, ${imgArray},
+            ${'AliExpress'}, ${p.productId || p.id},
+            ${wholesaleCost}, ${salePrice},
+            ${productCostAUD}, ${shippingAUD}, ${taxAUD},
+            ${'AUD'}, ${p.category || 'General'}, true,
+            ${p.rating || 0}, ${p.orders || 0},
+            ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
+            ${p.discount || 20}
+          )
+        `
+        totalImported++
+      } catch { /* skip duplicates */ }
 
       console.log(`[Cron] → AUD: product=$${productCostAUD.toFixed(2)} ship=$${shippingAUD.toFixed(2)} tax=$${taxAUD.toFixed(2)} wholesale=$${wholesaleCost.toFixed(2)} sale=$${salePrice.toFixed(2)} "${p.title?.slice(0, 50)}"`)
     }

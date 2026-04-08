@@ -96,21 +96,24 @@ export default async function handler(req, res) {
 
     // Get total product count (with filters applied)
     const countResult = await sql.query(
-      `SELECT COUNT(*) as total FROM user_products WHERE user_id = $1 AND is_active = true${whereExtra}`,
-      [store.owner_id]
+      `SELECT COUNT(*) as total FROM (SELECT DISTINCT ON (supplier_product_id) id FROM user_products WHERE is_active = true${whereExtra} ORDER BY supplier_product_id, created_at DESC) deduped`,
+      []
     )
     const totalProducts = parseInt(countResult.rows[0].total)
 
     // Get the store owner's products — paginated with filters and sort
     const productResult = await sql.query(
-      `SELECT id, title, description, image, images, supplier, supplier_cost,
-             sale_price, category, total_sold, created_at, supplier_product_id,
-             product_rating, orders_count, original_price, discount_percent
-      FROM user_products
-      WHERE user_id = $1 AND is_active = true${whereExtra}
+      `SELECT * FROM (
+        SELECT DISTINCT ON (supplier_product_id) id, title, description, image, images, supplier, supplier_cost,
+               sale_price, category, total_sold, created_at, supplier_product_id,
+               product_rating, orders_count, original_price, discount_percent
+        FROM user_products
+        WHERE is_active = true${whereExtra}
+        ORDER BY supplier_product_id, created_at DESC
+      ) products
       ORDER BY ${orderBy}
-      LIMIT $2 OFFSET $3`,
-      [store.owner_id, limit, offset]
+      LIMIT $1 OFFSET $2`,
+      [limit, offset]
     )
     const ownerProducts = productResult.rows
 
@@ -173,8 +176,11 @@ export default async function handler(req, res) {
 
     // Get ALL categories with counts (not just current page)
     const { rows: catRows } = await sql`
-      SELECT category, COUNT(*) as count FROM user_products
-      WHERE user_id = ${store.owner_id} AND is_active = true
+      SELECT category, COUNT(*) as count FROM (
+        SELECT DISTINCT ON (supplier_product_id) category, supplier_product_id
+        FROM user_products WHERE is_active = true
+        ORDER BY supplier_product_id, created_at DESC
+      ) deduped
       GROUP BY category ORDER BY count DESC
     `
     const categories = catRows.map(r => ({ name: r.category || 'General', count: parseInt(r.count) }))
@@ -186,8 +192,11 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE sale_price >= 10 AND sale_price < 20) as range10to20,
         COUNT(*) FILTER (WHERE sale_price >= 20 AND sale_price < 50) as range20to50,
         COUNT(*) FILTER (WHERE sale_price >= 50) as over50
-      FROM user_products
-      WHERE user_id = ${store.owner_id} AND is_active = true
+      FROM (
+        SELECT DISTINCT ON (supplier_product_id) sale_price, supplier_product_id
+        FROM user_products WHERE is_active = true
+        ORDER BY supplier_product_id, created_at DESC
+      ) deduped
     `
     const priceRanges = priceRows[0] ? {
       under10: parseInt(priceRows[0].under10) || 0,

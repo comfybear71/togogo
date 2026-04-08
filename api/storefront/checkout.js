@@ -51,7 +51,7 @@ export default async function handler(req, res) {
       const { rows: products } = await sql`
         SELECT id, title, image, supplier, supplier_cost, sale_price, supplier_product_id
         FROM user_products
-        WHERE id = ${item.productId} AND user_id = ${store.user_id} AND is_active = true
+        WHERE id = ${item.productId} AND is_active = true
       `
       if (!products[0]) continue
 
