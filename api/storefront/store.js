@@ -96,7 +96,11 @@ export default async function handler(req, res) {
 
     // Get total product count (with filters applied)
     const countResult = await sql.query(
-      `SELECT COUNT(*) as total FROM (SELECT DISTINCT ON (supplier_product_id) id FROM user_products WHERE is_active = true${whereExtra} ORDER BY supplier_product_id, created_at DESC) deduped`,
+      `SELECT COUNT(*) as total FROM (
+        SELECT DISTINCT ON (supplier_product_id) id, sale_price, category, title
+        FROM user_products WHERE is_active = true
+        ORDER BY supplier_product_id, created_at DESC
+      ) deduped WHERE true${whereExtra}`,
       []
     )
     const totalProducts = parseInt(countResult.rows[0].total)
@@ -108,9 +112,10 @@ export default async function handler(req, res) {
                sale_price, category, total_sold, created_at, supplier_product_id,
                product_rating, orders_count, original_price, discount_percent
         FROM user_products
-        WHERE is_active = true${whereExtra}
+        WHERE is_active = true
         ORDER BY supplier_product_id, created_at DESC
       ) products
+      WHERE true${whereExtra}
       ORDER BY ${orderBy}
       LIMIT $1 OFFSET $2`,
       [limit, offset]
