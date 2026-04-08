@@ -363,7 +363,7 @@ export default function StorefrontPage({ subdomain }) {
                 <span>•</span>
                 <span>{storeData.categories?.length || 0} categories</span>
                 <span>•</span>
-                <span className="text-emerald-400">A$6 shipping</span>
+                <span className="text-emerald-400">Free shipping</span>
               </div>
             </div>
             <div className="relative group">
@@ -599,7 +599,7 @@ export default function StorefrontPage({ subdomain }) {
                   {/* Shipping badge */}
                   <div className="mt-1.5">
                     <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
-                      <Truck className="h-3 w-3" /> A$6 shipping
+                      <Truck className="h-3 w-3" /> Free shipping
                     </span>
                   </div>
                 </div>
@@ -799,7 +799,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             {/* Shipping */}
             <div className="flex flex-wrap gap-2 mb-6">
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
-                <Truck className="h-4 w-4" /> Shipping only $6
+                <Truck className="h-4 w-4" /> Free shipping
               </div>
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection
@@ -836,7 +836,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-[#1e293b] border border-white/[0.06]">
               <Truck className="h-5 w-5 text-emerald-400 flex-shrink-0" />
               <div>
-                <p className="text-sm text-white font-medium">A$6 flat shipping to Australia</p>
+                <p className="text-sm text-white font-medium">Free shipping to Australia</p>
                 <p className="text-xs text-slate-400">Estimated delivery: 15–25 business days</p>
               </div>
             </div>
@@ -1085,7 +1085,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
               </div>
               <div className={`flex justify-between text-sm text-emerald-400`}>
                 <span>Shipping</span>
-                <span>A$6.00</span>
+                <span>Free</span>
               </div>
               <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
                 <span>Total</span>
