@@ -368,7 +368,7 @@ export default function ProductsPage() {
                       <td className="py-3 pr-3 text-zinc-400">A${supplierCost.toFixed(2)}</td>
                       <td className="py-3 pr-3 font-medium text-white">${salePrice.toFixed(2)}</td>
                       <td className="py-3 pr-3 text-emerald-400">${(salePrice - supplierCost).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-[#FF6B35]">${((salePrice - supplierCost) * 0.3).toFixed(2)}<span className="text-zinc-600 text-xs"> +$6</span></td>
+                      <td className="py-3 pr-3 text-[#FF6B35]">${((salePrice - supplierCost) * 0.1).toFixed(2)}</td>
                       {storeFilter && <td className="py-3 pr-3 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>}
                       <td className="py-3 pr-4">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColors[status]}`}>
