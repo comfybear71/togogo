@@ -92,6 +92,11 @@ export default async function handler(req, res) {
 
       // No match — insert the backup order directly
       try {
+        const safeInt = (v) => Math.round(parseFloat(v || 0)) || 0
+        const safeFloat = (v) => parseFloat(v || 0) || 0
+        const safeStr = (v) => String(v || '')
+        const safeAddr = typeof order.shipping_address === 'object' ? JSON.stringify(order.shipping_address) : (order.shipping_address || '{}')
+
         await sql`
           INSERT INTO user_orders (
             user_id, supplier, supplier_product_id, supplier_order_id,
@@ -102,23 +107,26 @@ export default async function handler(req, res) {
             status, tracking_number, tracking_url, notes,
             stripe_payment_intent, created_at
           ) VALUES (
-            ${order.user_id}, ${order.supplier || 'AliExpress'}, ${order.supplier_product_id || ''},
+            ${order.user_id}, ${safeStr(order.supplier) || 'AliExpress'}, ${safeStr(order.supplier_product_id)},
             ${order.supplier_order_id || null},
-            ${order.product_title || 'Product'}, ${order.product_image || ''},
-            ${parseFloat(order.supplier_cost || 0)}, ${parseFloat(order.sale_price || 0)},
-            ${parseFloat(order.profit || 0)}, ${parseFloat(order.commission || 0)},
-            ${parseFloat(order.commission_rate || 0.10)}, ${Math.round(parseFloat(order.quantity || 1))},
-            ${order.platform || 'togogo-store'}, ${order.platform_order_id || ''},
-            ${order.customer_name || ''}, ${order.customer_email || ''},
-            ${order.shipping_address || '{}'},
-            ${order.status || 'processing'}, ${order.tracking_number || null}, ${order.tracking_url || null},
-            ${order.notes || 'Restored from backup'},
+            ${safeStr(order.product_title) || 'Product'}, ${safeStr(order.product_image)},
+            ${safeFloat(order.supplier_cost)}, ${safeFloat(order.sale_price)},
+            ${safeFloat(order.profit)}, ${safeFloat(order.commission)},
+            ${safeFloat(order.commission_rate) || 0.10}, ${safeInt(order.quantity) || 1},
+            ${safeStr(order.platform) || 'togogo-store'}, ${safeStr(order.platform_order_id)},
+            ${safeStr(order.customer_name)}, ${safeStr(order.customer_email)},
+            ${safeAddr},
+            ${safeStr(order.status) || 'processing'}, ${order.tracking_number || null}, ${order.tracking_url || null},
+            ${safeStr(order.notes) || 'Restored from backup'},
             ${order.stripe_payment_intent || null},
             ${order.created_at || new Date().toISOString()}
           )
         `
         inserted++
-      } catch { skipped++ }
+      } catch (insertErr) {
+        console.error(`[Restore] Insert failed for ${order.platform_order_id}:`, insertErr.message)
+        skipped++
+      }
     }
 
     return res.json({
