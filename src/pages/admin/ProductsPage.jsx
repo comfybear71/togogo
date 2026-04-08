@@ -337,7 +337,8 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                   <th className="pb-3 pr-3">Product</th>
-                  <th className="pb-3 pr-3">Cost</th>
+                  <th className="pb-3 pr-3">Cost (USD)</th>
+                  <th className="pb-3 pr-3">Cost (AUD)</th>
                   <th className="pb-3 pr-3">Sale</th>
                   <th className="pb-3 pr-3">Profit</th>
                   <th className="pb-3 pr-3">ToGoGo</th>
@@ -365,6 +366,7 @@ export default function ProductsPage() {
                           <p className="font-medium text-white max-w-[200px] truncate" title={p.title}>{p.title}</p>
                         </div>
                       </td>
+                      <td className="py-3 pr-3 text-zinc-500 text-xs">US${(supplierCost / 1.45).toFixed(2)}</td>
                       <td className="py-3 pr-3 text-zinc-400">${supplierCost.toFixed(2)}</td>
                       <td className="py-3 pr-3 font-medium text-white">${salePrice.toFixed(2)}</td>
                       <td className="py-3 pr-3 text-emerald-400">${(salePrice - supplierCost).toFixed(2)}</td>
