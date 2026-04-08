@@ -944,8 +944,9 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInpu
           <input
             type="text"
             placeholder="Search products..."
-            value={searchInput}
+            value={searchInput || ''}
             onChange={onSearchChange}
+            onKeyDown={(e) => { if (e.key === ' ') e.stopPropagation() }}
             className="w-full rounded-full border border-white/[0.12] py-2 pl-10 pr-4 text-sm text-white bg-white/[0.06] placeholder-slate-500"
             style={{ fontSize: '16px', outline: 'none' }}
             onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
