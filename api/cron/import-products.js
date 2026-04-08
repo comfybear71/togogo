@@ -272,6 +272,33 @@ export default async function handler(req, res) {
       `
     } catch { /* non-critical */ }
 
+    // Auto-fix prices: ensure all products have correct supplier_cost (no double tax)
+    // Read markup from admin settings
+    let currentMarkup = 1.3
+    try {
+      const { rows: mkRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_markup'`
+      if (mkRows[0]) currentMarkup = parseFloat(mkRows[0].value) || 1.3
+    } catch {}
+
+    let pricesFixed = 0
+    try {
+      const { rowCount } = await sql`
+        UPDATE user_products
+        SET
+          tax_amount = 0,
+          supplier_cost = ROUND((api_price + shipping_cost)::numeric, 2),
+          sale_price = ROUND(((api_price + shipping_cost) * ${currentMarkup})::numeric, 2),
+          updated_at = NOW()
+        WHERE price_currency = 'AUD'
+          AND api_price > 0
+          AND (tax_amount > 0 OR supplier_cost != ROUND((api_price + shipping_cost)::numeric, 2))
+      `
+      pricesFixed = rowCount
+      if (pricesFixed > 0) console.log(`[Cron] Auto-fixed ${pricesFixed} product prices (removed tax, applied ${currentMarkup}x markup)`)
+    } catch (err) {
+      console.error('[Cron] Price fix failed:', err.message)
+    }
+
     const newTotal = currentCount + batch.length
     console.log(`[Cron] Done! ${enriched} enriched, ${enrichFailed} failed. Catalog: ~${newTotal}`)
 
@@ -281,6 +308,7 @@ export default async function handler(req, res) {
       totalImported,
       enriched,
       enrichFailed,
+      pricesFixed,
       stores: stores.length,
       catalogSize: newTotal,
     })
