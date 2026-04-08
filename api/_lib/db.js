@@ -193,6 +193,7 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_id TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_connected'` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS store_settings JSONB DEFAULT '{}'::jsonb` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS price_verified BOOLEAN DEFAULT false` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
 
   // Pricing breakdown columns on user_products
