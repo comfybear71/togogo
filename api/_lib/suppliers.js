@@ -373,10 +373,32 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       }
     }
 
+    // Step 3: Query the order to get the REAL AliExpress cost (product + shipping + tax in USD)
+    let realCostUSD = null
+    if (aeOrderId) {
+      try {
+        const orderData = await callAPI('aliexpress.trade.ds.order.get', {
+          single_order_query: JSON.stringify({ order_id: Number(aeOrderId) }),
+        })
+        const orderResult = orderData?.aliexpress_trade_ds_order_get_response?.result
+          || orderData?.result
+        if (orderResult) {
+          // Extract the actual cost — can be in different fields
+          const totalAmount = parseFloat(orderResult.total_product_amount || orderResult.pay_amount || orderResult.order_amount || '0')
+          const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
+          realCostUSD = totalAmount + shippingAmount
+          console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (product: $${totalAmount}, shipping: $${shippingAmount})`)
+        }
+      } catch (costErr) {
+        console.log(`[AliExpress] Could not query order cost for ${aeOrderId}: ${costErr.message}`)
+      }
+    }
+
     return {
       success: true,
       orderId: aeOrderId,
       orderData: result,
+      realCostUSD,
     }
   } catch (err) {
     console.error('[AliExpress] Order submit error:', err.message)

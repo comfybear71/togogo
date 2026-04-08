@@ -330,7 +330,19 @@ export default async function handler(req, res) {
                       },
                     })
                     if (result.success) {
-                      await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress'}, updated_at = NOW() WHERE id = ${order.id}`
+                      // If we got the real AliExpress cost, update supplier_cost + recalculate profit
+                      let updateNotes = 'Submitted to AliExpress'
+                      if (result.realCostUSD) {
+                        const usdToAud = 1.45
+                        const realCostAUD = Math.round(result.realCostUSD * usdToAud * 100) / 100
+                        const commissionRate = 0.30
+                        const realProfit = Math.round((order.sale_price - realCostAUD) * (1 - commissionRate) * 100) / 100
+                        const realCommission = Math.round((order.sale_price - realCostAUD) * commissionRate * 100) / 100
+                        await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, supplier_cost = ${realCostAUD}, profit = ${realProfit}, commission = ${realCommission}, status = 'processing', notes = ${`AE cost: US$${result.realCostUSD.toFixed(2)} = A$${realCostAUD.toFixed(2)}`}, updated_at = NOW() WHERE id = ${order.id}`
+                        console.log(`[Webhook] AliExpress order ${result.orderId}: real cost US$${result.realCostUSD.toFixed(2)} = A$${realCostAUD.toFixed(2)}, profit A$${realProfit.toFixed(2)}`)
+                      } else {
+                        await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress'}, updated_at = NOW() WHERE id = ${order.id}`
+                      }
                       console.log(`[Webhook] AliExpress order submitted: ${result.orderId}`)
 
                       // Report to DS Level system — builds towards automatic discounts
