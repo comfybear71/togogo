@@ -74,7 +74,6 @@ const SECTIONS = [
       { key: 'shipping_fee_aud', label: 'Flat Shipping Fee (AUD)', placeholder: '6.00 (set to 0 to remove shipping fee)' },
       { key: 'usd_to_aud_rate', label: 'USD to AUD Exchange Rate', placeholder: '1.45' },
       { key: 'min_shipping_cost', label: 'Min Shipping Per Product (AUD)', placeholder: '3.00' },
-      { key: 'tax_rate', label: 'Tax Rate (%)', placeholder: '18' },
       { key: 'platform_fee_percent', label: 'ToGoGo Commission (% of profit)', placeholder: '30' },
       { key: 'default_coupon_code', label: 'AliExpress Coupon Code', placeholder: 'AUAP03' },
     ],
