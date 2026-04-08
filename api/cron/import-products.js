@@ -213,8 +213,13 @@ export default async function handler(req, res) {
       const taxAUD = productCostAUD * taxRate
       const wholesaleCost = productCostAUD + shippingAUD + taxAUD
 
-      // Store sale price = wholesale × 1.5 (client markup)
-      const salePrice = Math.ceil(wholesaleCost * 1.5 * 100) / 100
+      // Store sale price = wholesale × markup (configurable from admin settings or per-store)
+      let defaultMarkup = 1.3
+      try {
+        const { rows: markupRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_markup'`
+        if (markupRows[0]) defaultMarkup = parseFloat(markupRows[0].value) || 1.3
+      } catch { /* use default */ }
+      const salePrice = Math.ceil(wholesaleCost * defaultMarkup * 100) / 100
 
       // Skip products over A$1000
       if (salePrice > 1000) continue
