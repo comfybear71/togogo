@@ -19,34 +19,38 @@ export default async function handler(req, res) {
     } catch { /* use default */ }
     const minShip = 3.00 // minimum A$3 shipping
 
-    // Convert all prices from USD to AUD and recalculate
-    // IMPORTANT: supplier_cost = api_price_aud + shipping_aud + tax_aud (NO double conversion)
+    // Read markup from admin settings
+    let markup = 1.3
+    try {
+      const { rows: markupRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_markup'`
+      if (markupRows[0]) markup = parseFloat(markupRows[0].value) || 1.3
+    } catch {}
+
+    // Convert any remaining USD products to AUD
     const { rowCount } = await sql`
       UPDATE user_products
       SET
         api_price = ROUND((api_price * ${rate})::numeric, 2),
         shipping_cost = GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip}),
-        tax_amount = ROUND((api_price * ${rate} * 0.18)::numeric, 2),
-        supplier_cost = ROUND((api_price * ${rate})::numeric, 2) + GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip}) + ROUND((api_price * ${rate} * 0.18)::numeric, 2),
-        sale_price = ROUND(((ROUND((api_price * ${rate})::numeric, 2) + GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip}) + ROUND((api_price * ${rate} * 0.18)::numeric, 2)) * 1.5)::numeric, 2),
+        tax_amount = 0,
+        supplier_cost = ROUND((api_price * ${rate})::numeric, 2) + GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip}),
+        sale_price = ROUND(((ROUND((api_price * ${rate})::numeric, 2) + GREATEST(ROUND((shipping_cost * ${rate})::numeric, 2), ${minShip})) * ${markup})::numeric, 2),
         price_currency = 'AUD',
         updated_at = NOW()
       WHERE api_price > 0 AND api_price < 500
         AND (price_currency = 'USD' OR price_currency IS NULL)
     `
 
-    // FIX: Recalculate supplier_cost for ALL AUD products
-    // supplier_cost MUST equal api_price + shipping_cost + tax_amount (all already in AUD)
-    // This fixes the double-conversion bug where fix-prices was run multiple times
+    // Recalculate ALL AUD products: supplier_cost = api_price + shipping (NO tax — AliExpress handles tax)
     const { rowCount: fixedCount } = await sql`
       UPDATE user_products
       SET
-        supplier_cost = ROUND((api_price + shipping_cost + tax_amount)::numeric, 2),
-        sale_price = ROUND(((api_price + shipping_cost + tax_amount) * 1.5)::numeric, 2),
+        tax_amount = 0,
+        supplier_cost = ROUND((api_price + shipping_cost)::numeric, 2),
+        sale_price = ROUND(((api_price + shipping_cost) * ${markup})::numeric, 2),
         updated_at = NOW()
       WHERE price_currency = 'AUD'
         AND api_price > 0
-        AND supplier_cost != ROUND((api_price + shipping_cost + tax_amount)::numeric, 2)
     `
 
     // Save current rate + coupon code to admin_settings if not exists

@@ -75,8 +75,9 @@ export default async function handler(req, res) {
           realShippingAUD = Math.max(cheapest.shippingFee * usdToAud, minShipping)
         }
 
-        const taxAUD = realProductAUD * 0.18
-        const realSupplierCost = Math.round((realProductAUD + realShippingAUD + taxAUD) * 100) / 100
+        // NO separate tax — AliExpress includes tax at their checkout
+        const taxAUD = 0
+        const realSupplierCost = Math.round((realProductAUD + realShippingAUD) * 100) / 100
 
         // Read default markup from admin settings
         let markup = 1.3

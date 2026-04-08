@@ -209,9 +209,10 @@ export default async function handler(req, res) {
       // Freight calculator returns USD — convert to AUD with minimum A$3
       const minShipping = 3.00
       const shippingAUD = Math.max(shippingCost * usdToAud, minShipping)
-      // Tax is ~18% of product cost in AUD
-      const taxAUD = productCostAUD * taxRate
-      const wholesaleCost = productCostAUD + shippingAUD + taxAUD
+      // NO separate tax — AliExpress charges tax at their checkout, included in the total
+      // supplier_cost = product + shipping (what we actually pay)
+      const taxAUD = 0
+      const wholesaleCost = productCostAUD + shippingAUD
 
       // Store sale price = wholesale × markup (configurable from admin settings or per-store)
       let defaultMarkup = 1.3
