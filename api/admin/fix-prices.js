@@ -70,8 +70,9 @@ export default async function handler(req, res) {
       usdToAudConverted: rowCount,
       supplierCostFixed: fixedCount,
       rate: `1 USD = ${rate} AUD`,
-      formula: 'supplier_cost = api_price_AUD + shipping_AUD + tax_AUD, sale_price = supplier_cost × 1.5',
-      note: 'supplier_cost now correctly reflects actual AliExpress cost in AUD'
+      markup: `${markup}x`,
+      formula: `supplier_cost = api_price_AUD + shipping_AUD (no tax), sale_price = supplier_cost × ${markup}`,
+      note: 'supplier_cost = what we pay AliExpress (product + shipping). No separate tax — AliExpress handles tax at their checkout.'
     })
   } catch (err) {
     return res.status(500).json({ error: err.message })
