@@ -412,7 +412,7 @@ export default function StorefrontPage({ subdomain }) {
 
       {/* Category Bar — horizontal scroll like AliExpress */}
       {storeData.categories?.length > 0 && (
-        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[49px] z-30">
+        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[56px] z-30">
           <div className="mx-auto max-w-7xl px-4">
             {/* Category tabs */}
             <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
