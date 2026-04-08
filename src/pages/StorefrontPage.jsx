@@ -932,11 +932,15 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInpu
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
-            <Store className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-lg font-bold text-white hidden sm:inline">{store.name}</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-base font-bold tracking-tight">
+            <span style={{ color: '#FF6B35' }}>T</span>
+            <span style={{ color: '#FF6B35' }}>o</span>
+            <span style={{ color: '#FFD23F' }}>G</span>
+            <span style={{ color: '#FFD23F' }}>o</span>
+            <span style={{ color: '#06D6A0' }}>G</span>
+            <span style={{ color: '#06D6A0' }}>o</span>
+          </span>
         </div>
         {/* Search bar in header */}
         <div className="relative flex-1 min-w-0">
