@@ -44,89 +44,68 @@ export default async function handler(req, res) {
     for (const order of backupOrders) {
       if (!order.platform_order_id && !order.supplier_order_id) { skipped++; continue }
 
-      // Try to match by platform_order_id first
-      let { rowCount } = await sql`
-        UPDATE user_orders
-        SET
-          supplier_order_id = COALESCE(${order.supplier_order_id || null}, supplier_order_id),
-          status = COALESCE(${order.status || null}, status),
-          tracking_number = COALESCE(${order.tracking_number || null}, tracking_number),
-          tracking_url = COALESCE(${order.tracking_url || null}, tracking_url),
-          supplier_cost = CASE WHEN ${parseFloat(order.supplier_cost || 0)} > 0 THEN ${parseFloat(order.supplier_cost)} ELSE supplier_cost END,
-          profit = CASE WHEN ${parseFloat(order.profit || 0)} != 0 THEN ${parseFloat(order.profit)} ELSE profit END,
-          commission = CASE WHEN ${parseFloat(order.commission || 0)} != 0 THEN ${parseFloat(order.commission)} ELSE commission END,
-          product_title = COALESCE(${order.product_title || null}, product_title),
-          product_image = COALESCE(${order.product_image || null}, product_image),
-          supplier_product_id = COALESCE(${order.supplier_product_id || null}, supplier_product_id),
-          notes = COALESCE(${order.notes || null}, notes),
-          updated_at = NOW()
-        WHERE platform_order_id = ${order.platform_order_id}
-      `
-
-      if (rowCount > 0) { updated++; continue }
-
-      // Try to match by sale_price + customer_email + approximate date
-      const result = await sql`
-        UPDATE user_orders
-        SET
-          supplier_order_id = COALESCE(${order.supplier_order_id || null}, supplier_order_id),
-          status = COALESCE(${order.status || null}, status),
-          tracking_number = COALESCE(${order.tracking_number || null}, tracking_number),
-          tracking_url = COALESCE(${order.tracking_url || null}, tracking_url),
-          supplier_cost = CASE WHEN ${parseFloat(order.supplier_cost || 0)} > 0 THEN ${parseFloat(order.supplier_cost)} ELSE supplier_cost END,
-          profit = CASE WHEN ${parseFloat(order.profit || 0)} != 0 THEN ${parseFloat(order.profit)} ELSE profit END,
-          commission = CASE WHEN ${parseFloat(order.commission || 0)} != 0 THEN ${parseFloat(order.commission)} ELSE commission END,
-          product_title = COALESCE(${order.product_title || null}, product_title),
-          product_image = COALESCE(${order.product_image || null}, product_image),
-          supplier_product_id = COALESCE(${order.supplier_product_id || null}, supplier_product_id),
-          platform_order_id = COALESCE(${order.platform_order_id || null}, platform_order_id),
-          notes = COALESCE(${order.notes || null}, notes),
-          updated_at = NOW()
-        WHERE customer_email = ${order.customer_email || ''}
-          AND ABS(sale_price - ${parseFloat(order.sale_price || 0)}) < 0.10
-          AND supplier_order_id IS NULL
-          AND id = (SELECT id FROM user_orders WHERE customer_email = ${order.customer_email || ''} AND ABS(sale_price - ${parseFloat(order.sale_price || 0)}) < 0.10 AND supplier_order_id IS NULL LIMIT 1)
-      `
-
-      if ((result.rowCount || 0) > 0) { updated++; continue }
-
-      // No match — insert the backup order directly
       try {
+        // Skip matching — just insert directly from backup
         const safeInt = (v) => Math.round(parseFloat(v || 0)) || 0
-        const safeFloat = (v) => parseFloat(v || 0) || 0
-        const safeStr = (v) => String(v || '')
+        const safeFloat = (v) => Math.round((parseFloat(v || 0)) * 100) / 100
+        const safeStr = (v) => v ? String(v) : ''
         const safeAddr = typeof order.shipping_address === 'object' ? JSON.stringify(order.shipping_address) : (order.shipping_address || '{}')
 
-        await sql`
-          INSERT INTO user_orders (
-            user_id, supplier, supplier_product_id, supplier_order_id,
-            product_title, product_image,
-            supplier_cost, sale_price, profit, commission, commission_rate, quantity,
-            platform, platform_order_id,
-            customer_name, customer_email, shipping_address,
-            status, tracking_number, tracking_url, notes,
-            stripe_payment_intent, created_at
-          ) VALUES (
-            ${order.user_id}, ${safeStr(order.supplier) || 'AliExpress'}, ${safeStr(order.supplier_product_id)},
-            ${order.supplier_order_id || null},
-            ${safeStr(order.product_title) || 'Product'}, ${safeStr(order.product_image)},
-            ${safeFloat(order.supplier_cost)}, ${safeFloat(order.sale_price)},
-            ${safeFloat(order.profit)}, ${safeFloat(order.commission)},
-            ${safeFloat(order.commission_rate) || 0.10}, ${safeInt(order.quantity) || 1},
-            ${safeStr(order.platform) || 'togogo-store'}, ${safeStr(order.platform_order_id)},
-            ${safeStr(order.customer_name)}, ${safeStr(order.customer_email)},
-            ${safeAddr},
-            ${safeStr(order.status) || 'processing'}, ${order.tracking_number || null}, ${order.tracking_url || null},
-            ${safeStr(order.notes) || 'Restored from backup'},
-            ${order.stripe_payment_intent || null},
-            ${order.created_at || new Date().toISOString()}
-          )
+        // Check if this exact order already exists
+        const { rows: exists } = await sql`
+          SELECT id FROM user_orders
+          WHERE platform_order_id = ${order.platform_order_id || 'x'}
+             OR (supplier_order_id = ${order.supplier_order_id || 'x'} AND supplier_order_id IS NOT NULL)
+          LIMIT 1
         `
-        inserted++
-      } catch (insertErr) {
-        console.error(`[Restore] Insert failed for ${order.platform_order_id}:`, insertErr.message)
+        if (exists.length > 0) {
+          // Update existing with backup data
+          await sql`
+            UPDATE user_orders
+            SET
+              supplier_order_id = COALESCE(${order.supplier_order_id || null}, supplier_order_id),
+              status = COALESCE(${order.status || null}, status),
+              tracking_number = COALESCE(${order.tracking_number || null}, tracking_number),
+              product_title = COALESCE(${order.product_title || null}, product_title),
+              product_image = COALESCE(${order.product_image || null}, product_image),
+              updated_at = NOW()
+            WHERE id = ${exists[0].id}
+          `
+          updated++
+        } else {
+          // Insert new
+          await sql`
+            INSERT INTO user_orders (
+              user_id, supplier, supplier_product_id, supplier_order_id,
+              product_title, product_image,
+              supplier_cost, sale_price, profit, commission, commission_rate, quantity,
+              platform, platform_order_id,
+              customer_name, customer_email, shipping_address,
+              status, tracking_number, tracking_url, notes,
+              stripe_payment_intent, created_at
+            ) VALUES (
+              ${order.user_id}, ${safeStr(order.supplier) || 'AliExpress'}, ${safeStr(order.supplier_product_id)},
+              ${order.supplier_order_id || null},
+              ${safeStr(order.product_title) || 'Product'}, ${safeStr(order.product_image)},
+              ${safeFloat(order.supplier_cost)}, ${safeFloat(order.sale_price)},
+              ${safeFloat(order.profit)}, ${safeFloat(order.commission)},
+              ${safeFloat(order.commission_rate)}, ${safeInt(order.quantity) || 1},
+              ${safeStr(order.platform) || 'togogo-store'}, ${safeStr(order.platform_order_id)},
+              ${safeStr(order.customer_name)}, ${safeStr(order.customer_email)},
+              ${safeAddr},
+              ${safeStr(order.status) || 'processing'}, ${order.tracking_number || null}, ${order.tracking_url || null},
+              ${safeStr(order.notes) || 'Restored from backup'},
+              ${order.stripe_payment_intent || null},
+              ${order.created_at || new Date().toISOString()}
+            )
+          `
+          inserted++
+        }
+      } catch (err) {
+        console.error(`[Restore] Failed for ${order.platform_order_id}: ${err.message}`)
         skipped++
       }
+    }
     }
 
     return res.json({
