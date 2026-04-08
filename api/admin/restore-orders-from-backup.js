@@ -85,7 +85,7 @@ export default async function handler(req, res) {
         WHERE customer_email = ${order.customer_email || ''}
           AND ABS(sale_price - ${parseFloat(order.sale_price || 0)}) < 0.10
           AND supplier_order_id IS NULL
-        LIMIT 1
+          AND id = (SELECT id FROM user_orders WHERE customer_email = ${order.customer_email || ''} AND ABS(sale_price - ${parseFloat(order.sale_price || 0)}) < 0.10 AND supplier_order_id IS NULL LIMIT 1)
       `
 
       if ((result.rowCount || 0) > 0) { updated++; continue }
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
             ${order.product_title || 'Product'}, ${order.product_image || ''},
             ${parseFloat(order.supplier_cost || 0)}, ${parseFloat(order.sale_price || 0)},
             ${parseFloat(order.profit || 0)}, ${parseFloat(order.commission || 0)},
-            ${parseFloat(order.commission_rate || 0.10)}, ${parseInt(order.quantity || 1)},
+            ${parseFloat(order.commission_rate || 0.10)}, ${Math.round(parseFloat(order.quantity || 1))},
             ${order.platform || 'togogo-store'}, ${order.platform_order_id || ''},
             ${order.customer_name || ''}, ${order.customer_email || ''},
             ${order.shipping_address || '{}'},
