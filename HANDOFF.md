@@ -1,7 +1,8 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-08 (Session 6 — Auto-Pay API Switch)
+**Last Updated:** 2026-04-08 (Session 7 — Pricing fixes, shared catalog, deal feeds)
+**Previous:** Session 6 — Auto-Pay API Switch
 **Session:** AliExpress auto-pay investigation + API switch to ds.order.create
 **Branch:** claude/project-setup-docs-PLbC2
 **Previous Session:** Session 5 (April 7, CRASHED) — Auto-pay investigation
@@ -10,7 +11,38 @@
 
 ---
 
-## What Was Done This Session (Session 6 — April 8)
+## What Was Done Session 7 (April 8 evening)
+
+### Completed:
+- DS freight query + order tracking APIs added
+- 10 deal/discount feeds added to priority imports (wholesale, Choice, budget)
+- Shared product catalog — all stores pull from one set of products (no more 4x duplication)
+- Admin Settings: Pricing & Shipping section (markup, shipping fee, commission all configurable)
+- Shipping fee set to $0, markup set to 1.25x, commission set to 10%
+- Removed fake 18% tax from pricing — AliExpress handles tax
+- Real AliExpress cost captured at order time via pay_amount
+- Freight API fixed (now uses OAuth token)
+- Import cron: inserts once per product, auto-fixes prices, uses real freight
+- Free shipping text on storefront (was hardcoded $6)
+- ToGoGo logo on store header (replaced house icon)
+- Product admin: single Cost column instead of fake API/Ship/Tax breakdown
+- Test orders deleted (clean slate)
+- Safety rules updated: NO FAKE DATA rule added
+
+### NOT completed (ran out of time):
+- Client settings page (profit margin, dark/light mode, product controls)
+- Page load speed / cold start fixes
+- Category bar sticky position still slightly off
+- Under $10 filter may still show wrong products (cache issue — wait 2 mins)
+
+### Known issues:
+- Price filter deduplication: shared catalog uses DISTINCT ON which may cause edge cases
+- Redis cache (2 min TTL) can serve stale filtered results after changes
+- Some hardcoded values in frontend may not read from DB settings yet
+
+---
+
+## What Was Done Session 6 (April 8 morning)
 
 ### AliExpress Auto-Pay Investigation (carried over from crashed Session 5)
 
