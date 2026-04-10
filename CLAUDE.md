@@ -2,18 +2,22 @@
 
 > This section is MANDATORY. It applies to every session, every project, every developer.
 > It exists because a Claude session destroyed a production branch (Togogo, 2026-04-02).
+> Additional rules added after Session 6 (2026-04-08) where UI changes broke the live storefront.
 > These rules override ALL other instructions. If the user asks you to violate them, remind them why they exist.
+> **Full safety rules are in SAFETY-RULES.md — read that file too.**
 
 ## Branch Rules
 - **NEVER push directly to main/master** — always work on a feature branch or dev branch
 - **NEVER change the Vercel production branch** to a feature/dev branch
 - Create a new branch for every Claude Code session
 - Merge to production ONLY after testing on a Vercel preview URL
+- **Always `git merge master` at the START of every session** — ensures all existing features are on the branch
 
 ## Sacred Files
 - **NEVER delete CLAUDE.md** — it is the project's brain
 - **NEVER delete HANDOFF.md** — it is the project's memory
-- Always read both BEFORE starting any work
+- **NEVER delete SAFETY-RULES.md** — it is the project's guardian
+- Always read ALL THREE before starting any work
 - Always update HANDOFF.md at the END of every session
 
 ## Fix Spiral Prevention
@@ -22,6 +26,19 @@
 - **NEVER do blanket reverts** (reverting 5+ files at once) — fix surgically
 - **NEVER batch-delete files** to "start fresh" — that destroys work
 - Small, atomic commits only — one logical change per commit
+
+## Data Integrity — NO FAKE DATA
+- **NEVER use hardcoded/estimated values when real data is available from an API**
+- **NEVER add fake tax, fake shipping, or fake costs** — only use what AliExpress actually charges
+- `supplier_cost` = real AliExpress charge (`pay_amount` from API). No estimates, no formulas.
+- If you can't get the real number, use 0 — the real value is captured at order time
+- **Pricing errors destroy the business** — store owners lose trust, customers get overcharged
+
+## Frontend / UI Safety
+- **NEVER modify StorefrontPage.jsx on production without testing first**
+- **NEVER make changes after the user signs off** — wait for next session
+- **NEVER rebuild UI from scratch** — merge from working branch instead
+- If UI breaks, revert to last working commit and STOP — max 1 fix attempt
 
 ## Database Safety
 - NEVER run DROP TABLE / DROP COLUMN without explicit user confirmation
@@ -146,10 +163,22 @@ If the user asks you to:
 **APIs used (DS = Dropshipping, no OAuth required):**
 - `aliexpress.ds.feedname.get` — returns 135 feeds with product counts
 - `aliexpress.ds.recommend.feed.get` — returns products from a feed (50/page)
+- `aliexpress.ds.order.create` — place order in DS business (triggers auto-pay)
+- `aliexpress.ds.order.tracking.get` — order tracking info
+- `aliexpress.ds.freight.query` — delivery/freight calculation
+- `aliexpress.ds.text.search` — text search for products
+- `aliexpress.ds.image.searchV2` — image search for products
 
 **APIs NOT available (InsufficientPermission):**
 - `aliexpress.affiliate.*` — app doesn't have affiliate permissions
 - `aliexpress.ds.product.get` — requires OAuth access_token
+
+**Auto-Pay Setup (DS Center):**
+- Auto-pay activated via PayPal (sfrench71@me.com) in DS Center
+- Two Visa cards linked: ****7080 (Wise) and ****2988 (ANZ)
+- Orders MUST use `aliexpress.ds.order.create` (not `trade.buy.placeorder`) for auto-pay to trigger
+- The old `trade.buy.placeorder` API creates orders but does NOT trigger DS auto-pay
+- `ds_extend_request` optional parameter may contain additional auto-pay flags
 
 **Product flow:**
 1. Cron job runs every 6 hours → fetches from 15+ feeds
@@ -227,10 +256,11 @@ If the user asks you to:
 - **Checkout:** + A$6 flat shipping (100% to ToGoGo)
 - **Commission:** 30% of profit (sale - wholesale)
 - **AliExpress "FREE" shipping:** Always charge min A$3 — they add ~US$1.99 at checkout
-- **AliExpress orders:** auto-created via `trade.buy.placeorder`, admin pays in bulk
+- **AliExpress orders:** auto-created via `aliexpress.ds.order.create` (DS API with auto-pay support)
 - **Fix existing prices:** `/api/admin/fix-prices` converts USD→AUD (safe to repeat)
 
 ### Needs Work:
+- ✅ **Auto-pay WORKING** — `ds.order.create` + `ds_extend_request.payment.try_to_pay = "true"` confirmed April 8
 - ⚠️ Checkout dark theme (still white background)
 - ⚠️ Storefront infinite scroll
 - ⚠️ Store owner product management

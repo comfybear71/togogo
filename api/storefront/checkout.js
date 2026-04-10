@@ -51,7 +51,7 @@ export default async function handler(req, res) {
       const { rows: products } = await sql`
         SELECT id, title, image, supplier, supplier_cost, sale_price, supplier_product_id
         FROM user_products
-        WHERE id = ${item.productId} AND user_id = ${store.user_id} AND is_active = true
+        WHERE id = ${item.productId} AND is_active = true
       `
       if (!products[0]) continue
 
@@ -92,16 +92,23 @@ export default async function handler(req, res) {
     // No separate shipping fee — shipping + tax included in product price (Temu model)
     const totalAmount = lineItems.reduce((s, li) => s + li.price_data.unit_amount * li.quantity, 0)
 
-    // Add A$6 flat shipping — goes to PLATFORM (ToGoGo), not store owner
-    const shippingFeeCents = 600
-    lineItems.push({
-      price_data: {
-        currency: 'aud',
-        product_data: { name: 'Shipping' },
-        unit_amount: shippingFeeCents,
-      },
-      quantity: 1,
-    })
+    // Shipping fee — configurable from admin settings (default A$6, set to 0 to remove)
+    let shippingFeeAUD = 6.00
+    try {
+      const { rows: feeRows } = await sql`SELECT value FROM admin_settings WHERE key = 'shipping_fee_aud'`
+      if (feeRows[0]) shippingFeeAUD = parseFloat(feeRows[0].value) || 0
+    } catch { /* use default */ }
+    const shippingFeeCents = Math.round(shippingFeeAUD * 100)
+    if (shippingFeeCents > 0) {
+      lineItems.push({
+        price_data: {
+          currency: 'aud',
+          product_data: { name: 'Shipping' },
+          unit_amount: shippingFeeCents,
+        },
+        quantity: 1,
+      })
+    }
     const totalWithShipping = totalAmount + shippingFeeCents
 
     const totalSupplierCostCents = Math.round(totalSupplierCost * 100)

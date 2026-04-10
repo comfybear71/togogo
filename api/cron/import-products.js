@@ -3,7 +3,7 @@
 // Each run fetches from different feeds to build variety over time
 // ACCURATE PRICING: fetches real shipping cost via freight calculator API
 import { sql, ensureSchema } from '../_lib/db.js'
-import { searchAliExpress, getProductDetails, calculateFreight } from '../_lib/suppliers.js'
+import { searchAliExpress, getProductDetails, calculateFreight, queryDSFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // Auth: allow Vercel cron, JWT_SECRET as query param, or admin JWT token
@@ -173,13 +173,22 @@ export default async function handler(req, res) {
             (async () => {
               const details = await getProductDetails(aeId)
               if (details) realProductCost = details.cost || p.cost || 0
-              const freightOptions = await calculateFreight(aeId, 1, 'AU')
+              // Try DS freight first, then old freight API, then product details shipping
+              let freightOptions = await queryDSFreight(aeId, 'AU', 1)
+              if (!freightOptions || freightOptions.length === 0) {
+                freightOptions = await calculateFreight(aeId, 1, 'AU')
+              }
               if (freightOptions && freightOptions.length > 0) {
                 const cheapest = freightOptions.reduce((min, o) => o.cost < min.cost ? o : min, freightOptions[0])
                 shippingCost = cheapest.cost
-                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName}, ${cheapest.estimatedDays} days)`)
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (${cheapest.serviceName})`)
+              } else if (details?.shipping?.length > 0) {
+                // Fallback: use shipping from product details
+                const cheapest = details.shipping.reduce((min, s) => s.shippingFee < min.shippingFee ? s : min, details.shipping[0])
+                shippingCost = cheapest.shippingFee
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=$${shippingCost.toFixed(2)} (from product details)`)
               } else {
-                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using min)`)
+                console.log(`[Cron] ${aeId}: product=$${realProductCost.toFixed(2)} freight=UNKNOWN (using $0 — real cost captured at order time)`)
               }
               return 'ok'
             })(),
@@ -206,45 +215,48 @@ export default async function handler(req, res) {
         if (rateRows[0]) usdToAud = parseFloat(rateRows[0].value) || 1.45
       } catch { /* use default */ }
       const productCostAUD = realProductCost * usdToAud
-      // Freight calculator returns USD — convert to AUD with minimum A$3
-      const minShipping = 3.00
-      const shippingAUD = Math.max(shippingCost * usdToAud, minShipping)
-      // Tax is ~18% of product cost in AUD
-      const taxAUD = productCostAUD * taxRate
-      const wholesaleCost = productCostAUD + shippingAUD + taxAUD
+      // Freight returns USD — convert to AUD. No minimum — real cost captured at order time
+      const shippingAUD = Math.round(shippingCost * usdToAud * 100) / 100
+      // NO separate tax — AliExpress charges tax at their checkout, included in the total
+      // supplier_cost = product + shipping (what we actually pay)
+      const taxAUD = 0
+      const wholesaleCost = productCostAUD + shippingAUD
 
-      // Store sale price = wholesale × 1.5 (client markup)
-      const salePrice = Math.ceil(wholesaleCost * 1.5 * 100) / 100
+      // Store sale price = wholesale × markup (configurable from admin settings or per-store)
+      let defaultMarkup = 1.3
+      try {
+        const { rows: markupRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_markup'`
+        if (markupRows[0]) defaultMarkup = parseFloat(markupRows[0].value) || 1.3
+      } catch { /* use default */ }
+      const salePrice = Math.ceil(wholesaleCost * defaultMarkup * 100) / 100
 
       // Skip products over A$1000
       if (salePrice > 1000) continue
 
-      // Import into all stores
-      for (const store of stores) {
-        try {
-          const imgArray = Array.isArray(p.images) ? p.images : []
-          await sql`
-            INSERT INTO user_products (
-              user_id, title, description, image, images, supplier,
-              supplier_product_id, supplier_cost, sale_price,
-              api_price, shipping_cost, tax_amount,
-              price_currency, category, is_active,
-              product_rating, orders_count, original_price, discount_percent
-            ) VALUES (
-              ${store.user_id}, ${p.title}, ${p.title},
-              ${p.image || ''}, ${imgArray},
-              ${'AliExpress'}, ${p.productId || p.id},
-              ${wholesaleCost}, ${salePrice},
-              ${productCostAUD}, ${shippingAUD}, ${taxAUD},
-              ${'AUD'}, ${p.category || 'General'}, true,
-              ${p.rating || 0}, ${p.orders || 0},
-              ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
-              ${p.discount || 20}
-            )
-          `
-          totalImported++
-        } catch { /* skip duplicates */ }
-      }
+      // Import ONCE into shared catalog (use first store's user_id for DB constraint)
+      try {
+        const imgArray = Array.isArray(p.images) ? p.images : []
+        await sql`
+          INSERT INTO user_products (
+            user_id, title, description, image, images, supplier,
+            supplier_product_id, supplier_cost, sale_price,
+            api_price, shipping_cost, tax_amount,
+            price_currency, category, is_active,
+            product_rating, orders_count, original_price, discount_percent
+          ) VALUES (
+            ${stores[0].user_id}, ${p.title}, ${p.title},
+            ${p.image || ''}, ${imgArray},
+            ${'AliExpress'}, ${p.productId || p.id},
+            ${wholesaleCost}, ${salePrice},
+            ${productCostAUD}, ${shippingAUD}, ${taxAUD},
+            ${'AUD'}, ${p.category || 'General'}, true,
+            ${p.rating || 0}, ${p.orders || 0},
+            ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
+            ${p.discount || 20}
+          )
+        `
+        totalImported++
+      } catch { /* skip duplicates */ }
 
       console.log(`[Cron] → AUD: product=$${productCostAUD.toFixed(2)} ship=$${shippingAUD.toFixed(2)} tax=$${taxAUD.toFixed(2)} wholesale=$${wholesaleCost.toFixed(2)} sale=$${salePrice.toFixed(2)} "${p.title?.slice(0, 50)}"`)
     }
@@ -266,6 +278,33 @@ export default async function handler(req, res) {
       `
     } catch { /* non-critical */ }
 
+    // Auto-fix prices: ensure all products have correct supplier_cost (no double tax)
+    // Read markup from admin settings
+    let currentMarkup = 1.3
+    try {
+      const { rows: mkRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_markup'`
+      if (mkRows[0]) currentMarkup = parseFloat(mkRows[0].value) || 1.3
+    } catch {}
+
+    let pricesFixed = 0
+    try {
+      const { rowCount } = await sql`
+        UPDATE user_products
+        SET
+          tax_amount = 0,
+          supplier_cost = ROUND((api_price + shipping_cost)::numeric, 2),
+          sale_price = ROUND(((api_price + shipping_cost) * ${currentMarkup})::numeric, 2),
+          updated_at = NOW()
+        WHERE price_currency = 'AUD'
+          AND api_price > 0
+          AND (tax_amount > 0 OR supplier_cost != ROUND((api_price + shipping_cost)::numeric, 2))
+      `
+      pricesFixed = rowCount
+      if (pricesFixed > 0) console.log(`[Cron] Auto-fixed ${pricesFixed} product prices (removed tax, applied ${currentMarkup}x markup)`)
+    } catch (err) {
+      console.error('[Cron] Price fix failed:', err.message)
+    }
+
     const newTotal = currentCount + batch.length
     console.log(`[Cron] Done! ${enriched} enriched, ${enrichFailed} failed. Catalog: ~${newTotal}`)
 
@@ -275,6 +314,7 @@ export default async function handler(req, res) {
       totalImported,
       enriched,
       enrichFailed,
+      pricesFixed,
       stores: stores.length,
       catalogSize: newTotal,
     })

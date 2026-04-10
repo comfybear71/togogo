@@ -64,6 +64,21 @@ const SECTIONS = [
     ],
   },
   {
+    id: 'pricing',
+    label: 'Pricing & Shipping',
+    icon: CreditCard,
+    color: '#06D6A0',
+    desc: 'Control product markup, shipping fees, exchange rates, and commission.',
+    fields: [
+      { key: 'default_markup', label: 'Default Markup Multiplier', placeholder: '1.5 (= 50% markup on wholesale cost)' },
+      { key: 'shipping_fee_aud', label: 'Flat Shipping Fee (AUD)', placeholder: '6.00 (set to 0 to remove shipping fee)' },
+      { key: 'usd_to_aud_rate', label: 'USD to AUD Exchange Rate', placeholder: '1.45' },
+      { key: 'min_shipping_cost', label: 'Min Shipping Per Product (AUD)', placeholder: '3.00' },
+      { key: 'platform_fee_percent', label: 'ToGoGo Commission (% of profit)', placeholder: '30' },
+      { key: 'default_coupon_code', label: 'AliExpress Coupon Code', placeholder: 'AUAP03' },
+    ],
+  },
+  {
     id: 'payments',
     label: 'Payment Config',
     icon: CreditCard,
@@ -73,7 +88,6 @@ const SECTIONS = [
       { key: 'stripe_secret_key', label: 'Stripe Secret Key', placeholder: 'sk_live_...', secret: true },
       { key: 'stripe_publishable_key', label: 'Stripe Publishable Key', placeholder: 'pk_live_...' },
       { key: 'stripe_webhook_secret', label: 'Stripe Webhook Secret', placeholder: 'whsec_...', secret: true },
-      { key: 'platform_fee_percent', label: 'ToGoGo Commission (%)', placeholder: '5' },
     ],
   },
   {

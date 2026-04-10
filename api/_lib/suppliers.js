@@ -45,7 +45,7 @@ function signRequest(params, appSecret) {
   return crypto.createHmac('sha256', appSecret).update(sorted).digest('hex').toUpperCase()
 }
 
-async function callAPI(method, params = {}) {
+export async function callAPI(method, params = {}) {
   const appKey = process.env.ALIEXPRESS_APP_KEY
   const appSecret = process.env.ALIEXPRESS_APP_SECRET
   if (!appKey || !appSecret) {
@@ -194,10 +194,47 @@ export async function getProductDetails(productId) {
 }
 
 // ============================================
+// WHOLESALE PRICING — aliexpress.ds.product.wholesale.get
+// ============================================
+
+export async function getWholesalePricing(productId) {
+  try {
+    const data = await callAuthenticatedAPI('aliexpress.ds.product.wholesale.get', {
+      product_id: String(productId),
+    })
+
+    const result = data?.aliexpress_ds_product_wholesale_get_response?.result
+    if (!result) {
+      console.log(`[AliExpress] No wholesale pricing for product ${productId}`)
+      return null
+    }
+
+    // Parse tier pricing (e.g., buy 10+ for $5, buy 50+ for $4)
+    const tiers = result?.wholesale_tier_list?.wholesale_tier_d_t_o || []
+
+    return {
+      productId: String(productId),
+      available: tiers.length > 0,
+      tiers: tiers.map(t => ({
+        minQty: parseInt(t.min_quantity || '0'),
+        maxQty: t.max_quantity ? parseInt(t.max_quantity) : null,
+        price: parseFloat(t.price?.amount || '0'),
+        currency: t.price?.currency_code || 'USD',
+        discount: t.discount || null,
+      })),
+      rawData: result,
+    }
+  } catch (err) {
+    console.error(`[AliExpress] Wholesale pricing failed for ${productId}:`, err.message)
+    return null
+  }
+}
+
+// ============================================
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
-export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount, promotionCode }) {
+export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount, promotionCode, orderId }) {
   try {
     // Resolve SKU attr if not provided
     let resolvedSkuAttr = skuId || ''
@@ -225,7 +262,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
     const addressLine = [shippingAddress.line1, shippingAddress.line2].filter(Boolean).join(', ')
       || shippingAddress.address || 'N/A'
 
-    // aliexpress.trade.buy.placeorder — creates real order on AliExpress
+    // aliexpress.ds.order.create — DS-specific order API (triggers auto-pay)
     const orderRequest = {
       logistics_address: {
         address: addressLine,
@@ -245,6 +282,7 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
         logistics_service_name: shippingMethod,
         order_memo: 'ToGoGo dropship order',
       }],
+      out_order_id: orderId || undefined,
     }
 
     // Add promotion/coupon code if available
@@ -253,16 +291,41 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       console.log(`[AliExpress] Applying promo code: ${promotionCode}`)
     }
 
-    console.log(`[AliExpress] Placing order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
+    console.log(`[AliExpress] Placing DS order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
+
+    // ds_extend_request: contains auto-pay trigger (try_to_pay)
+    const dsExtendRequest = {
+      payment: {
+        pay_currency: 'USD',
+        try_to_pay: 'true',
+      },
+    }
+
+    // Add promotion to ds_extend_request if available
+    if (promotionCode) {
+      dsExtendRequest.promotion = { promotion_activity_id: promotionCode }
+    }
+
+    // Use wholesale pricing model for bulk orders (10+)
+    if (quantity >= 10) {
+      dsExtendRequest.trade_extra_param = { business_model: 'wholesale' }
+      console.log(`[AliExpress] Bulk order (qty=${quantity}), using wholesale pricing`)
+    }
 
     const params = {
       param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
+      ds_extend_request: JSON.stringify(dsExtendRequest),
     }
 
-    const data = await callAuthenticatedAPI('aliexpress.trade.buy.placeorder', params)
+    console.log(`[AliExpress] ds_extend_request: ${JSON.stringify(dsExtendRequest)}`)
+
+    const data = await callAuthenticatedAPI('aliexpress.ds.order.create', params)
+
+    console.log(`[AliExpress] DS order.create raw response: ${JSON.stringify(data).slice(0, 500)}`)
 
     // Response can be in different formats depending on API version
-    const result = data?.aliexpress_trade_buy_placeorder_response?.result
+    const result = data?.aliexpress_ds_order_create_response?.result
+      || data?.aliexpress_trade_buy_placeorder_response?.result
       || data?.result
     if (!result) {
       console.error('[AliExpress] Order placement failed:', JSON.stringify(data).slice(0, 500))
@@ -310,10 +373,44 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       }
     }
 
+    // Step 3: Query the order to get the REAL AliExpress cost (product + shipping + tax in USD)
+    let realCostUSD = null
+    if (aeOrderId) {
+      try {
+        const orderData = await callAPI('aliexpress.trade.ds.order.get', {
+          single_order_query: JSON.stringify({ order_id: Number(aeOrderId) }),
+        })
+        const orderResult = orderData?.aliexpress_trade_ds_order_get_response?.result
+          || orderData?.result
+        if (orderResult) {
+          // Extract the actual cost — can be in different fields
+          // pay_amount = total charged to card/PayPal (includes product + shipping + tax)
+          // If pay_amount not available, sum up the parts
+          const payAmount = parseFloat(orderResult.pay_amount || '0')
+          const productAmount = parseFloat(orderResult.total_product_amount || orderResult.product_amount || '0')
+          const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
+          const taxAmount = parseFloat(orderResult.tax_amount || '0')
+
+          if (payAmount > 0) {
+            // Best: use the actual total charged (includes everything)
+            realCostUSD = payAmount
+            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (pay_amount — total charged inc. tax)`)
+          } else {
+            // Fallback: sum the parts
+            realCostUSD = productAmount + shippingAmount + taxAmount
+            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (product: $${productAmount}, shipping: $${shippingAmount}, tax: $${taxAmount})`)
+          }
+        }
+      } catch (costErr) {
+        console.log(`[AliExpress] Could not query order cost for ${aeOrderId}: ${costErr.message}`)
+      }
+    }
+
     return {
       success: true,
       orderId: aeOrderId,
       orderData: result,
+      realCostUSD,
     }
   } catch (err) {
     console.error('[AliExpress] Order submit error:', err.message)
@@ -462,7 +559,8 @@ export async function calculateFreight(productId, quantity = 1, countryCode = 'A
       }),
     }
 
-    const data = await callAPI('aliexpress.logistics.buyer.freight.calculate', params)
+    // AliExpress now requires OAuth token for freight calculation
+    const data = await callAuthenticatedAPI('aliexpress.logistics.buyer.freight.calculate', params)
 
     const result = data?.aliexpress_logistics_buyer_freight_calculate_response?.result
     if (!result?.success) {
@@ -483,6 +581,94 @@ export async function calculateFreight(productId, quantity = 1, countryCode = 'A
     }))
   } catch (err) {
     console.error('[AliExpress] Freight calc error:', err.message)
+    return null
+  }
+}
+
+// ============================================
+// DS FREIGHT QUERY — aliexpress.ds.freight.query
+// DS-specific freight calculation (may work without OAuth unlike the logistics API)
+// ============================================
+
+export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1, skuId = '') {
+  try {
+    const params = {
+      product_id: String(productId),
+      country_code: countryCode,
+      product_num: String(quantity),
+      send_goods_country_code: 'CN',
+      ...(skuId ? { sku_id: String(skuId) } : {}),
+    }
+
+    // Try without OAuth first, then with
+    let data
+    try {
+      data = await callAPI('aliexpress.ds.freight.query', params)
+    } catch {
+      data = await callAuthenticatedAPI('aliexpress.ds.freight.query', params)
+    }
+
+    console.log(`[AliExpress] DS freight query for ${productId}: ${JSON.stringify(data).slice(0, 500)}`)
+
+    const result = data?.aliexpress_ds_freight_query_response?.result
+      || data?.result
+    if (!result) return null
+
+    const options = result.freight_list?.freight || result.aeop_freight_calculate_result_for_buyer_d_t_o_list?.aeop_freight_calculate_result_for_buyer_dto || []
+
+    return options.map(o => ({
+      serviceName: o.service_name || o.logistics_service_name || '',
+      cost: parseFloat(o.freight?.amount || o.shipping_fee || '0'),
+      currency: o.freight?.currency_code || o.currency || 'USD',
+      estimatedDays: o.estimated_delivery_time || o.delivery_time || '',
+      trackingAvailable: o.tracking_available === true || o.tracking_available === 'true',
+    }))
+  } catch (err) {
+    console.error('[AliExpress] DS freight query error:', err.message)
+    return null
+  }
+}
+
+// ============================================
+// DS ORDER TRACKING — aliexpress.ds.order.tracking.get
+// DS-specific tracking endpoint (alternative to trade.ds.order.get)
+// ============================================
+
+export async function getDSOrderTracking(orderId) {
+  try {
+    const params = { order_id: String(orderId) }
+
+    let data
+    try {
+      data = await callAuthenticatedAPI('aliexpress.ds.order.tracking.get', params)
+    } catch {
+      data = await callAPI('aliexpress.ds.order.tracking.get', params)
+    }
+
+    console.log(`[AliExpress] DS tracking for ${orderId}: ${JSON.stringify(data).slice(0, 500)}`)
+
+    const result = data?.aliexpress_ds_order_tracking_get_response?.result
+      || data?.result
+    if (!result) return null
+
+    // Extract tracking details
+    const trackingInfo = result.tracking_info_list?.tracking_info || result.details?.details || []
+
+    return {
+      orderId: String(orderId),
+      trackingNumber: result.tracking_number || result.logistics_no || '',
+      logisticsCompany: result.logistics_company || result.service_name || '',
+      trackingUrl: result.official_website || result.tracking_url || '',
+      events: Array.isArray(trackingInfo) ? trackingInfo.map(e => ({
+        description: e.event_desc || e.description || '',
+        date: e.signed_date || e.event_date || '',
+        status: e.status || '',
+        location: e.address || e.location || '',
+      })) : [],
+      rawData: result,
+    }
+  } catch (err) {
+    console.error('[AliExpress] DS tracking error:', err.message)
     return null
   }
 }
@@ -514,7 +700,23 @@ export async function reportOrderForDSLevel({ productId, orderId, orderAmount, s
       paytime,
     }
 
-    const data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+    // Try the DS-specific API first, fall back to alternative names
+    let data
+    try {
+      data = await callAuthenticatedAPI('aliexpress.ds.member.orderdata.submit', params)
+    } catch (err) {
+      console.log(`[AliExpress] DS Level: primary API failed (${err.message}), trying without OAuth...`)
+      try {
+        data = await callAPI('aliexpress.ds.member.orderdata.submit', params)
+      } catch (err2) {
+        console.log(`[AliExpress] DS Level: non-OAuth also failed (${err2.message})`)
+        data = null
+      }
+    }
+
+    if (!data) {
+      return { success: false, error: 'All API attempts failed' }
+    }
 
     const result = data?.aliexpress_ds_member_orderdata_submit_response?.result
     if (result?.is_success || result?.success) {
@@ -526,6 +728,31 @@ export async function reportOrderForDSLevel({ productId, orderId, orderAmount, s
     }
   } catch (err) {
     console.error('[AliExpress] DS Level report error:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// ============================================
+// DS MEMBER BENEFITS — check DS level and available discounts
+// ============================================
+
+export async function getDSMemberBenefits() {
+  try {
+    const data = await callAuthenticatedAPI('aliexpress.ds.member.benefit.get', {})
+
+    console.log(`[AliExpress] DS member benefits response: ${JSON.stringify(data).slice(0, 500)}`)
+
+    const result = data?.aliexpress_ds_member_benefit_get_response?.result
+      || data?.aliexpress_ds_member_benefit_get_response
+      || data
+
+    return {
+      success: true,
+      benefits: result,
+      rawData: data,
+    }
+  } catch (err) {
+    console.error('[AliExpress] DS member benefits error:', err.message)
     return { success: false, error: err.message }
   }
 }
@@ -691,6 +918,15 @@ const POOL_CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
 // Best feeds for an Australian dropshipping store
 const PRIORITY_FEEDS = [
+  // Deal & discount feeds (cheapest/best value products)
+  'AEB_WholesalePriceGood_20241205',
+  'AEB_US_LocalStock_Choice_20240830',
+  'AEB_Topseller_PriceRange0~20$',
+  'AEB_Topseller_PriceRange0_20',
+  // Large curated selections
+  'AEB_Shoplazza_SelectedItems_20241011',
+  'AEB_i69_FullCategory_TopSellers_20241225',
+  // Category bestsellers
   'DS_Global_topsellers',
   'DS_ConsumerElectronics_bestsellers',
   'DS_Home&Kitchen_bestsellers',
@@ -698,14 +934,18 @@ const PRIORITY_FEEDS = [
   'DS_Sports&Outdoors_bestsellers',
   'DS_Automobile&Accessories_bestsellers',
   'DS_NewArrivals',
-  'AEB_Topseller_PriceRange0_20',
+  // AU-specific & home
   'AEB_AU_HomeImprovement&Furniture&Lights&Tools&Luggage',
+  'AEB_US_Home&Garden_TopSellers',
+  'AEB_US_Lighting_TopSellers',
+  'AEB_US_Furniture_TopSellers',
+  // More categories
   'AEB_Fetch_Garden&Tool&Pet&AutoParts_TopSellers_20241210',
-  'AEB_i69_FullCategory_TopSellers_20241225',
   'AEB_CETagItems_20241017',
   'AEB_EAN Items',
   'DS_ElectronicComponents_bestsellers',
   'DS_BoxingDayEssentials',
+  'AEB_SurpriseBox_TechKidsWomen_20241024',
 ]
 
 async function getProductPool() {

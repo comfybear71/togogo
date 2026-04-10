@@ -363,7 +363,7 @@ export default function StorefrontPage({ subdomain }) {
                 <span>•</span>
                 <span>{storeData.categories?.length || 0} categories</span>
                 <span>•</span>
-                <span className="text-emerald-400">A$6 shipping</span>
+                <span className="text-emerald-400">Free shipping</span>
               </div>
             </div>
             <div className="relative group">
@@ -412,7 +412,7 @@ export default function StorefrontPage({ subdomain }) {
 
       {/* Category Bar — horizontal scroll like AliExpress */}
       {storeData.categories?.length > 0 && (
-        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[49px] z-30">
+        <div className="border-b border-white/[0.06] bg-[#0c1222] sticky top-[57px] z-30">
           <div className="mx-auto max-w-7xl px-4">
             {/* Category tabs */}
             <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1 category-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
@@ -599,7 +599,7 @@ export default function StorefrontPage({ subdomain }) {
                   {/* Shipping badge */}
                   <div className="mt-1.5">
                     <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
-                      <Truck className="h-3 w-3" /> A$6 shipping
+                      <Truck className="h-3 w-3" /> Free shipping
                     </span>
                   </div>
                 </div>
@@ -799,7 +799,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             {/* Shipping */}
             <div className="flex flex-wrap gap-2 mb-6">
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
-                <Truck className="h-4 w-4" /> Shipping only $6
+                <Truck className="h-4 w-4" /> Free shipping
               </div>
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection
@@ -836,7 +836,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-[#1e293b] border border-white/[0.06]">
               <Truck className="h-5 w-5 text-emerald-400 flex-shrink-0" />
               <div>
-                <p className="text-sm text-white font-medium">A$6 flat shipping to Australia</p>
+                <p className="text-sm text-white font-medium">Free shipping to Australia</p>
                 <p className="text-xs text-slate-400">Estimated delivery: 15–25 business days</p>
               </div>
             </div>
@@ -874,11 +874,12 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <h3 className="text-sm font-semibold text-white mb-4 uppercase tracking-wider">Product Description</h3>
             {details.description.includes('<') ? (
               <div
-                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words [&_*]:!text-slate-300 [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_strong]:!text-white [&_b]:!text-white"
+                className="prose prose-invert prose-sm max-w-none [&_img]:rounded-lg [&_img]:max-w-full [&_img]:h-auto [&_img]:my-4 overflow-x-hidden break-words [&_*]:!text-slate-200 [&_h1]:!text-white [&_h2]:!text-white [&_h3]:!text-white [&_h4]:!text-white [&_strong]:!text-white [&_b]:!text-white [&_p]:!text-slate-200 [&_li]:!text-slate-200 [&_span]:!text-slate-200 [&_td]:!text-slate-200 [&_th]:!text-white [&_a]:!text-[#FF6B35]"
+                style={{ colorScheme: 'dark', color: '#e2e8f0' }}
                 dangerouslySetInnerHTML={{ __html: fixDescriptionImages(details.description) }}
               />
             ) : (
-              <p className="text-sm text-slate-400 leading-relaxed">{details.description}</p>
+              <p className="text-sm text-slate-200 leading-relaxed">{details.description}</p>
             )}
           </div>
         )}
@@ -932,11 +933,15 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInpu
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ backgroundColor: theme.accent }}>
-            <Store className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-lg font-bold text-white hidden sm:inline">{store.name}</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-base font-bold tracking-tight">
+            <span style={{ color: '#FF6B35' }}>T</span>
+            <span style={{ color: '#FF6B35' }}>o</span>
+            <span style={{ color: '#FFD23F' }}>G</span>
+            <span style={{ color: '#FFD23F' }}>o</span>
+            <span style={{ color: '#06D6A0' }}>G</span>
+            <span style={{ color: '#06D6A0' }}>o</span>
+          </span>
         </div>
         {/* Search bar in header */}
         <div className="relative flex-1 min-w-0">
@@ -944,8 +949,9 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInpu
           <input
             type="text"
             placeholder="Search products..."
-            value={searchInput}
+            value={searchInput || ''}
             onChange={onSearchChange}
+            onKeyDown={(e) => { if (e.key === ' ') e.stopPropagation() }}
             className="w-full rounded-full border border-white/[0.12] py-2 pl-10 pr-4 text-sm text-white bg-white/[0.06] placeholder-slate-500"
             style={{ fontSize: '16px', outline: 'none' }}
             onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
@@ -1079,7 +1085,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
               </div>
               <div className={`flex justify-between text-sm text-emerald-400`}>
                 <span>Shipping</span>
-                <span>A$6.00</span>
+                <span>Free</span>
               </div>
               <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
                 <span>Total</span>
@@ -1141,7 +1147,6 @@ function fixDescriptionImages(html) {
     // Move data-src to src (AliExpress lazy loading)
     .replace(/<img([^>]*?)data-src="([^"]+)"([^>]*?)>/gi, (match, before, url, after) => {
       const fixedUrl = url.startsWith('//') ? 'https:' + url : url
-      // Remove any existing empty/placeholder src
       const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
       return `<img${cleaned} src="${fixedUrl}">`
     })
@@ -1153,6 +1158,10 @@ function fixDescriptionImages(html) {
       const cleaned = (before + after).replace(/src="[^"]*"/gi, '')
       return `<img${cleaned} src="${fixedUrl}">`
     })
+    // Strip dark inline text colours that are invisible on dark background
+    .replace(/color\s*:\s*(#[0-3][0-9a-f]{5}|#[0-3][0-9a-f]{2}|rgb\s*\(\s*[0-9]{1,2}\s*,\s*[0-9]{1,2}\s*,\s*[0-9]{1,2}\s*\)|black)/gi, 'color: #e2e8f0')
+    // Strip background-color that could clash with dark theme
+    .replace(/background-color\s*:\s*(#[9a-f][0-9a-f]{5}|#[9a-f][0-9a-f]{2}|white|rgb\s*\(\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*,\s*2[0-9]{2}\s*\))/gi, 'background-color: transparent')
 }
 
 function ProductImageGallery({ product }) {

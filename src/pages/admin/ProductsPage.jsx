@@ -337,10 +337,7 @@ export default function ProductsPage() {
               <thead>
                 <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                   <th className="pb-3 pr-3">Product</th>
-                  <th className="pb-3 pr-3">API Price</th>
-                  <th className="pb-3 pr-3">Ship</th>
-                  <th className="pb-3 pr-3">Tax</th>
-                  <th className="pb-3 pr-3">Wholesale</th>
+                  <th className="pb-3 pr-3">Cost</th>
                   <th className="pb-3 pr-3">Sale</th>
                   <th className="pb-3 pr-3">Profit</th>
                   <th className="pb-3 pr-3">ToGoGo</th>
@@ -368,13 +365,10 @@ export default function ProductsPage() {
                           <p className="font-medium text-white max-w-[200px] truncate" title={p.title}>{p.title}</p>
                         </div>
                       </td>
-                      <td className="py-3 pr-3 text-zinc-500 text-xs">${parseFloat(p.api_price || 0).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-xs text-yellow-400">${parseFloat(p.shipping_cost || 3).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-zinc-500 text-xs">${parseFloat(p.tax_amount || 0).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-zinc-400">${supplierCost.toFixed(2)}</td>
+                      <td className="py-3 pr-3 text-zinc-400">A${supplierCost.toFixed(2)}</td>
                       <td className="py-3 pr-3 font-medium text-white">${salePrice.toFixed(2)}</td>
                       <td className="py-3 pr-3 text-emerald-400">${(salePrice - supplierCost).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-[#FF6B35]">${((salePrice - supplierCost) * 0.3).toFixed(2)}<span className="text-zinc-600 text-xs"> +$6</span></td>
+                      <td className="py-3 pr-3 text-[#FF6B35]">${((salePrice - supplierCost) * 0.1).toFixed(2)}</td>
                       {storeFilter && <td className="py-3 pr-3 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>}
                       <td className="py-3 pr-4">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColors[status]}`}>
