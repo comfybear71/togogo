@@ -466,12 +466,13 @@ export default function StorefrontPage({ subdomain }) {
               const rating = product.rating || 0
               const soldCount = product.ordersCount || product.totalSold || 0
               const savings = originalPrice > price ? (originalPrice - price) : 0
+              const outOfStock = product.inStock === false
 
               return (
               <div
                 key={product.id}
-                onClick={() => navigateTo('product', product)}
-                className={`group cursor-pointer overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5`}
+                onClick={() => !outOfStock && navigateTo('product', product)}
+                className={`group overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all ${outOfStock ? 'opacity-60 cursor-default' : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'}`}
               >
                 {/* Image with discount badge */}
                 <div className="relative aspect-square overflow-hidden bg-gray-100">
@@ -479,26 +480,34 @@ export default function StorefrontPage({ subdomain }) {
                     <img
                       src={product.image}
                       alt={product.title}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      className={`h-full w-full object-cover transition-transform ${outOfStock ? 'grayscale' : 'group-hover:scale-105'}`}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <Package className="h-12 w-12 text-gray-300" />
                     </div>
                   )}
+                  {/* Out of stock overlay */}
+                  {outOfStock && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <span className="bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full">Unavailable</span>
+                    </div>
+                  )}
                   {/* Discount badge */}
-                  {discount > 0 && (
+                  {!outOfStock && discount > 0 && (
                     <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
                       -{discount}%
                     </div>
                   )}
-                  {/* Quick add button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                    className="absolute bottom-2 right-2 rounded-full p-2 shadow-lg transition-all opacity-0 group-hover:opacity-100 bg-white/90 hover:bg-white text-gray-700 hover:text-black"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
+                  {/* Quick add button — hidden when out of stock */}
+                  {!outOfStock && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); cart.add(product) }}
+                      className="absolute bottom-2 right-2 rounded-full p-2 shadow-lg transition-all opacity-0 group-hover:opacity-100 bg-white/90 hover:bg-white text-gray-700 hover:text-black"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Product info */}
