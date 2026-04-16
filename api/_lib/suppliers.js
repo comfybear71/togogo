@@ -194,6 +194,96 @@ export async function getProductDetails(productId) {
 }
 
 // ============================================
+// VERIFY PRODUCT — pre-checkout availability check
+// Checks: exists, in stock, SKU available, price within 10%, shipping under A$3
+// Returns: { available: true/false, reason: string, details: {} }
+// ============================================
+
+export async function verifyProduct(productId, skuAttr = '', quantity = 1, storedSupplierCost = 0) {
+  const USD_TO_AUD = 1.45
+  const MAX_SHIPPING_AUD = 3.00
+  const MAX_PRICE_INCREASE = 0.10 // 10%
+
+  try {
+    const details = await getProductDetails(productId)
+
+    // Check 1: Product exists
+    if (!details) {
+      return { available: false, reason: 'product_not_found', message: 'This product is no longer available on AliExpress' }
+    }
+
+    // Check 2: SKU variant still exists (if specified)
+    if (skuAttr) {
+      const matchingVariant = details.variants.find(v => v.skuAttr === skuAttr)
+      if (!matchingVariant) {
+        return { available: false, reason: 'sku_not_found', message: 'This product option is no longer available' }
+      }
+
+      // Check 3: Stock available for requested quantity
+      if (matchingVariant.stock !== null && matchingVariant.stock < quantity) {
+        if (matchingVariant.stock === 0) {
+          return { available: false, reason: 'out_of_stock', message: 'This product is out of stock' }
+        }
+        return {
+          available: false,
+          reason: 'low_stock',
+          message: `Only ${matchingVariant.stock} available, you requested ${quantity}`,
+          availableQty: matchingVariant.stock,
+        }
+      }
+    } else {
+      // No specific SKU — check if ANY variant has stock
+      const hasStock = details.variants.some(v => v.stock === null || v.stock > 0)
+      if (details.variants.length > 0 && !hasStock) {
+        return { available: false, reason: 'out_of_stock', message: 'This product is out of stock' }
+      }
+    }
+
+    // Check 4: Price hasn't increased more than 10%
+    if (storedSupplierCost > 0) {
+      const currentCostAUD = details.cost * USD_TO_AUD
+      const priceIncrease = (currentCostAUD - storedSupplierCost) / storedSupplierCost
+      if (priceIncrease > MAX_PRICE_INCREASE) {
+        return {
+          available: false,
+          reason: 'price_increased',
+          message: 'This product is temporarily unavailable due to a price change',
+          oldCost: storedSupplierCost,
+          newCost: Math.round(currentCostAUD * 100) / 100,
+        }
+      }
+    }
+
+    // Check 5: Shipping available and under A$3
+    if (details.shipping && details.shipping.length > 0) {
+      const cheapest = details.shipping.reduce((min, s) => s.shippingFee < min.shippingFee ? s : min, details.shipping[0])
+      const shippingAUD = cheapest.shippingFee * USD_TO_AUD
+      if (shippingAUD > MAX_SHIPPING_AUD) {
+        return {
+          available: false,
+          reason: 'shipping_too_expensive',
+          message: 'This product is temporarily unavailable due to shipping costs',
+        }
+      }
+    } else if (details.shipping && details.shipping.length === 0) {
+      return {
+        available: false,
+        reason: 'no_shipping',
+        message: 'This product cannot be shipped to your location',
+      }
+    }
+
+    // All checks passed
+    return { available: true, reason: 'ok', message: 'Available' }
+
+  } catch (err) {
+    console.error(`[AliExpress] Verify failed for ${productId}:`, err.message)
+    // API error — allow purchase (better to risk $5 than block every sale when AE is slow)
+    return { available: true, reason: 'api_error', message: 'Available (could not verify)' }
+  }
+}
+
+// ============================================
 // WHOLESALE PRICING — aliexpress.ds.product.wholesale.get
 // ============================================
 
