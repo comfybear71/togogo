@@ -277,74 +277,9 @@ export default function StorefrontPage({ subdomain }) {
     />
   )
 
-  // ─── Cart View ──────────────────────────────────────────────────────
+  // ─── Cart View with availability verification ─────────────────────
   if (view === 'cart') return (
-    <div className={`min-h-screen ${theme.pageBg} overflow-x-hidden`}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => {}} />
-      <div className="mx-auto max-w-2xl px-4 py-8">
-        <button
-          onClick={() => setView('grid')}
-          className={`mb-6 flex items-center gap-1 text-sm ${theme.textSecondary}`}
-        >
-          <ChevronLeft className="h-4 w-4" /> Continue shopping
-        </button>
-        <h1 className={`text-2xl font-bold ${theme.textPrimary} mb-6`}>Your Cart ({cart.count})</h1>
-        {cart.items.length === 0 ? (
-          <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} p-12 text-center shadow-sm`}>
-            <ShoppingCart className="mx-auto h-12 w-12 text-gray-300 mb-3" />
-            <p className={theme.textSecondary}>Your cart is empty</p>
-            <button onClick={() => setView('grid')} className="mt-4 text-sm font-medium hover:underline" style={{ color: theme.accent }}>
-              Browse products
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3 mb-6">
-              {cart.items.map((item) => (
-                <div key={item.id} className={`flex items-center gap-3 rounded-xl ${theme.cardBg} ${theme.cardBorder} p-3 shadow-sm`}>
-                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100">
-                    {item.image ? (
-                      <img src={item.image} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-gray-300" /></div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${theme.textPrimary} truncate`}>{item.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
-                        <Minus className="h-3 w-3" />
-                      </button>
-                      <span className={`w-5 text-center text-xs font-medium ${theme.textPrimary}`}>{item.quantity}</span>
-                      <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className="rounded-lg p-1" style={{ backgroundColor: theme.accentLight }}>
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                  <p className={`font-semibold ${theme.textPrimary} text-sm`}>A${(item.price * item.quantity).toFixed(2)}</p>
-                  <button onClick={() => cart.remove(item.id)} className={`p-1 ${theme.textMuted} hover:text-red-500`}>
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>
-              <div className={`flex justify-between text-lg font-bold ${theme.textPrimary} mb-4`}>
-                <span>Total</span>
-                <span>A${cart.total.toFixed(2)}</span>
-              </div>
-              <button
-                onClick={() => setView('checkout')}
-                className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors"
-                style={{ backgroundColor: theme.accent }}
-              >
-                Proceed to Checkout
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+    <CartView store={store} cart={cart} theme={theme} subdomain={subdomain} onBack={() => setView('grid')} onCheckout={() => setView('checkout')} />
   )
 
   // ─── Product Grid (default view) ───────────────────────────────────
@@ -531,12 +466,13 @@ export default function StorefrontPage({ subdomain }) {
               const rating = product.rating || 0
               const soldCount = product.ordersCount || product.totalSold || 0
               const savings = originalPrice > price ? (originalPrice - price) : 0
+              const outOfStock = product.inStock === false
 
               return (
               <div
                 key={product.id}
-                onClick={() => navigateTo('product', product)}
-                className={`group cursor-pointer overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all hover:shadow-lg hover:-translate-y-0.5`}
+                onClick={() => !outOfStock && navigateTo('product', product)}
+                className={`group overflow-hidden rounded-xl ${theme.cardBg} ${theme.cardBorder} shadow-sm transition-all ${outOfStock ? 'opacity-60 cursor-default' : 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5'}`}
               >
                 {/* Image with discount badge */}
                 <div className="relative aspect-square overflow-hidden bg-gray-100">
@@ -544,26 +480,34 @@ export default function StorefrontPage({ subdomain }) {
                     <img
                       src={product.image}
                       alt={product.title}
-                      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                      className={`h-full w-full object-cover transition-transform ${outOfStock ? 'grayscale' : 'group-hover:scale-105'}`}
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
                       <Package className="h-12 w-12 text-gray-300" />
                     </div>
                   )}
+                  {/* Out of stock overlay */}
+                  {outOfStock && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <span className="bg-red-600 text-white text-xs font-bold px-3 py-1.5 rounded-full">Unavailable</span>
+                    </div>
+                  )}
                   {/* Discount badge */}
-                  {discount > 0 && (
+                  {!outOfStock && discount > 0 && (
                     <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded">
                       -{discount}%
                     </div>
                   )}
-                  {/* Quick add button */}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); cart.add(product) }}
-                    className="absolute bottom-2 right-2 rounded-full p-2 shadow-lg transition-all opacity-0 group-hover:opacity-100 bg-white/90 hover:bg-white text-gray-700 hover:text-black"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
+                  {/* Quick add button — hidden when out of stock */}
+                  {!outOfStock && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); cart.add(product) }}
+                      className="absolute bottom-2 right-2 rounded-full p-2 shadow-lg transition-all opacity-0 group-hover:opacity-100 bg-white/90 hover:bg-white text-gray-700 hover:text-black"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Product info */}
@@ -637,6 +581,176 @@ export default function StorefrontPage({ subdomain }) {
           Powered by <a href="https://togogo.me" className="font-medium hover:underline" style={{ color: theme.accent }}>ToGoGo</a>
         </p>
       </footer>
+    </div>
+  )
+}
+
+// ─── Cart View — with live AliExpress availability verification ──────────
+function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
+  const [verifying, setVerifying] = useState(true)
+  const [itemStatus, setItemStatus] = useState({}) // { productId: { available, reason, message, availableQty } }
+  const [hasIssues, setHasIssues] = useState(false)
+
+  // Verify all cart items on mount
+  useEffect(() => {
+    if (cart.items.length === 0) { setVerifying(false); return }
+
+    const verify = async () => {
+      setVerifying(true)
+      try {
+        const res = await fetch(`${API_BASE}/api/storefront/verify-cart`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: cart.items.map(i => ({
+              productId: i.supplierProductId || i.id,
+              title: i.title,
+              skuAttr: i.skuAttr || '',
+              quantity: i.quantity,
+            })),
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          const statusMap = {}
+          let issues = false
+          for (const item of (data.items || [])) {
+            statusMap[item.productId] = item
+            if (!item.available) issues = true
+          }
+          setItemStatus(statusMap)
+          setHasIssues(issues)
+        }
+      } catch { /* verification failed — allow checkout */ }
+      setVerifying(false)
+    }
+    verify()
+  }, [cart.items])
+
+  const getStatus = (item) => {
+    const id = item.supplierProductId || item.id
+    return itemStatus[id] || null
+  }
+
+  return (
+    <div className={`min-h-screen bg-[#0f172a]`}>
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => {}} />
+      <div className="mx-auto max-w-2xl px-4 py-8">
+        <button onClick={onBack} className="mb-6 flex items-center gap-1 text-sm text-slate-400">
+          <ChevronLeft className="h-4 w-4" /> Continue shopping
+        </button>
+        <h1 className="text-2xl font-bold text-white mb-6">Your Cart ({cart.count})</h1>
+
+        {cart.items.length === 0 ? (
+          <div className="rounded-2xl bg-[#1e293b] border border-white/[0.06] p-12 text-center">
+            <ShoppingCart className="mx-auto h-12 w-12 text-slate-600 mb-3" />
+            <p className="text-slate-400">Your cart is empty</p>
+            <button onClick={onBack} className="mt-4 text-sm font-medium text-[#FF6B35] hover:underline">
+              Browse products
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Verification banner */}
+            {verifying && (
+              <div className="rounded-xl bg-blue-500/10 border border-blue-500/20 p-3 mb-4 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />
+                <p className="text-sm text-blue-300">Verifying availability...</p>
+              </div>
+            )}
+            {!verifying && hasIssues && (
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 mb-4 flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <p className="text-sm text-red-300">Some items in your cart are no longer available. Please remove them to continue.</p>
+              </div>
+            )}
+            {!verifying && !hasIssues && Object.keys(itemStatus).length > 0 && (
+              <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-3 mb-4 flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-400" />
+                <p className="text-sm text-green-300">All items verified and available</p>
+              </div>
+            )}
+
+            {/* Cart items */}
+            <div className="space-y-3 mb-6">
+              {cart.items.map((item) => {
+                const status = getStatus(item)
+                const isUnavailable = status && !status.available
+                return (
+                  <div key={item.id} className={`rounded-xl bg-[#1e293b] border p-3 shadow-sm ${isUnavailable ? 'border-red-500/30 bg-red-500/5' : 'border-white/[0.06]'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`h-12 w-12 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 ${isUnavailable ? 'opacity-40' : ''}`}>
+                        {item.image ? (
+                          <img src={item.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center"><Package className="h-5 w-5 text-gray-300" /></div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium text-white truncate ${isUnavailable ? 'line-through opacity-50' : ''}`}>{item.title}</p>
+                        {!isUnavailable && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className="rounded-lg p-1 bg-white/[0.06]">
+                              <Minus className="h-3 w-3 text-slate-400" />
+                            </button>
+                            <span className="w-5 text-center text-xs font-medium text-white">{item.quantity}</span>
+                            <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className="rounded-lg p-1 bg-white/[0.06]">
+                              <Plus className="h-3 w-3 text-slate-400" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <p className={`font-semibold text-sm ${isUnavailable ? 'text-slate-600 line-through' : 'text-white'}`}>A${(item.price * item.quantity).toFixed(2)}</p>
+                      <button onClick={() => cart.remove(item.id)} className="p-1 text-slate-500 hover:text-red-500">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    {/* Availability issue message */}
+                    {isUnavailable && (
+                      <div className="mt-2 flex items-center justify-between">
+                        <p className="text-xs text-red-400">{status.message}</p>
+                        {status.reason === 'low_stock' && status.availableQty > 0 ? (
+                          <button
+                            onClick={() => cart.updateQty(item.id, status.availableQty)}
+                            className="text-xs font-medium text-[#FF6B35] hover:underline"
+                          >
+                            Update to {status.availableQty}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => cart.remove(item.id)}
+                            className="text-xs font-medium text-red-400 hover:underline"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Total + Checkout button */}
+            <div className="rounded-xl bg-[#1e293b] border border-white/[0.06] p-5 shadow-sm">
+              <div className="flex justify-between text-lg font-bold text-white mb-4">
+                <span>Total</span>
+                <span>A${cart.total.toFixed(2)}</span>
+              </div>
+              <button
+                onClick={onCheckout}
+                disabled={verifying || hasIssues}
+                className={`w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors ${
+                  verifying || hasIssues ? 'opacity-50 cursor-not-allowed bg-slate-600' : ''
+                }`}
+                style={!(verifying || hasIssues) ? { backgroundColor: '#FF6B35' } : {}}
+              >
+                {verifying ? 'Verifying availability...' : hasIssues ? 'Remove unavailable items to continue' : 'Proceed to Checkout'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }

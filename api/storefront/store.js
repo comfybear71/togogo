@@ -110,7 +110,7 @@ export default async function handler(req, res) {
       `SELECT * FROM (
         SELECT DISTINCT ON (supplier_product_id) id, title, description, image, images, supplier, supplier_cost,
                sale_price, category, total_sold, created_at, supplier_product_id,
-               product_rating, orders_count, original_price, discount_percent
+               product_rating, orders_count, original_price, discount_percent, in_stock
         FROM user_products
         WHERE is_active = true
         ORDER BY supplier_product_id, created_at DESC
@@ -146,6 +146,7 @@ export default async function handler(req, res) {
       ordersCount: p.orders_count || 0,
       originalPrice: parseFloat(p.original_price) || 0,
       discountPercent: p.discount_percent || 0,
+      inStock: p.in_stock !== false,
       createdAt: p.created_at,
     }})
 
