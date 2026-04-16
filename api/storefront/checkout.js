@@ -3,6 +3,7 @@
 import Stripe from 'stripe'
 import { sql, ensureSchema } from '../_lib/db.js'
 import { getCommissionRate } from '../_lib/commission.js'
+import { verifyProduct } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // CORS
@@ -57,6 +58,26 @@ export default async function handler(req, res) {
 
       const product = products[0]
       const qty = item.quantity || 1
+
+      // SAFETY NET: Verify product on AliExpress before taking payment
+      const aeId = (product.supplier_product_id || '').replace('ae_', '')
+      if (aeId && !aeId.includes('-')) {
+        try {
+          const check = await verifyProduct(aeId, '', qty, parseFloat(product.supplier_cost || 0))
+          if (!check.available) {
+            console.error(`[Checkout] Product ${aeId} failed verification: ${check.reason} — ${check.message}`)
+            // Auto-deactivate so other customers don't see it
+            if (['product_not_found', 'out_of_stock'].includes(check.reason)) {
+              await sql`UPDATE user_products SET is_active = false, updated_at = NOW() WHERE supplier_product_id = ${aeId}`.catch(() => {})
+            }
+            return res.status(400).json({ error: check.message, reason: check.reason })
+          }
+        } catch (verifyErr) {
+          // Verification failed (API timeout etc) — allow checkout rather than block
+          console.log(`[Checkout] Verification timeout for ${aeId}, allowing checkout: ${verifyErr.message}`)
+        }
+      }
+
       const unitPrice = Math.round(parseFloat(product.sale_price) * 100) // cents
 
       lineItems.push({
