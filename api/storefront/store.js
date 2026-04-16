@@ -211,6 +211,13 @@ export default async function handler(req, res) {
       over50: parseInt(priceRows[0].over50) || 0,
     } : {}
 
+    // Read shipping fee from admin settings
+    let shippingFee = 0
+    try {
+      const { rows: feeRows } = await sql`SELECT value FROM admin_settings WHERE key = 'shipping_fee_aud'`
+      if (feeRows[0]) shippingFee = parseFloat(feeRows[0].value) || 0
+    } catch { /* default 0 */ }
+
     const response = {
       store: {
         id: store.id,
@@ -225,6 +232,7 @@ export default async function handler(req, res) {
       products,
       categories,
       priceRanges,
+      shippingFee,
       pagination: {
         page,
         limit,

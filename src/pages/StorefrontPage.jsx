@@ -1112,6 +1112,17 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', city: '', state: '', zip: '', country: 'Australia' })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [shippingFee, setShippingFee] = useState(0)
+
+  // Fetch shipping fee from admin settings
+  useEffect(() => {
+    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=1&limit=1`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.shippingFee !== undefined) setShippingFee(parseFloat(data.shippingFee) || 0)
+      })
+      .catch(() => {})
+  }, [subdomain])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -1197,13 +1208,13 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
                 <span>Subtotal</span>
                 <span>A${cart.total.toFixed(2)}</span>
               </div>
-              <div className={`flex justify-between text-sm text-emerald-400`}>
+              <div className={`flex justify-between text-sm ${shippingFee > 0 ? theme.textSecondary : 'text-emerald-400'}`}>
                 <span>Shipping</span>
-                <span>Free</span>
+                <span>{shippingFee > 0 ? `A$${shippingFee.toFixed(2)}` : 'Free'}</span>
               </div>
               <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
                 <span>Total</span>
-                <span>A${(cart.total + 6).toFixed(2)}</span>
+                <span>A${(cart.total + shippingFee).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -1242,7 +1253,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             className="w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
-            {submitting ? 'Placing Order...' : `Place Order — A$${(cart.total + 6).toFixed(2)}`}
+            {submitting ? 'Placing Order...' : `Place Order — A$${(cart.total + shippingFee).toFixed(2)}`}
           </button>
 
           <p className={`text-center text-xs ${theme.textMuted}`}>
