@@ -1200,17 +1200,17 @@ export async function searchAliExpress(query, page = 1) {
 export async function searchAliExpressDirect(keyword, page = 1, options = {}) {
   try {
     const params = {
-      keyword: keyword,
-      target_currency: 'USD',
-      target_language: 'EN',
+      keyWord: keyword,
+      local: 'en_US',
       countryCode: options.country || 'AU',
-      page_no: String(page),
-      page_size: String(options.pageSize || 30),
-      sort: options.sort || 'LAST_VOLUME_DESC',
+      currency: 'USD',
+      pageIndex: String(page),
+      pageSize: String(options.pageSize || 30),
+      sortBy: options.sort || 'min_price',
     }
-    if (options.categoryId) params.category_id = String(options.categoryId)
-    if (options.minPrice) params.min_price = String(options.minPrice)
-    if (options.maxPrice) params.max_price = String(options.maxPrice)
+    if (options.categoryId) params.categoryId = Number(options.categoryId)
+    if (options.minPrice) params.min = String(options.minPrice)
+    if (options.maxPrice) params.max = String(options.maxPrice)
 
     const data = await callAuthenticatedAPI('aliexpress.ds.text.search', params)
 
