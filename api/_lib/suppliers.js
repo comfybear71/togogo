@@ -1198,62 +1198,86 @@ export async function searchAliExpress(query, page = 1) {
 // ============================================
 
 export async function searchAliExpressDirect(keyword, page = 1, options = {}) {
-  try {
-    const params = {
-      keyWord: keyword,
-      local: 'en_US',
-      countryCode: options.country || 'AU',
-      currency: 'USD',
-      pageIndex: String(page),
-      pageSize: String(options.pageSize || 30),
-      sortBy: options.sort || 'min_price',
-    }
-    if (options.categoryId) params.categoryId = Number(options.categoryId)
-    if (options.minPrice) params.min = String(options.minPrice)
-    if (options.maxPrice) params.max = String(options.maxPrice)
-
-    const data = await callAuthenticatedAPI('aliexpress.ds.text.search', params)
-
-    const result = data?.aliexpress_ds_text_search_response?.result
-      || data?.aliexpress_ds_text_search_response
-      || data?.result
-
-    if (!result) {
-      console.log(`[AliExpress] Text search returned no result for "${keyword}"`)
-      return { products: [], total: 0 }
-    }
-
-    const rawProducts = result.products?.traffic_product_d_t_o
-      || result.products?.product
-      || result.products
-      || []
-
-    const products = (Array.isArray(rawProducts) ? rawProducts : []).map(p => ({
-      productId: String(p.product_id || ''),
-      title: p.product_title || '',
-      image: p.product_main_image_url || '',
-      images: p.product_small_image_urls?.string || [],
-      cost: parseFloat(p.target_sale_price || p.original_price || '0'),
-      originalPrice: parseFloat(p.original_price || '0'),
-      currency: 'USD',
-      category: p.first_level_category_name || p.second_level_category_name || '',
-      categoryId: p.first_level_category_id || '',
-      orders: parseInt(p.lastest_volume || '0'),
-      rating: parseFloat(p.evaluate_rate || '0'),
-      shippingDays: p.ship_to_days || '',
-      discountPercent: p.discount ? Math.round(parseFloat(p.discount) * 100) : 0,
-      promotionLink: p.promotion_link || '',
-    }))
-
-    return {
-      products: filterNSFW(products),
-      total: parseInt(result.total_record_count || result.total_page_no || '0'),
-      currentPage: page,
-    }
-  } catch (err) {
-    console.error(`[AliExpress] Text search error for "${keyword}":`, err.message)
-    return { products: [], total: 0 }
+  const params = {
+    keyWord: keyword,
+    local: 'en_US',
+    countryCode: options.country || 'AU',
+    currency: 'USD',
+    pageIndex: String(page),
+    pageSize: String(options.pageSize || 30),
+    sortBy: options.sort || 'min_price',
   }
+  if (options.categoryId) params.categoryId = Number(options.categoryId)
+  if (options.minPrice) params.min = String(options.minPrice)
+  if (options.maxPrice) params.max = String(options.maxPrice)
+
+  const debug = options.debug === true
+
+  console.log(`[TextSearch] Request params:`, JSON.stringify(params))
+
+  let rawData = null
+  let errorMessage = null
+
+  try {
+    rawData = await callAuthenticatedAPI('aliexpress.ds.text.search', params)
+    console.log(`[TextSearch] Raw response keys:`, rawData ? Object.keys(rawData).join(',') : 'null')
+    console.log(`[TextSearch] Raw response (first 1500 chars):`, JSON.stringify(rawData).slice(0, 1500))
+  } catch (err) {
+    errorMessage = err.message
+    console.error(`[TextSearch] API call threw for "${keyword}":`, err.message)
+    if (debug) {
+      return { products: [], total: 0, debug: { params, error: errorMessage, rawData: null } }
+    }
+    return { products: [], total: 0, error: errorMessage }
+  }
+
+  const result = rawData?.aliexpress_ds_text_search_response?.result
+    || rawData?.aliexpress_ds_text_search_response
+    || rawData?.result
+
+  if (!result) {
+    console.log(`[TextSearch] No "result" field in response for "${keyword}"`)
+    if (debug) {
+      return { products: [], total: 0, debug: { params, error: 'no-result-field', rawData } }
+    }
+    return { products: [], total: 0, error: 'no-result-field' }
+  }
+
+  const rawProducts = result.products?.traffic_product_d_t_o
+    || result.products?.product
+    || result.products
+    || []
+
+  console.log(`[TextSearch] Result keys: ${Object.keys(result).join(',')} | raw product count: ${Array.isArray(rawProducts) ? rawProducts.length : 0}`)
+
+  const products = (Array.isArray(rawProducts) ? rawProducts : []).map(p => ({
+    productId: String(p.product_id || ''),
+    title: p.product_title || '',
+    image: p.product_main_image_url || '',
+    images: p.product_small_image_urls?.string || [],
+    cost: parseFloat(p.target_sale_price || p.original_price || '0'),
+    originalPrice: parseFloat(p.original_price || '0'),
+    currency: 'USD',
+    category: p.first_level_category_name || p.second_level_category_name || '',
+    categoryId: p.first_level_category_id || '',
+    orders: parseInt(p.lastest_volume || '0'),
+    rating: parseFloat(p.evaluate_rate || '0'),
+    shippingDays: p.ship_to_days || '',
+    discountPercent: p.discount ? Math.round(parseFloat(p.discount) * 100) : 0,
+    promotionLink: p.promotion_link || '',
+  }))
+
+  const response = {
+    products: filterNSFW(products),
+    total: parseInt(result.total_record_count || result.total_page_no || '0'),
+    currentPage: page,
+  }
+
+  if (debug) {
+    response.debug = { params, rawData }
+  }
+
+  return response
 }
 
 // ============================================
