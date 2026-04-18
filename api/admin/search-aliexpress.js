@@ -34,18 +34,33 @@ export default async function handler(req, res) {
     }
 
     const page = parseInt(req.query.page) || 1
+    const debug = req.query.debug === '1' || req.query.debug === 'true'
     const options = {
-      sort: req.query.sort || 'LAST_VOLUME_DESC',
+      sort: req.query.sort || 'orders',
       categoryId: req.query.category_id || '',
       minPrice: req.query.min_price || '',
       maxPrice: req.query.max_price || '',
       country: 'AU',
       pageSize: 30,
+      debug,
     }
 
-    console.log(`[SearchAE] Searching for "${keyword}" page ${page}, sort: ${options.sort}`)
+    console.log(`[SearchAE] Searching for "${keyword}" page ${page}, sort: ${options.sort}, debug: ${debug}`)
     const results = await searchAliExpressDirect(keyword, page, options)
-    console.log(`[SearchAE] Found ${results.products.length} products for "${keyword}"`)
+    console.log(`[SearchAE] Found ${results.products.length} products for "${keyword}" (error: ${results.error || 'none'})`)
+
+    // Debug mode: return raw AliExpress response for troubleshooting
+    if (debug) {
+      return res.json({
+        keyword,
+        page,
+        sort: options.sort,
+        productsCount: results.products.length,
+        total: results.total,
+        error: results.error || null,
+        debug: results.debug || null,
+      })
+    }
 
     // Read markup for price preview
     let markup = 1.25
@@ -75,6 +90,7 @@ export default async function handler(req, res) {
       page,
       total: results.total,
       products: productsWithPricing,
+      error: results.error || null,
     })
   }
 
