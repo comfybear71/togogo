@@ -1245,10 +1245,15 @@ export async function searchAliExpressDirect(keyword, page = 1, options = {}) {
     return { products: [], total: 0, error: 'no-data-field' }
   }
 
-  const productGroups = Array.isArray(data.products) ? data.products : []
-  const rawProducts = productGroups.flatMap(g =>
-    Array.isArray(g?.selection_search_product) ? g.selection_search_product : []
-  )
+  // data.products can be either:
+  //   (a) an object:  { selection_search_product: [...items...] }   — observed in live API 2026-04-18
+  //   (b) an array:   [ { selection_search_product: [...items...] }, ... ]   — defensive fallback
+  const productsField = data.products
+  const rawProducts = Array.isArray(productsField?.selection_search_product)
+    ? productsField.selection_search_product
+    : Array.isArray(productsField)
+      ? productsField.flatMap(g => Array.isArray(g?.selection_search_product) ? g.selection_search_product : [])
+      : []
 
   console.log(`[TextSearch] Data keys: ${Object.keys(data).join(',')} | totalCount: ${data.totalCount} | raw product count: ${rawProducts.length}`)
 
