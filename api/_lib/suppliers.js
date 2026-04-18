@@ -1203,7 +1203,7 @@ export async function searchAliExpressDirect(keyword, page = 1, options = {}) {
       keyword: keyword,
       target_currency: 'USD',
       target_language: 'EN',
-      ship_to_country: options.country || 'AU',
+      countryCode: options.country || 'AU',
       page_no: String(page),
       page_size: String(options.pageSize || 30),
       sort: options.sort || 'LAST_VOLUME_DESC',
