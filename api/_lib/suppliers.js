@@ -1193,6 +1193,70 @@ export async function searchAliExpress(query, page = 1) {
 }
 
 // ============================================
+// DS TEXT SEARCH — aliexpress.ds.text.search
+// Direct keyword search on AliExpress (not from our feed pool)
+// ============================================
+
+export async function searchAliExpressDirect(keyword, page = 1, options = {}) {
+  try {
+    const params = {
+      keyword: keyword,
+      target_currency: 'USD',
+      target_language: 'EN',
+      ship_to_country: options.country || 'AU',
+      page_no: String(page),
+      page_size: String(options.pageSize || 30),
+      sort: options.sort || 'LAST_VOLUME_DESC',
+    }
+    if (options.categoryId) params.category_id = String(options.categoryId)
+    if (options.minPrice) params.min_price = String(options.minPrice)
+    if (options.maxPrice) params.max_price = String(options.maxPrice)
+
+    const data = await callAuthenticatedAPI('aliexpress.ds.text.search', params)
+
+    const result = data?.aliexpress_ds_text_search_response?.result
+      || data?.aliexpress_ds_text_search_response
+      || data?.result
+
+    if (!result) {
+      console.log(`[AliExpress] Text search returned no result for "${keyword}"`)
+      return { products: [], total: 0 }
+    }
+
+    const rawProducts = result.products?.traffic_product_d_t_o
+      || result.products?.product
+      || result.products
+      || []
+
+    const products = (Array.isArray(rawProducts) ? rawProducts : []).map(p => ({
+      productId: String(p.product_id || ''),
+      title: p.product_title || '',
+      image: p.product_main_image_url || '',
+      images: p.product_small_image_urls?.string || [],
+      cost: parseFloat(p.target_sale_price || p.original_price || '0'),
+      originalPrice: parseFloat(p.original_price || '0'),
+      currency: 'USD',
+      category: p.first_level_category_name || p.second_level_category_name || '',
+      categoryId: p.first_level_category_id || '',
+      orders: parseInt(p.lastest_volume || '0'),
+      rating: parseFloat(p.evaluate_rate || '0'),
+      shippingDays: p.ship_to_days || '',
+      discountPercent: p.discount ? Math.round(parseFloat(p.discount) * 100) : 0,
+      promotionLink: p.promotion_link || '',
+    }))
+
+    return {
+      products: filterNSFW(products),
+      total: parseInt(result.total_record_count || result.total_page_no || '0'),
+      currentPage: page,
+    }
+  } catch (err) {
+    console.error(`[AliExpress] Text search error for "${keyword}":`, err.message)
+    return { products: [], total: 0 }
+  }
+}
+
+// ============================================
 // FETCH BULK — For cron jobs / catalog building
 // ============================================
 
