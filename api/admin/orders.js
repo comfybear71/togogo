@@ -1,17 +1,12 @@
 // Admin orders API — fetches real orders and disputes from database
 import { sql, ensureSchema } from '../_lib/db.js'
-import { getCurrentUser } from '../_lib/auth.js'
+import { requireAdminLite } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
-  // Auth: check JWT then verify role from DATABASE
-  const setupSecret = req.headers['x-setup-secret'] || req.query.secret
-  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
-    // OK
-  } else {
-    const tokenUser = await getCurrentUser(req)
-    if (!tokenUser) return res.status(401).json({ error: 'Authentication required' })
-    const { rows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
-    if (!rows[0] || rows[0].role !== 'admin') return res.status(403).json({ error: 'Admin access required' })
+  try {
+    await requireAdminLite(req)
+  } catch (err) {
+    return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
   }
 
   await ensureSchema()

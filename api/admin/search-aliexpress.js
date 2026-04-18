@@ -2,24 +2,14 @@
 // GET /api/admin/search-aliexpress?keyword=kitchen+sponge&page=1
 // POST /api/admin/search-aliexpress { action: 'import', products: [{ productId, title, image, cost, category }] }
 import { sql, ensureSchema } from '../_lib/db.js'
-import { getCurrentUser } from '../_lib/auth.js'
+import { requireAdminLite } from '../_lib/auth.js'
 import { searchAliExpressDirect } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
-  // Auth: ?secret= for URL testing, else JWT Bearer + fresh DB role check
-  // (JWT payload may have stale role — always verify role from DB per CLAUDE.md)
-  const setupSecret = req.headers['x-setup-secret'] || req.query.secret
-  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
-    // Authenticated via setup secret
-  } else {
-    const tokenUser = await getCurrentUser(req)
-    if (!tokenUser) {
-      return res.status(401).json({ error: 'Authentication required' })
-    }
-    const { rows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
-    if (!rows[0] || rows[0].role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' })
-    }
+  try {
+    await requireAdminLite(req)
+  } catch (err) {
+    return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
   }
 
   await ensureSchema()

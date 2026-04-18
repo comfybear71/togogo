@@ -2,6 +2,7 @@
 // Visit: https://togogo.me/api/admin/fix-role?secret=YOUR_JWT_SECRET
 import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
+import { bustRoleCache } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
   const secret = req.query.secret
@@ -13,6 +14,7 @@ export default async function handler(req, res) {
 
   // Step 1: Fix admin role
   await sql`UPDATE users SET role = 'admin' WHERE email = 'sfrench71@gmail.com'`
+  bustRoleCache()
   console.log('[Fix] Set sfrench71@gmail.com to admin')
 
   // Step 2: Get stores
