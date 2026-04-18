@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import {
   DollarSign, Package, ShoppingBag, TrendingUp, Clock,
@@ -7,11 +7,9 @@ import {
   AlertCircle, Loader2, BarChart3, ChevronRight, Zap,
   RefreshCw, Truck, Send,
 } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
 import { useAuthStore, authFetch } from '../stores/authStore'
+
+const EarningsBarChart = lazy(() => import('../components/charts/EarningsBarChart'))
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -420,23 +418,9 @@ export default function DashboardPage() {
                 Earnings — Last 14 Days
               </h3>
               <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={earnings.map(e => ({
-                    date: new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                    earnings: e.profit,
-                    revenue: e.revenue,
-                  }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                    <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                    <Tooltip
-                      contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 11 }}
-                      labelStyle={{ color: '#999' }}
-                      formatter={(value, name) => [`$${value.toFixed(2)}`, name === 'earnings' ? 'Profit' : 'Revenue']}
-                    />
-                    <Bar dataKey="earnings" fill="#06D6A0" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-zinc-600" /></div>}>
+                  <EarningsBarChart earnings={earnings} />
+                </Suspense>
               </div>
             </div>
           ) : (

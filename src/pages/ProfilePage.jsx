@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   Moon, Sun, LogOut, Heart, Bell, CreditCard, User,
@@ -7,10 +7,7 @@ import {
   ArrowUpRight, ExternalLink, ChevronRight, Plus,
   Settings, Loader2, AlertCircle, Zap, Shield,
 } from 'lucide-react'
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell,
-} from 'recharts'
+const EarningsBarChart = lazy(() => import('../components/charts/EarningsBarChart'))
 import Avatar from '../components/ui/Avatar'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -499,24 +496,9 @@ export default function ProfilePage() {
                           Earnings — Last 14 Days
                         </h3>
                         <div className="h-48">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={earnings.map(e => ({
-                              date: new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                              earnings: e.profit,
-                              revenue: e.revenue,
-                            }))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                              <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} />
-                              <YAxis tick={{ fontSize: 9, fill: '#666' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
-                              <Tooltip
-                                contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: 8, fontSize: 11 }}
-                                labelStyle={{ color: '#999' }}
-                                formatter={(value, name) => [`$${value.toFixed(2)}`, name === 'earnings' ? 'Profit' : 'Revenue']}
-                              />
-                              <Bar dataKey="revenue" fill="#FF6B35" radius={[4, 4, 0, 0]} opacity={0.3} />
-                              <Bar dataKey="earnings" fill="#06D6A0" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                          </ResponsiveContainer>
+                          <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-zinc-600" /></div>}>
+                            <EarningsBarChart earnings={earnings} showRevenueBar />
+                          </Suspense>
                         </div>
                       </div>
                     ) : (
