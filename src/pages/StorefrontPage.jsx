@@ -667,7 +667,7 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
             {!verifying && !hasIssues && Object.keys(itemStatus).length > 0 && (
               <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-3 mb-4 flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-green-400" />
-                <p className="text-sm text-green-300">All items verified and available</p>
+                <p className="text-sm text-green-300">All items are in stock at current prices. Shipping to your address will be confirmed at checkout.</p>
               </div>
             )}
 

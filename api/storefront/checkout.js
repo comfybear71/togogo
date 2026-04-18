@@ -69,6 +69,22 @@ export default async function handler(req, res) {
             if (['product_not_found', 'out_of_stock'].includes(check.reason)) {
               await sql`UPDATE user_products SET is_active = false, updated_at = NOW() WHERE supplier_product_id = ${aeId}`.catch(() => {})
             }
+            // Log (don't act on) shipping failures with the customer's address
+            // so we can see patterns over time. NEVER auto-deactivate on no_shipping.
+            if (check.reason === 'no_shipping') {
+              await sql`
+                INSERT INTO shipping_failures (product_id, supplier_product_id, country, state, postcode, reason, failure_source)
+                VALUES (
+                  ${product.id},
+                  ${aeId},
+                  ${customer?.address?.country || null},
+                  ${customer?.address?.state || null},
+                  ${customer?.address?.zip || null},
+                  ${check.reason},
+                  ${'checkout'}
+                )
+              `.catch(() => {})
+            }
             return res.status(400).json({ error: check.message, reason: check.reason })
           }
         } catch (verifyErr) {
