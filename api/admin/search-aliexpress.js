@@ -2,26 +2,24 @@
 // GET /api/admin/search-aliexpress?keyword=kitchen+sponge&page=1
 // POST /api/admin/search-aliexpress { action: 'import', products: [{ productId, title, image, cost, category }] }
 import { sql, ensureSchema } from '../_lib/db.js'
+import { getCurrentUser } from '../_lib/auth.js'
 import { searchAliExpressDirect } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
-  // Auth: accept JWT Bearer token OR ?secret= query param (same as other admin endpoints)
-  const secret = req.query.secret || req.headers['x-setup-secret']
-  const bearerToken = req.headers.authorization?.replace('Bearer ', '')
-  let authorized = false
-
-  if (secret && secret === process.env.JWT_SECRET) {
-    authorized = true
-  } else if (bearerToken) {
-    try {
-      const { verifyToken } = await import('../_lib/auth.js')
-      const payload = verifyToken(bearerToken)
-      if (payload?.role === 'admin') authorized = true
-    } catch {}
-  }
-
-  if (!authorized) {
-    return res.status(401).json({ error: 'Unauthorized' })
+  // Auth: ?secret= for URL testing, else JWT Bearer + fresh DB role check
+  // (JWT payload may have stale role — always verify role from DB per CLAUDE.md)
+  const setupSecret = req.headers['x-setup-secret'] || req.query.secret
+  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
+    // Authenticated via setup secret
+  } else {
+    const tokenUser = await getCurrentUser(req)
+    if (!tokenUser) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
+    const { rows } = await sql`SELECT role FROM users WHERE id = ${tokenUser.id}`
+    if (!rows[0] || rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' })
+    }
   }
 
   await ensureSchema()
