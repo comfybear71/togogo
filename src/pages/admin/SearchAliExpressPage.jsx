@@ -11,7 +11,7 @@ export default function SearchAliExpressPage() {
   const [selected, setSelected] = useState(new Set())
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
-  const [sort, setSort] = useState('LAST_VOLUME_DESC')
+  const [sort, setSort] = useState('orders')
 
   const token = localStorage.getItem('togogo-token')
   const headers = { Authorization: `Bearer ${token}` }
@@ -95,10 +95,9 @@ export default function SearchAliExpressPage() {
           onChange={(e) => setSort(e.target.value)}
           className="rounded-xl border border-white/[0.1] bg-white/[0.05] px-3 py-2.5 text-sm text-white focus:outline-none"
         >
-          <option value="LAST_VOLUME_DESC">Most Sold</option>
-          <option value="SALE_PRICE_ASC">Price: Low → High</option>
-          <option value="SALE_PRICE_DESC">Price: High → Low</option>
-          <option value="EVALUATE_RATE_DESC">Best Rated</option>
+          <option value="orders">Most Sold</option>
+          <option value="min_price">Price: Low → High</option>
+          <option value="comments">Most Reviewed</option>
         </select>
         <button
           onClick={() => search(1)}

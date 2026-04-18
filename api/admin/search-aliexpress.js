@@ -3,13 +3,25 @@
 // POST /api/admin/search-aliexpress { action: 'import', products: [{ productId, title, image, cost, category }] }
 import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpressDirect } from '../_lib/suppliers.js'
-import { requireAdminOrSetup } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
-  try {
-    await requireAdminOrSetup(req)
-  } catch (err) {
-    return res.status(err?.status || 401).json({ error: err?.message || 'Unauthorized' })
+  // Auth: accept JWT Bearer token OR ?secret= query param (same as other admin endpoints)
+  const secret = req.query.secret || req.headers['x-setup-secret']
+  const bearerToken = req.headers.authorization?.replace('Bearer ', '')
+  let authorized = false
+
+  if (secret && secret === process.env.JWT_SECRET) {
+    authorized = true
+  } else if (bearerToken) {
+    try {
+      const { verifyToken } = await import('../_lib/auth.js')
+      const payload = verifyToken(bearerToken)
+      if (payload?.role === 'admin') authorized = true
+    } catch {}
+  }
+
+  if (!authorized) {
+    return res.status(401).json({ error: 'Unauthorized' })
   }
 
   await ensureSchema()
@@ -31,7 +43,9 @@ export default async function handler(req, res) {
       pageSize: 30,
     }
 
+    console.log(`[SearchAE] Searching for "${keyword}" page ${page}, sort: ${options.sort}`)
     const results = await searchAliExpressDirect(keyword, page, options)
+    console.log(`[SearchAE] Found ${results.products.length} products for "${keyword}"`)
 
     // Read markup for price preview
     let markup = 1.25
