@@ -1231,45 +1231,59 @@ export async function searchAliExpressDirect(keyword, page = 1, options = {}) {
     return { products: [], total: 0, error: errorMessage }
   }
 
-  const result = rawData?.aliexpress_ds_text_search_response?.result
-    || rawData?.aliexpress_ds_text_search_response
-    || rawData?.result
+  // Actual response shape (verified 2026-04-18 via ?debug=1):
+  //   aliexpress_ds_text_search_response.data.totalCount
+  //   aliexpress_ds_text_search_response.data.products[] — each wraps selection_search_product[] of real items
+  const data = rawData?.aliexpress_ds_text_search_response?.data
+    || rawData?.data
 
-  if (!result) {
-    console.log(`[TextSearch] No "result" field in response for "${keyword}"`)
+  if (!data) {
+    console.log(`[TextSearch] No "data" field in response for "${keyword}"`)
     if (debug) {
-      return { products: [], total: 0, debug: { params, error: 'no-result-field', rawData } }
+      return { products: [], total: 0, debug: { params, error: 'no-data-field', rawData } }
     }
-    return { products: [], total: 0, error: 'no-result-field' }
+    return { products: [], total: 0, error: 'no-data-field' }
   }
 
-  const rawProducts = result.products?.traffic_product_d_t_o
-    || result.products?.product
-    || result.products
-    || []
+  const productGroups = Array.isArray(data.products) ? data.products : []
+  const rawProducts = productGroups.flatMap(g =>
+    Array.isArray(g?.selection_search_product) ? g.selection_search_product : []
+  )
 
-  console.log(`[TextSearch] Result keys: ${Object.keys(result).join(',')} | raw product count: ${Array.isArray(rawProducts) ? rawProducts.length : 0}`)
+  console.log(`[TextSearch] Data keys: ${Object.keys(data).join(',')} | totalCount: ${data.totalCount} | raw product count: ${rawProducts.length}`)
 
-  const products = (Array.isArray(rawProducts) ? rawProducts : []).map(p => ({
-    productId: String(p.product_id || ''),
-    title: p.product_title || '',
-    image: p.product_main_image_url || '',
-    images: p.product_small_image_urls?.string || [],
-    cost: parseFloat(p.target_sale_price || p.original_price || '0'),
-    originalPrice: parseFloat(p.original_price || '0'),
+  const parseOrdersCount = s => {
+    if (!s) return 0
+    const n = parseInt(String(s).replace(/[,+\s]/g, ''), 10)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const parseDiscountPercent = s => {
+    if (!s) return 0
+    const n = parseFloat(String(s).replace('%', ''))
+    return Number.isFinite(n) ? Math.round(n) : 0
+  }
+
+  const products = rawProducts.map(p => ({
+    productId: String(p.itemId || ''),
+    title: p.title || '',
+    image: p.itemMainPic || '',
+    images: p.itemMainPic ? [p.itemMainPic] : [],
+    cost: parseFloat(p.targetSalePrice || p.targetOriginalPrice || '0'),
+    originalPrice: parseFloat(p.targetOriginalPrice || p.targetSalePrice || '0'),
     currency: 'USD',
-    category: p.first_level_category_name || p.second_level_category_name || '',
-    categoryId: p.first_level_category_id || '',
-    orders: parseInt(p.lastest_volume || '0'),
-    rating: parseFloat(p.evaluate_rate || '0'),
-    shippingDays: p.ship_to_days || '',
-    discountPercent: p.discount ? Math.round(parseFloat(p.discount) * 100) : 0,
-    promotionLink: p.promotion_link || '',
+    category: '',
+    categoryId: String(p.cateId || '').split(',')[0] || '',
+    orders: parseOrdersCount(p.orders),
+    rating: parseFloat(p.score || '0'),
+    shippingDays: '',
+    discountPercent: parseDiscountPercent(p.discount),
+    promotionLink: p.itemUrl || '',
   }))
 
   const response = {
     products: filterNSFW(products),
-    total: parseInt(result.total_record_count || result.total_page_no || '0'),
+    total: parseInt(data.totalCount || '0'),
     currentPage: page,
   }
 
