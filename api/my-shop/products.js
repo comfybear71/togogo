@@ -1,5 +1,5 @@
 // User's own products API — CRUD for store owner's products
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 import { getCommissionRate } from '../_lib/commission.js'
 
@@ -20,8 +20,6 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(err?.status || 401).json({ error: err?.message || 'Authentication required' })
   }
-
-  await ensureSchema()
 
   // GET — list user's own products
   if (req.method === 'GET') {

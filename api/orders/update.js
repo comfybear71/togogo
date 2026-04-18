@@ -1,6 +1,6 @@
 // Order update endpoint — allows sellers to manually update order status and tracking
 // PATCH: update status, tracking_number, tracking_url, notes
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 
 const VALID_STATUSES = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded']
@@ -17,7 +17,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    await ensureSchema()
     const user = await requireAuth(req)
     const { orderId, status, tracking_number, tracking_url, notes } = req.body || {}
 

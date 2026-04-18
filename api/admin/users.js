@@ -1,5 +1,5 @@
 // Admin users API — list, search, update users
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAdminLite, bustRoleCache } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -12,11 +12,9 @@ export default async function handler(req, res) {
   // GET — list users with search/filter
   if (req.method === 'GET') {
     try {
-      await ensureSchema()
       const { search, role, status, sort, limit: lim } = req.query
       const limit = Math.min(parseInt(lim) || 50, 200)
 
-      // Tables are guaranteed to exist after ensureSchema()
       const hasOrdersTable = true
       const hasStoresTable = true
 

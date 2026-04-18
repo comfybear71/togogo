@@ -1,6 +1,6 @@
 // Tracking sync endpoint — polls suppliers for order status & tracking updates
 // POST: sync tracking for a specific order or all processing orders
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 import { getSupplierOrderTracking } from '../_lib/suppliers.js'
 
@@ -16,7 +16,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    await ensureSchema()
     const user = await requireAuth(req)
     const { orderId } = req.body || {}
 

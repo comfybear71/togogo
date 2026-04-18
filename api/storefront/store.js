@@ -1,7 +1,7 @@
 // Public storefront API — serves store info + products by subdomain
 // No auth required — this is the customer-facing store
 // Supports pagination: ?page=1&limit=20 for infinite scroll
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
 import { Redis } from '@upstash/redis'
 
@@ -31,8 +31,6 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
-
-  await ensureSchema()
 
   const { subdomain } = req.query
   if (!subdomain) {

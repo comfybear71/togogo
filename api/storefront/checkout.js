@@ -1,7 +1,7 @@
 // Storefront checkout — creates Stripe Checkout Session with Connect payment split
 // Customer pays → Platform takes commission → Store owner gets the rest
 import Stripe from 'stripe'
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { getCommissionRate } from '../_lib/commission.js'
 import { verifyProduct } from '../_lib/suppliers.js'
 
@@ -18,7 +18,6 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-  await ensureSchema()
 
   // Clean up stale pending_payment orders (older than 1 hour)
   try {

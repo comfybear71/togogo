@@ -1,14 +1,13 @@
 // Stripe Connect — Get account status
 // GET /api/connect/status — returns connect account status, balance, payouts
 import Stripe from 'stripe'
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { getCurrentUser } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
-  await ensureSchema()
 
   const user = await getCurrentUser(req)
   if (!user) return res.status(401).json({ error: 'Authentication required' })

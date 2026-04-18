@@ -1,14 +1,12 @@
 // Debug endpoint — shows raw data from admin queries
 // Access via: /api/admin/debug?secret=YOUR_JWT_SECRET
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   const setupSecret = req.headers['x-setup-secret'] || req.query.secret
   if (!setupSecret || setupSecret !== process.env.JWT_SECRET) {
     return res.status(403).json({ error: 'Secret required' })
   }
-
-  await ensureSchema()
 
   const results = {}
 

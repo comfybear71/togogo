@@ -1,12 +1,10 @@
 // Storefront customer lookup — check order status by email + order ref
 // GET /api/storefront/customer?email=X&orderRef=X — single order lookup
 // GET /api/storefront/customer?email=X&subdomain=X — all orders for this customer at this store
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-
-  await ensureSchema()
 
   const { email, orderRef, subdomain } = req.query
 

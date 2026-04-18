@@ -8,7 +8,19 @@ import { sql } from '@vercel/postgres'
 
 export { sql }
 
-// Auto-initialize: ensure schema exists on first query
+// Schema management:
+//   ensureSchema() is NO LONGER called from hot-path request handlers.
+//   It was adding ~500ms–2s per cold start running 35 CREATE TABLE +
+//   30 ALTER TABLE on every new serverless instance. Hot paths now
+//   assume tables already exist.
+//
+//   After ANY change to initializeSchema() below (new table, new column),
+//   or after the very first deploy against a fresh database, hit
+//   POST /api/admin/init-schema to apply migrations. Safe to call repeatedly.
+//
+//   Low-frequency paths (cron, webhooks, admin fix-* tools, store
+//   provisioning) still call ensureSchema() as a safety net — the cost
+//   only hits on the first cold start for each of those functions.
 let schemaReady = false
 let schemaPromise = null
 
@@ -285,6 +297,31 @@ export async function initializeSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(store_id, email)
+    )
+  `
+
+  // Marketing — promo codes + banners (admin-managed)
+  await sql`
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      type TEXT NOT NULL DEFAULT 'percent' CHECK (type IN ('percent', 'fixed')),
+      value NUMERIC(10,2) NOT NULL DEFAULT 0,
+      max_uses INTEGER DEFAULT 100,
+      used INTEGER DEFAULT 0,
+      expiry DATE,
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`
+    CREATE TABLE IF NOT EXISTS banners (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      title TEXT NOT NULL,
+      image_url TEXT DEFAULT '',
+      link_url TEXT DEFAULT '',
+      active BOOLEAN DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `
 
