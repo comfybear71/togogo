@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -9,18 +9,12 @@ import {
   XCircle,
   TrendingDown,
   Copy,
+  Loader2,
 } from 'lucide-react';
-import {
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Area,
-  AreaChart,
-} from 'recharts';
 import Skeleton from '../components/ui/Skeleton';
 import { useProduct, usePriceHistory } from '../hooks/useProducts';
+
+const PriceHistoryAreaChart = lazy(() => import('../components/charts/PriceHistoryAreaChart'));
 
 const MOCK_PRODUCTS = {
   '1': {
@@ -591,54 +585,9 @@ export default function ProductDetailPage() {
             </h2>
           </div>
           <div className="w-full h-64 md:h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#FF6B35" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#FF6B35" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e1e1e" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 11, fill: '#71717a' }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#1e1e1e' }}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: '#71717a' }}
-                  tickLine={false}
-                  axisLine={{ stroke: '#1e1e1e' }}
-                  tickFormatter={(v) => `$${v}`}
-                  domain={['dataMin - 5', 'dataMax + 5']}
-                  width={60}
-                />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: '13px',
-                    borderRadius: '10px',
-                    backgroundColor: '#1a1a1a',
-                    border: '1px solid #2a2a2a',
-                    color: '#fff',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  }}
-                  itemStyle={{ color: '#FF6B35' }}
-                  labelStyle={{ color: '#71717a', fontSize: '11px' }}
-                  formatter={(value) => [`$${value.toFixed(2)}`, 'Price']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="price"
-                  stroke="#FF6B35"
-                  strokeWidth={2}
-                  fill="url(#priceGradient)"
-                  dot={false}
-                  activeDot={{ r: 5, fill: '#FF6B35', stroke: '#050505', strokeWidth: 2 }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<div className="h-full flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-zinc-600" /></div>}>
+              <PriceHistoryAreaChart data={chartData} />
+            </Suspense>
           </div>
         </div>
 

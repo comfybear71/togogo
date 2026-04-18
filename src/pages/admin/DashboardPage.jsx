@@ -1,12 +1,17 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import {
   Users, ShoppingBag, Package, DollarSign, AlertTriangle,
   TrendingUp, Trophy, Clock, Star, Loader2, Database, RefreshCw,
 } from 'lucide-react'
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar,
-} from 'recharts'
+
+const AdminRevenueLineChart = lazy(() => import('../../components/charts/AdminRevenueLineChart'))
+const AdminSignupsBarChart = lazy(() => import('../../components/charts/AdminSignupsBarChart'))
+
+const ChartFallback = ({ height = 280 }) => (
+  <div className="flex items-center justify-center text-sm text-zinc-600" style={{ height }}>
+    <Loader2 className="h-5 w-5 animate-spin" />
+  </div>
+)
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -143,15 +148,9 @@ export default function DashboardPage() {
                 <h2 className="text-lg font-semibold text-white">Revenue (Last 30 Days)</h2>
               </div>
               {revenueByDay.length > 0 ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <LineChart data={revenueByDay}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#a1a1aa' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#a1a1aa' }} tickFormatter={(v) => `$${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`} />
-                    <Tooltip formatter={(v) => [`$${v.toLocaleString()}`, 'Revenue']} />
-                    <Line type="monotone" dataKey="revenue" stroke="#FF6B35" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<ChartFallback />}>
+                  <AdminRevenueLineChart data={revenueByDay} />
+                </Suspense>
               ) : (
                 <div className="flex items-center justify-center h-[280px] text-sm text-zinc-600">
                   No revenue data yet — orders will show here
@@ -165,15 +164,9 @@ export default function DashboardPage() {
                 <h2 className="text-lg font-semibold text-white">New Signups (Last 30 Days)</h2>
               </div>
               {signupsByDay.some((d) => d.signups > 0) ? (
-                <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={signupsByDay}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#a1a1aa' }} />
-                    <YAxis tick={{ fontSize: 11, fill: '#a1a1aa' }} />
-                    <Tooltip />
-                    <Bar dataKey="signups" fill="#06D6A0" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<ChartFallback />}>
+                  <AdminSignupsBarChart data={signupsByDay} />
+                </Suspense>
               ) : (
                 <div className="flex items-center justify-center h-[280px] text-sm text-zinc-600">
                   No signups yet — new users will show here
