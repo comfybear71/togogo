@@ -98,6 +98,52 @@ export async function requireAdminOrSetup(req) {
   return requireAdmin(req)
 }
 
+// In-memory role cache (per warm serverless instance). Keyed by user_id.
+// Admin endpoints check this first to avoid a `SELECT role FROM users` on every
+// request. 5-min TTL bounds staleness; bustRoleCache() clears on role change.
+const roleCache = new Map()
+const ROLE_CACHE_TTL_MS = 5 * 60 * 1000
+
+export function bustRoleCache(userId = null) {
+  if (userId) roleCache.delete(userId)
+  else roleCache.clear()
+}
+
+// Fast admin check — verifies JWT, checks cache, falls back to a single
+// light `SELECT role` query on miss. Used by admin endpoints that only need
+// to know "is this caller an admin" and don't need the full user row.
+// Throws { status, message } for the caller to catch and map to a response.
+export async function requireAdminLite(req) {
+  // Setup secret bypass (for URL testing + ?secret= query param)
+  const setupSecret = req.headers['x-setup-secret'] || req.query?.secret
+  if (setupSecret && setupSecret === EFFECTIVE_JWT_SECRET) {
+    return { id: 'setup', role: 'admin', email: null }
+  }
+
+  // Extract token from Authorization header or cookie
+  const authHeader = req.headers.authorization
+  let token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+  if (!token && req.cookies?.token) token = req.cookies.token
+  if (!token) throw { status: 401, message: 'Authentication required' }
+
+  const payload = verifyToken(token)
+  if (!payload?.id) throw { status: 401, message: 'Invalid token' }
+
+  // Cache hit?
+  const cached = roleCache.get(payload.id)
+  if (cached && Date.now() < cached.expiresAt) {
+    if (cached.role !== 'admin') throw { status: 403, message: 'Admin access required' }
+    return { id: payload.id, role: cached.role, email: payload.email || null }
+  }
+
+  // Cache miss — one light query
+  const { rows } = await sql`SELECT role FROM users WHERE id = ${payload.id}`
+  const role = rows[0]?.role || null
+  roleCache.set(payload.id, { role, expiresAt: Date.now() + ROLE_CACHE_TTL_MS })
+  if (role !== 'admin') throw { status: 403, message: 'Admin access required' }
+  return { id: payload.id, role, email: payload.email || null }
+}
+
 // Find or create user from Google OAuth profile
 export async function findOrCreateGoogleUser({ googleId, email, name, avatarUrl }) {
   await ensureSchema()
