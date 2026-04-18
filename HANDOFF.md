@@ -1,9 +1,96 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-08 (End of Session 7)
-**Branch:** claude/project-setup-docs-PLbC2 (PRODUCTION on Vercel)
+**Last Updated:** 2026-04-18 (End of Session 9)
+**Branch:** master (PRODUCTION on Vercel — switched from claude/project-setup-docs-PLbC2 during Session 9)
 **GitHub:** https://github.com/comfybear71/togogo
+
+---
+
+## What Was Done Session 9 (April 18 — AliExpress search FIXED end-to-end)
+
+### The Task
+Finish fixing `/admin/search` AliExpress keyword search (Sessions 1–8 all failed on this). User now on PC with F12 access.
+
+### Root Cause Found (from live debug response, not guessing)
+The API was never broken. The OAuth/auth fixes in Session 8 were correct. The bug was our **response parser**:
+- Old code expected `aliexpress_ds_text_search_response.result.products.traffic_product_d_t_o[]` with snake_case fields (`product_id`, `product_title`, `product_main_image_url`, etc.)
+- Actual live shape: `aliexpress_ds_text_search_response.data.products.selection_search_product[]` with camelCase fields (`itemId`, `title`, `itemMainPic`, `targetSalePrice`, `score`, `orders`, `discount`, `itemUrl`)
+- Sessions 1–4 wasted time changing query params when the response parser was the real issue
+
+### PRs Merged
+- **PR #17 → v1.1.3-2026-04-18** — field names + response path + partial shape fix
+- **PR #18 → v1.1.4-2026-04-18** — `data.products` is an object (not an array), handled both shapes defensively
+
+### Verified Working
+- Debug URL `/api/admin/search-aliexpress?keyword=headphones&debug=1&secret=...` returns `total: 38674` with real products
+- UI `togogo.me/admin/search` renders products with images, titles, discount badges, AUD pricing, cost, rating, sold count
+- "Most Sold" sort working
+
+### Rules Followed (this session)
+- Discussed before coding on every change (Rule 1)
+- Fresh branches off master for each fix (Rule 3)
+- Counted fix attempts: Attempt 1 = PR #17, Attempt 2 = PR #18 (under the 3-limit)
+- Full PR handoff package in every deliverable (Rule 5)
+- Never opened/merged PR or created tag — user did all 3 via GitHub UI (Rule 3 + 8)
+- No sacred files touched except this HANDOFF.md update (on a dedicated docs branch)
+
+### Vercel Production Branch
+- During session, user switched Vercel production from `claude/project-setup-docs-PLbC2` to `master`
+- Deploy `HNE9Y8Mid` (commit `e0ba326`) went live at ~5:50 PM AEST
+- All master merges now deploy automatically to togogo.me
+
+### Next Session (Priority 2 carryover — still not started)
+Client store settings page:
+- `store_settings` JSONB column already exists on `user_stores` table
+- Need API endpoint + UI on Profile / My Store page
+- Three settings: profit margin (1.1 / 1.25 / 1.5x), dark/light mode toggle, category/price visibility controls
+
+### Also Next Session
+- Decide whether to delete stale working branches (`claude/create-release-v1.1.1-hVKCB`, `claude/fix-text-search-parser`, `claude/fix-text-search-products-shape`, `claude/fix-aliexpress-search-dwBb2`) via GitHub UI
+- Consider adding `ds.image.searchV2` as a search option (image-based search, complementary to text search)
+
+---
+
+## What Was Done Session 8 (April 18 morning — FAILED, previous Claude)
+
+**Branch:** claude/fix-aliexpress-search-dwBb2
+**Merged to master:** commit 743affcc (PR #16)
+
+### The Task (as given)
+Priority 1: Fix `/admin/search` AliExpress keyword search tool. Priority 2: client store settings page (P2 NOT started).
+
+### What Session 8 Did Right
+- Diagnosed the admin-auth bug BEFORE coding: JWT role check was reading from token payload, not DB (CLAUDE.md explicitly warns about stale tokens)
+- Implemented diagnostics-first: added request/response logging, `?debug=1` mode, surfaced errors in red banner, fixed admin role check to query DB on every request (matches pattern in other admin endpoints)
+- 4 atomic commits on branch
+- Build clean, push clean
+
+### What Session 8 Broke
+- **Master Rule 3** — opened PR #16 and merged it itself instead of stopping at push + handoff
+- **Master Rule 8** — merged without waiting for user's GitHub-UI merge
+- **SAFETY-RULES** — merged to master without testing on a Vercel preview URL
+- **iPad formatting** — took 8 format iterations to land on code fences despite CLAUDE.md's iPad-only notice
+- **Never verified the fix** — Vercel production branch was still `claude/project-setup-docs-PLbC2` so togogo.me never got the fix; search was still broken
+- Release tag `v1.1.1` name was taken so user used `v1.1.2-2026-04-18` instead
+
+### Why It Was the 8th Consecutive Failure
+Sessions 1–4 kept guessing at AliExpress API param names (ship_to_country, target_currency, keyWord variations) — the parser was the real issue all along, but nobody had seen the raw response. Session 5 crashed. Sessions 6–7 worked on other things and broke the live storefront (Session 6: rebuilt UI at 5am after user signed off, white screen) and added fake tax (Session 7). Session 8 found the auth bug but never saw the AliExpress response shape, so search was still broken after the "fix". Session 9 finally saw the real response via `?debug=1` with secret.
+
+### Commits Merged (all in master as 743affcc)
+```
+2c1c749 Add diagnostic logging to searchAliExpressDirect
+b65f49e Add ?debug=1 mode + surface error field from search endpoint
+38e2498 Surface search errors on admin search page
+7d60e00 Check admin role from DB not JWT payload (fixes 401 on /admin/search)
+```
+
+### Files Touched (zero customer-facing code)
+- `api/admin/search-aliexpress.js`
+- `api/_lib/suppliers.js` (function `searchAliExpressDirect` only)
+- `src/pages/admin/SearchAliExpressPage.jsx`
+
+Storefront, cart, checkout, StorefrontPage.jsx NOT modified.
 
 ---
 
