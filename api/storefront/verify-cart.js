@@ -53,6 +53,17 @@ export default async function handler(req, res) {
         } catch { /* non-critical */ }
       }
 
+      // Log (don't act on) shipping failures — gathering data to inform the
+      // eventual flag/filter strategy. NEVER auto-deactivate on no_shipping.
+      if (!result.available && result.reason === 'no_shipping') {
+        try {
+          await sql`
+            INSERT INTO shipping_failures (supplier_product_id, country, reason, failure_source)
+            VALUES (${aeId}, ${'AU'}, ${result.reason}, ${'cart'})
+          `
+        } catch { /* log-only; never block verification */ }
+      }
+
       return {
         productId: item.productId,
         title: item.title || '',

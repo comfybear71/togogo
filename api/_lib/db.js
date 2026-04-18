@@ -325,6 +325,25 @@ export async function initializeSchema() {
     )
   `
 
+  // Shipping failure log — data-gathering only, NEVER used to auto-delete
+  // or auto-deactivate products. Populated when AliExpress reports a product
+  // cannot ship to a given address at cart or checkout time.
+  await sql`
+    CREATE TABLE IF NOT EXISTS shipping_failures (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      product_id UUID,
+      supplier_product_id TEXT,
+      country TEXT,
+      state TEXT,
+      postcode TEXT,
+      reason TEXT,
+      failure_source TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_shipping_failures_supplier ON shipping_failures(supplier_product_id)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_shipping_failures_created ON shipping_failures(created_at DESC)`
+
   // Indexes
   await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_email ON store_customers(email)`
