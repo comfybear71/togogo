@@ -12,24 +12,50 @@ export default function SearchAliExpressPage() {
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [sort, setSort] = useState('orders')
-
-  const token = localStorage.getItem('togogo-token')
-  const headers = { Authorization: `Bearer ${token}` }
+  const [error, setError] = useState(null)
 
   const search = async (p = 1) => {
     if (!keyword.trim()) return
     setLoading(true)
     setImportResult(null)
+    setError(null)
+
+    const token = localStorage.getItem('togogo-token')
+    if (!token) {
+      setError('Not logged in — missing auth token. Sign in again.')
+      setLoading(false)
+      return
+    }
+
+    const params = new URLSearchParams({ keyword: keyword.trim(), page: p, sort })
+    const url = `${API_BASE}/api/admin/search-aliexpress?${params}`
+    console.log('[SearchAE] Fetching', url)
+
     try {
-      const params = new URLSearchParams({ keyword: keyword.trim(), page: p, sort })
-      const res = await fetch(`${API_BASE}/api/admin/search-aliexpress?${params}`, { headers })
-      if (res.ok) {
-        const data = await res.json()
-        setResults(data)
-        setPage(p)
-        setSelected(new Set())
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+      const bodyText = await res.text()
+      console.log('[SearchAE] HTTP', res.status, 'body:', bodyText.slice(0, 400))
+
+      let data = null
+      try { data = JSON.parse(bodyText) } catch {}
+
+      if (!res.ok) {
+        setError(`HTTP ${res.status}: ${data?.error || bodyText.slice(0, 200) || 'unknown error'}`)
+        setLoading(false)
+        return
       }
-    } catch {}
+
+      if (data?.error) {
+        setError(`AliExpress: ${data.error}`)
+      }
+
+      setResults(data)
+      setPage(p)
+      setSelected(new Set())
+    } catch (err) {
+      console.error('[SearchAE] Fetch failed:', err)
+      setError(`Network error: ${err.message}`)
+    }
     setLoading(false)
   }
 
@@ -52,19 +78,25 @@ export default function SearchAliExpressPage() {
   const importSelected = async () => {
     if (selected.size === 0 || !results) return
     setImporting(true)
+    setError(null)
+    const token = localStorage.getItem('togogo-token')
     const products = results.products.filter(p => selected.has(p.productId))
     try {
       const res = await fetch(`${API_BASE}/api/admin/search-aliexpress`, {
         method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ products }),
       })
-      if (res.ok) {
-        const data = await res.json()
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setError(`Import failed: HTTP ${res.status} ${data?.error || ''}`)
+      } else {
         setImportResult(data)
         setSelected(new Set())
       }
-    } catch {}
+    } catch (err) {
+      setError(`Import network error: ${err.message}`)
+    }
     setImporting(false)
   }
 
@@ -125,6 +157,19 @@ export default function SearchAliExpressPage() {
             {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
             Import {selected.size} Product{selected.size !== 1 ? 's' : ''}
           </button>
+        </div>
+      )}
+
+      {/* Error banner */}
+      {error && (
+        <div className="mb-4 p-3 rounded-xl bg-red-500/10 border border-red-500/30">
+          <p className="text-sm font-medium text-red-300">Search failed</p>
+          <p className="text-xs text-red-200/80 mt-1 break-all">{error}</p>
+          <p className="text-[10px] text-red-200/60 mt-2">
+            Tip: open the browser console for the request/response, or hit{' '}
+            <code className="px-1 bg-black/30 rounded">/api/admin/search-aliexpress?keyword={keyword.trim()}&amp;debug=1&amp;secret=JWT_SECRET</code>{' '}
+            to see the raw AliExpress response.
+          </p>
         </div>
       )}
 
