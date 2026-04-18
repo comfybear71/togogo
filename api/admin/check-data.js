@@ -1,11 +1,10 @@
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   const secret = req.query.secret
   if (secret !== process.env.JWT_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
-  await ensureSchema()
 
   const { rows: products } = await sql`
     SELECT 

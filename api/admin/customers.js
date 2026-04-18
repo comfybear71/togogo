@@ -1,5 +1,5 @@
 // Admin customers API — view all store customers across all stores
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAdminLite } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -8,8 +8,6 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
   }
-
-  await ensureSchema()
 
   if (req.method === 'GET') {
     const { search, storeId } = req.query

@@ -1,14 +1,12 @@
 // Quick check — are products in the database?
 // Visit: https://togogo.me/api/admin/check-products?secret=YOUR_JWT_SECRET
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   const secret = req.query.secret
   if (!secret || secret !== process.env.JWT_SECRET) {
     return res.status(401).json({ error: 'Add ?secret=YOUR_JWT_SECRET' })
   }
-
-  await ensureSchema()
 
   const { rows: countRows } = await sql`SELECT COUNT(*) as count FROM user_products`
   const { rows: sample } = await sql`

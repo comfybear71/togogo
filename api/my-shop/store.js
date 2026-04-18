@@ -1,6 +1,6 @@
 // User's own store info API — returns the authenticated user's store details
 // No admin access required — scoped to the logged-in user
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -10,8 +10,6 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(err?.status || 401).json({ error: err?.message || 'Authentication required' })
   }
-
-  await ensureSchema()
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' })

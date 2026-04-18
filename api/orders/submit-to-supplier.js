@@ -1,14 +1,12 @@
 // Submit order to AliExpress supplier
 // POST /api/orders/submit-to-supplier
 // Body: { orderId } — looks up order in DB and submits to AliExpress
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { getCurrentUser } from '../_lib/auth.js'
 import { submitOrder } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
-
-  await ensureSchema()
 
   // Auth: admin or setup secret
   const setupSecret = req.headers['x-setup-secret'] || req.query.secret

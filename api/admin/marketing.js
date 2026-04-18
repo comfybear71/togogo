@@ -1,5 +1,5 @@
-// Admin marketing API — promo codes and banners stored in admin_settings
-import { sql, ensureSchema } from '../_lib/db.js'
+// Admin marketing API — promo codes and banners (tables in initializeSchema)
+import { sql } from '../_lib/db.js'
 import { requireAdminLite } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -8,35 +8,6 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
   }
-
-  await ensureSchema()
-
-  // Ensure marketing tables exist
-  try {
-    await sql`
-      CREATE TABLE IF NOT EXISTS promo_codes (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        code TEXT UNIQUE NOT NULL,
-        type TEXT NOT NULL DEFAULT 'percent' CHECK (type IN ('percent', 'fixed')),
-        value NUMERIC(10,2) NOT NULL DEFAULT 0,
-        max_uses INTEGER DEFAULT 100,
-        used INTEGER DEFAULT 0,
-        expiry DATE,
-        active BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `
-    await sql`
-      CREATE TABLE IF NOT EXISTS banners (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        title TEXT NOT NULL,
-        image_url TEXT DEFAULT '',
-        link_url TEXT DEFAULT '',
-        active BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `
-  } catch { /* tables may already exist */ }
 
   if (req.method === 'GET') {
     try {

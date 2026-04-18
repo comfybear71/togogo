@@ -1,4 +1,4 @@
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAdminLite } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
@@ -9,8 +9,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    await ensureSchema()
-
     if (req.method === 'GET') {
       const { search, status } = req.query
 

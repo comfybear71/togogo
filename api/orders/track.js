@@ -1,13 +1,11 @@
 // Get order tracking from AliExpress
 // GET /api/orders/track?orderId=ORDER_ID (AliExpress order ID)
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { getCurrentUser } from '../_lib/auth.js'
 import { getOrderTracking } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-
-  await ensureSchema()
 
   // Auth
   const setupSecret = req.query.secret

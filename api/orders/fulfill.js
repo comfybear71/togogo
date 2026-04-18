@@ -1,7 +1,7 @@
 // Order fulfillment endpoint — forwards pending orders to suppliers
 // POST: fulfill a specific order or all unfulfilled orders
 // GET: check fulfillment status of an order
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 import { placeSupplierOrder } from '../_lib/suppliers.js'
 
@@ -170,7 +170,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    await ensureSchema()
     const user = await requireAuth(req)
 
     if (req.method === 'POST') {

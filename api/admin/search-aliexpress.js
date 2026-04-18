@@ -1,7 +1,7 @@
 // Admin AliExpress product search — search by keyword, preview, import selected
 // GET /api/admin/search-aliexpress?keyword=kitchen+sponge&page=1
 // POST /api/admin/search-aliexpress { action: 'import', products: [{ productId, title, image, cost, category }] }
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 import { requireAdminLite } from '../_lib/auth.js'
 import { searchAliExpressDirect } from '../_lib/suppliers.js'
 
@@ -11,8 +11,6 @@ export default async function handler(req, res) {
   } catch (err) {
     return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
   }
-
-  await ensureSchema()
 
   // GET — search AliExpress
   if (req.method === 'GET') {

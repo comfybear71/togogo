@@ -1,14 +1,12 @@
 // Check Stripe Connect status for all stores
 // GET /api/admin/check-connect?secret=YOUR_JWT_SECRET
-import { sql, ensureSchema } from '../_lib/db.js'
+import { sql } from '../_lib/db.js'
 
 export default async function handler(req, res) {
   const secret = req.query.secret
   if (!secret || secret !== process.env.JWT_SECRET) {
     return res.status(401).json({ error: 'Add ?secret=YOUR_JWT_SECRET' })
   }
-
-  await ensureSchema()
 
   const { rows } = await sql`
     SELECT s.subdomain, s.store_name, s.stripe_connect_id, s.stripe_connect_status,
