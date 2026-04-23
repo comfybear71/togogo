@@ -133,7 +133,14 @@ export async function getProductDetails(productId) {
     const multimedia = result.ae_multimedia_info_dto || {}
     const skuInfo = result.ae_item_sku_info_dtos?.ae_item_sku_info_d_t_o || []
     const storeInfo = result.ae_store_info || {}
-    const shippingInfo = result.logistics_info_dto?.logistics_info_list?.logistics_info_d_t_o || []
+    const logisticsDto = result.logistics_info_dto || {}
+    // Old schema: array of carrier options at logistics_info_list.logistics_info_d_t_o
+    // New schema (verified 2026-04-22): { ship_to_country, delivery_time } confirmation only
+    const shippingInfo = logisticsDto.logistics_info_list?.logistics_info_d_t_o || []
+    const shipsToCountry = logisticsDto.ship_to_country || null
+    const deliveryDays = logisticsDto.delivery_time
+      ? parseInt(logisticsDto.delivery_time) || null
+      : null
 
     // All images
     const imageUrls = multimedia.image_urls ? multimedia.image_urls.split(';').filter(Boolean) : []
@@ -170,7 +177,7 @@ export async function getProductDetails(productId) {
           image,
         }
       }),
-      // Shipping options
+      // Shipping options (old-schema only — new DS API returns empty list)
       shipping: shippingInfo.map(s => ({
         company: s.logistics_company || '',
         serviceName: s.service_name || '',
@@ -178,6 +185,9 @@ export async function getProductDetails(productId) {
         shippingFee: parseFloat(s.freight?.amount || '0'),
         trackingAvailable: s.tracking_available || false,
       })),
+      // New-schema shipping confirmation — AE now returns these in place of the list
+      shipsToCountry,
+      deliveryDays,
       // Store info
       store: {
         id: storeInfo.store_id || '',
@@ -254,8 +264,15 @@ export async function verifyProduct(productId, skuAttr = '', quantity = 1, store
       }
     }
 
-    // Check 5: Shipping available and under A$3
-    if (details.shipping && details.shipping.length > 0) {
+    // Check 5: Shipping — accept EITHER schema from AliExpress DS API
+    //   Old schema: non-empty details.shipping array → verify cheapest under A$3
+    //   New schema (2026-04-22+): details.shipsToCountry confirms shipping country
+    //     (AE now returns only { ship_to_country, delivery_time }, no carrier list)
+    //   Neither present → genuine no_shipping
+    const hasShippingList = Array.isArray(details.shipping) && details.shipping.length > 0
+    const countryConfirmed = details.shipsToCountry === 'AU'
+
+    if (hasShippingList) {
       const cheapest = details.shipping.reduce((min, s) => s.shippingFee < min.shippingFee ? s : min, details.shipping[0])
       const shippingAUD = cheapest.shippingFee * USD_TO_AUD
       if (shippingAUD > MAX_SHIPPING_AUD) {
@@ -265,7 +282,7 @@ export async function verifyProduct(productId, skuAttr = '', quantity = 1, store
           message: 'This product is temporarily unavailable due to shipping costs',
         }
       }
-    } else if (details.shipping && details.shipping.length === 0) {
+    } else if (!countryConfirmed) {
       return {
         available: false,
         reason: 'no_shipping',
