@@ -29,6 +29,7 @@ export default function ProductsPage() {
   const [cooldown, setCooldown] = useState(0);
   const [megaImporting, setMegaImporting] = useState(false);
   const [megaProgress, setMegaProgress] = useState('');
+  const [enriching, setEnriching] = useState(false);
   const ITEMS_PER_PAGE = 50;
 
   const fetchProducts = useCallback(async (pg = page, search = searchQuery, cat = categoryFilter, store = storeFilter) => {
@@ -84,6 +85,28 @@ export default function ProductsPage() {
     } finally {
       setImporting(false);
     }
+  }
+
+  async function handleEnrichProducts() {
+    if (enriching) return;
+    setEnriching(true);
+    setImportResult(null);
+    let totalEnriched = 0;
+    // Run multiple passes to chew through the backlog
+    for (let pass = 0; pass < 5; pass++) {
+      try {
+        const token = localStorage.getItem('togogo-token');
+        const res = await fetch(`/api/cron/enrich-products?secret=${token}`);
+        const data = await res.json();
+        if (data.status === 'idle') break;
+        if (typeof data.enriched === 'number') totalEnriched += data.enriched;
+        if (!data.enriched && !data.skipped) break;
+      } catch {}
+      await new Promise(r => setTimeout(r, 1500));
+    }
+    setEnriching(false);
+    setImportResult({ success: true, newProducts: 0, stores: 0, catalogSize: 0, enriched: totalEnriched });
+    fetchProducts(page, searchQuery, categoryFilter, storeFilter);
   }
 
   async function handleMegaImport() {
@@ -216,14 +239,25 @@ export default function ProductsPage() {
               <h3 className="text-sm font-bold text-white">Import Products by Category</h3>
               <p className="text-xs text-zinc-500 mt-1">Each click imports ~20 products with accurate freight pricing. 30 second cooldown between imports.</p>
             </div>
-            <button
-              onClick={handleMegaImport}
-              disabled={megaImporting || importing || cooldown > 0}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-            >
-              {megaImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-              {megaImporting ? 'Importing...' : 'Import ALL Categories'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleEnrichProducts}
+                disabled={enriching || megaImporting || importing}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white border border-white/[0.08] bg-black hover:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+                title="Fetch real rating, sales count, discount and shipping for products still missing that data"
+              >
+                {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                {enriching ? 'Enriching...' : 'Enrich Data'}
+              </button>
+              <button
+                onClick={handleMegaImport}
+                disabled={megaImporting || importing || cooldown > 0}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+              >
+                {megaImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+                {megaImporting ? 'Importing...' : 'Import ALL Categories'}
+              </button>
+            </div>
           </div>
           {megaProgress && (
             <div className="rounded-xl p-3 text-sm bg-purple-500/10 text-purple-400 mb-3">

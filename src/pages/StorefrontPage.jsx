@@ -160,7 +160,9 @@ export default function StorefrontPage({ subdomain }) {
       .finally(() => setFilterLoading(false))
   }, [selectedCategory, priceRange, sortBy, searchQuery])
 
-  // Load more products
+  // Load more products — `buildUrl` must be in the deps so page 2+ uses the
+  // current filters. Without it, loadMore captures the stale `buildUrl` from
+  // before the user changed filters, pulling unfiltered results.
   const loadMore = useCallback(() => {
     if (loadingRef.current || !hasMore) return
     loadingRef.current = true
@@ -183,7 +185,7 @@ export default function StorefrontPage({ subdomain }) {
       })
       .catch(() => { setHasMore(false) })
       .finally(() => { setLoadingMore(false); loadingRef.current = false })
-  }, [subdomain, currentPage, hasMore])
+  }, [buildUrl, currentPage, hasMore])
 
   // Infinite scroll listener — prefetches ~2 screen heights before the bottom
   // so new products are visible by the time the user scrolls to them.

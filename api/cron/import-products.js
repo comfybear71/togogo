@@ -165,6 +165,7 @@ export default async function handler(req, res) {
       let shippingCost = 0
       let taxRate = 0.18 // 18% tax estimate
       let realProductCost = p.cost || 0
+      let enrichedDetails = null
 
       if (aeId && !aeId.includes('-')) {
         try {
@@ -172,7 +173,10 @@ export default async function handler(req, res) {
           const enrichResult = await Promise.race([
             (async () => {
               const details = await getProductDetails(aeId)
-              if (details) realProductCost = details.cost || p.cost || 0
+              if (details) {
+                enrichedDetails = details
+                realProductCost = details.cost || p.cost || 0
+              }
               // Extract first SKU id — ds.freight.query requires it for Choice products
               const firstSkuId = details?.variants?.[0]?.skuId || ''
               // Try DS freight first, then old freight API, then product details shipping
@@ -235,6 +239,18 @@ export default async function handler(req, res) {
       // Skip products over A$1000
       if (salePrice > 1000) continue
 
+      // Prefer real metrics from ds.product.get when we have them (rating,
+      // sales count, real discount %). Feed data is less reliable. Never
+      // invent values — if we don't know, store 0.
+      const rating = enrichedDetails?.rating || p.rating || 0
+      const ordersCount = enrichedDetails?.orders || p.orders || 0
+      const discountPercent = enrichedDetails?.discountPercent || p.discount || 0
+      const originalPriceAUD = enrichedDetails?.originalPrice
+        ? Math.round(enrichedDetails.originalPrice * usdToAud * defaultMarkup * 100) / 100
+        : (discountPercent > 0
+            ? Math.round(salePrice / (1 - discountPercent / 100) * 100) / 100
+            : 0)
+
       // Import ONCE into shared catalog (use first store's user_id for DB constraint)
       try {
         const imgArray = Array.isArray(p.images) ? p.images : []
@@ -252,9 +268,9 @@ export default async function handler(req, res) {
             ${wholesaleCost}, ${salePrice},
             ${productCostAUD}, ${shippingAUD}, ${taxAUD},
             ${'AUD'}, ${p.category || 'General'}, true,
-            ${p.rating || 0}, ${p.orders || 0},
-            ${p.discount > 0 ? Math.round(salePrice / (1 - p.discount / 100) * 100) / 100 : Math.round(salePrice * 1.25 * 100) / 100},
-            ${p.discount || 20}
+            ${rating}, ${ordersCount},
+            ${originalPriceAUD},
+            ${discountPercent}
           )
         `
         totalImported++

@@ -145,40 +145,65 @@ export async function refreshAliExpressToken() {
     return { success: false, error: 'refresh_token expired — full re-authorization required' }
   }
 
-  const params = {
+  // Unsigned base params (sign must be regenerated per request — different
+  // endpoints require slightly different param sets).
+  const baseParams = {
     app_key: appKey,
     sign_method: 'hmac-sha256',
     timestamp: String(Date.now()),
     refresh_token: current.refresh_token,
   }
-  params.sign = signRequest(params, appSecret)
 
-  const qs = new URLSearchParams(params).toString()
-  let response, rawText, method
+  async function tryEndpoint(label, url, init, extraParams = {}) {
+    const full = { ...baseParams, ...extraParams }
+    full.sign = signRequest(full, appSecret)
+    const qs = new URLSearchParams(full).toString()
 
-  // Attempt 1: GET /auth/token/refresh
-  method = 'GET /auth/token/refresh'
-  response = await fetch(`https://api-sg.aliexpress.com/auth/token/refresh?${qs}`)
-  rawText = await response.text()
-  console.log(`[AliExpress Refresh] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
-
-  // Attempt 2: POST body /auth/token/refresh
-  if (!response.ok || !rawText || rawText.length < 10) {
-    method = 'POST body /auth/token/refresh'
-    response = await fetch('https://api-sg.aliexpress.com/auth/token/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: qs,
-    })
-    rawText = await response.text()
-    console.log(`[AliExpress Refresh] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
+    try {
+      let response
+      if (init?.method === 'POST') {
+        response = await fetch(url, { ...init, body: qs })
+      } else {
+        response = await fetch(`${url}?${qs}`)
+      }
+      const rawText = await response.text()
+      console.log(`[AliExpress Refresh] ${label}: status=${response.status}, body=${rawText.slice(0, 300)}`)
+      return { response, rawText }
+    } catch (err) {
+      console.log(`[AliExpress Refresh] ${label}: fetch error ${err.message}`)
+      return { response: null, rawText: '', err }
+    }
   }
 
-  let data
-  try {
-    data = JSON.parse(rawText)
-  } catch {
-    return { success: false, error: `AliExpress returned non-JSON: ${rawText.slice(0, 200)}` }
+  let response, rawText, lastMethod, lastRaw
+  const attempts = [
+    { label: 'GET /auth/token/refresh', url: 'https://api-sg.aliexpress.com/auth/token/refresh', init: {} },
+    { label: 'POST /auth/token/refresh', url: 'https://api-sg.aliexpress.com/auth/token/refresh',
+      init: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } } },
+    { label: 'POST /sync method=/auth/token/refresh', url: 'https://api-sg.aliexpress.com/sync',
+      init: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      extraParams: { method: '/auth/token/refresh', format: 'json', v: '2.0' } },
+    { label: 'GET /auth/token/security/refresh', url: 'https://api-sg.aliexpress.com/auth/token/security/refresh', init: {} },
+  ]
+
+  let data = null
+  for (const a of attempts) {
+    const result = await tryEndpoint(a.label, a.url, a.init, a.extraParams)
+    lastMethod = a.label
+    lastRaw = result.rawText
+    response = result.response
+    rawText = result.rawText
+    if (!rawText || rawText.length < 5) continue
+    try {
+      data = JSON.parse(rawText)
+      if (data.access_token || data['auth_token_refresh_response'] || data['/auth/token/refresh_response']
+          || data.aliexpress_token_refresh_response) break
+      if (data.error_response) break
+    } catch { /* not JSON, try next */ }
+  }
+
+  if (!data) {
+    return { success: false, error: `AliExpress refresh — non-JSON via ${lastMethod}: ${String(lastRaw).slice(0, 300)}` }
   }
 
   if (data.error_response) {
@@ -305,8 +330,25 @@ export async function getProductDetails(productId) {
         name: storeInfo.store_name || '',
         rating: storeInfo.evaluation_positive_rate || '',
       },
-      orders: baseInfo.sales_count || 0,
-      rating: baseInfo.avg_evaluation_rating || null,
+      // Real product metrics from ds.product.get — parsed from raw strings
+      // (AE returns "10000+" for sales, "4.6" for rating, etc.)
+      orders: (() => {
+        const s = baseInfo.sales_count
+        if (!s) return 0
+        const n = parseInt(String(s).replace(/[,+\s]/g, ''), 10)
+        return Number.isFinite(n) ? n : 0
+      })(),
+      rating: baseInfo.avg_evaluation_rating
+        ? Math.min(5, parseFloat(baseInfo.avg_evaluation_rating) || 0)
+        : 0,
+      evaluationCount: parseInt(baseInfo.evaluation_count || '0', 10) || 0,
+      // Computed discount % from original vs sale price
+      discountPercent: (() => {
+        const orig = parseFloat(baseInfo.price?.amount || '0')
+        const sale = parseFloat(baseInfo.sale_price?.amount || '0')
+        if (!orig || !sale || sale >= orig) return 0
+        return Math.round((1 - sale / orig) * 100)
+      })(),
     }
   } catch (err) {
     console.error(`[AliExpress] ds.product.get failed for ${productId}:`, err.message)
