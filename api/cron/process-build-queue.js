@@ -167,13 +167,22 @@ export default async function handler(req, res) {
       `
       results.push({ keyword: row.keyword, error: result.error })
     } else {
+      // Count BOTH fresh inserts and existing products newly-tagged with
+      // this niche — both represent products that just became visible on
+      // this niched store
+      const combined = (result.productsFound || 0) + (result.tagged || 0)
       await sql`
         UPDATE store_build_queue
-        SET status = 'done', products_found = ${result.productsFound}, processed_at = NOW()
+        SET status = 'done', products_found = ${combined}, processed_at = NOW()
         WHERE id = ${row.id}
       `
-      totalProductsFound += result.productsFound
-      results.push({ keyword: row.keyword, productsFound: result.productsFound })
+      totalProductsFound += combined
+      results.push({
+        keyword: row.keyword,
+        productsFound: combined,
+        newInserts: result.productsFound || 0,
+        tagged: result.tagged || 0,
+      })
     }
   }
 
