@@ -1,20 +1,33 @@
 // Break-even pricing helpers — one source of truth for every variant price
 // used by imports, rebuilds, and storefront display.
 //
-// Invariant: everything is USD. No conversion. No markup (for now).
-// When we're confident the data is right, we can layer markup on top.
+// Invariants:
+//   - Everything in USD (AE's native currency)
+//   - NO markup (we're proving correctness first)
+//   - NO currency conversion
 //
-// Formula per variant:
-//   supplier_cost_usd = sku_price_usd + shipping_usd + tax_buffer
-//   sale_price_usd    = supplier_cost_usd            // break-even, no markup
+// Formula per variant — real AE API numbers plus a clearly-labelled tax
+// estimate (AE doesn't expose tax via any pre-order API; we pass through
+// a flat 10% to match AE's own checkout breakdown for AU buyers):
 //
-// Where tax_buffer approximates AE's actual checkout tax (observed 12–14%).
-// Using 14% is conservative for an AU destination.
+//   supplier_cost_usd = sku_price_usd + shipping_usd + estimateTax(sku_price_usd)
+//   sale_price_usd    = supplier_cost_usd
+//
+// When AE applies Choice discounts or promos at their checkout that
+// make their actual bill lower than our estimate, that delta is our
+// margin. Choice is a discount AE gives store owners for selling
+// through the platform — the user has explicitly said we keep it.
 
-export const TAX_RATE = 0.14
-export const DEFAULT_SHIPPING_USD = 0  // 0 when we don't know — we'd rather
-                                        // under-quote and reject at checkout
-                                        // than lie about the price
+export const DEFAULT_SHIPPING_USD = 0
+// Flat estimate. Per-country table is future work; user approved 10% now.
+export const TAX_RATE = 0.10
+
+// Returns the tax estimate in USD for a product subtotal.
+// Labelled "Est. tax" wherever displayed — never pretend it's an exact number.
+export function estimateTax(productUsd) {
+  const p = Math.max(0, Number(productUsd) || 0)
+  return Math.round(p * TAX_RATE * 100) / 100
+}
 
 // Parse a variant from ds.product.get's ae_item_sku_info_d_t_o[] shape.
 // Returns the canonical variant shape we store in user_products.variants.
@@ -62,11 +75,12 @@ export function parseVariant(skuRaw) {
   }
 }
 
-// Compute break-even USD cost for a single variant
+// Compute break-even USD cost for a single variant.
+// = product + shipping + 10% est. tax (labelled clearly everywhere it's shown)
 export function breakEvenUsd(variantPriceUsd, shippingUsd = DEFAULT_SHIPPING_USD) {
   const product = Math.max(0, Number(variantPriceUsd) || 0)
   const shipping = Math.max(0, Number(shippingUsd) || 0)
-  const tax = product * TAX_RATE
+  const tax = estimateTax(product)
   return Math.round((product + shipping + tax) * 100) / 100
 }
 

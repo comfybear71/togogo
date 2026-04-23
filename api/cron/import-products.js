@@ -164,7 +164,7 @@ export default async function handler(req, res) {
 
       // Fetch EXACT shipping cost from freight calculator API (no OAuth needed)
       let shippingCost = 0
-      let taxRate = 0.18 // 18% tax estimate
+      // No tax — AE doesn't expose the real rate via API, absorbed at order time
       let realProductCost = p.cost || 0
       let enrichedDetails = null
 

@@ -14,7 +14,7 @@
 import { sql, ensureSchema } from '../_lib/db.js'
 import { verifyToken, requireAdminOrSetup } from '../_lib/auth.js'
 import { getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
-import { summarisePricing, breakEvenUsd, TAX_RATE } from '../_lib/pricing.js'
+import { summarisePricing, breakEvenUsd } from '../_lib/pricing.js'
 
 async function authorize(req) {
   const querySecret = req.query.secret
@@ -199,7 +199,7 @@ export default async function handler(req, res) {
       title: (live?.title || '').slice(0, 80),
       variantCount: liveVariantsWithBreakEven.length,
       shippingUsd: liveShippingUsd,
-      taxRate: TAX_RATE,
+      taxNote: 'tax not included — AE does not expose it via API, absorbed at order time',
       variants: liveVariantsWithBreakEven.map(v => ({
         skuId: v.skuId,
         skuAttr: v.skuAttr,
