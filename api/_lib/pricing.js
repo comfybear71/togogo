@@ -3,20 +3,31 @@
 //
 // Invariants:
 //   - Everything in USD (AE's native currency)
-//   - NO tax (we don't know AE's rate — it varies 7-14%, only visible at
-//     AE checkout). Absorbed by us if charged.
 //   - NO markup (we're proving correctness first)
 //   - NO currency conversion
 //
-// Formula per variant — only real AE API numbers:
-//   supplier_cost_usd = sku_price_usd + shipping_usd
+// Formula per variant — real AE API numbers plus a clearly-labelled tax
+// estimate (AE doesn't expose tax via any pre-order API; we pass through
+// a flat 10% to match AE's own checkout breakdown for AU buyers):
+//
+//   supplier_cost_usd = sku_price_usd + shipping_usd + estimateTax(sku_price_usd)
 //   sale_price_usd    = supplier_cost_usd
 //
-// When AE adds tax / Choice discounts / promo codes at their checkout,
-// that delta lands in our margin — positive some orders, negative others.
-// No invented buffer. Pure API data.
+// When AE applies Choice discounts or promos at their checkout that
+// make their actual bill lower than our estimate, that delta is our
+// margin. Choice is a discount AE gives store owners for selling
+// through the platform — the user has explicitly said we keep it.
 
 export const DEFAULT_SHIPPING_USD = 0
+// Flat estimate. Per-country table is future work; user approved 10% now.
+export const TAX_RATE = 0.10
+
+// Returns the tax estimate in USD for a product subtotal.
+// Labelled "Est. tax" wherever displayed — never pretend it's an exact number.
+export function estimateTax(productUsd) {
+  const p = Math.max(0, Number(productUsd) || 0)
+  return Math.round(p * TAX_RATE * 100) / 100
+}
 
 // Parse a variant from ds.product.get's ae_item_sku_info_d_t_o[] shape.
 // Returns the canonical variant shape we store in user_products.variants.
