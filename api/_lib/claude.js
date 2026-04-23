@@ -45,24 +45,39 @@ async function callClaude({ model, system, messages, maxTokens = 4000 }) {
   return { content, raw: data }
 }
 
-// Extract a JSON code block from Claude's response (it's instructed to put
-// the JSON inside ```json ... ``` at the end of the message).
+// Extract a JSON object from Claude's response. Handles ```json fences,
+// bare ``` fences, and raw top-level {...}. Logs a preview on failure.
 function extractJsonBlock(text) {
+  // 1. Explicit json fence
   const fenced = text.match(/```json\s*([\s\S]*?)```/i)
-  if (fenced) return JSON.parse(fenced[1].trim())
-  // Fallback: try to find a top-level { ... } that parses
-  const braceMatch = text.match(/\{[\s\S]*\}/)
-  if (braceMatch) return JSON.parse(braceMatch[0])
+  if (fenced) {
+    try { return JSON.parse(fenced[1].trim()) } catch {}
+  }
+  // 2. Any code fence
+  const anyFence = text.match(/```[a-z]*\s*([\s\S]*?)```/i)
+  if (anyFence) {
+    try { return JSON.parse(anyFence[1].trim()) } catch {}
+  }
+  // 3. Raw top-level object — from the first { to the matching }
+  const firstBrace = text.indexOf('{')
+  if (firstBrace >= 0) {
+    const lastBrace = text.lastIndexOf('}')
+    if (lastBrace > firstBrace) {
+      try { return JSON.parse(text.slice(firstBrace, lastBrace + 1)) } catch {}
+    }
+  }
   throw new Error('No JSON block found in Claude response')
 }
 
 // Build a comprehensive niche product plan.
+// Asks Claude for pure JSON (no markdown) so parsing is unambiguous;
+// we generate the human-readable markdown from the JSON ourselves.
 //
 // Returns:
 //   {
 //     success: true,
 //     niche: 'fishing equipment',
-//     markdown: '...full formatted list for humans...',
+//     markdown: '...generated from JSON...',
 //     categories: { 'Rods & Reels': [...], 'Line & Terminal Tackle': [...] },
 //     allKeywords: ['spinning rods', 'baitcasting rods', ...],
 //   }
@@ -73,77 +88,84 @@ export async function generateNichePlan(niche) {
 
   const userNiche = niche.trim()
 
-  const system = `You are an elite Dropshipping Niche Specialist and Product Catalog Architect. Your expertise is creating complete, highly profitable product assortments for specialized online stores sourced from AliExpress.`
+  const system = `You are an elite Dropshipping Niche Specialist and Product Catalog Architect. Your expertise is creating complete, highly profitable product assortments for specialized online stores sourced from AliExpress.
 
-  const userPrompt = `Task: Generate an extremely comprehensive product keyword list for the niche: "${userNiche}".
+Return ONLY a single JSON object. No prose, no markdown headings, no explanation before or after. Just the JSON.`
 
-Output Format - You MUST follow this exactly:
+  const userPrompt = `Generate a comprehensive product catalogue plan for the niche: "${userNiche}".
 
-1. Start with the title line:
-[Niche Name] — Complete Product List
+Return ONLY this JSON structure (no prose, no markdown, no code fences):
 
-2. Then create 12-25 well-grouped major categories. Format each line exactly like this:
-Category Name: keyword1, keyword2, keyword3, keyword4, specific product variations...
-
-3. After all the categories, add this section:
-All Search Keywords (for AliExpress):
-keyword1, keyword2, keyword3, ... (a single long comma-separated list of every individual keyword from the categories above, no duplicates)
-
-4. Finally, output clean JSON for system integration (place it at the very end inside a \`\`\`json code block):
-\`\`\`json
 {
   "niche": "${userNiche}",
   "main_categories": {
-    "Category Name 1": ["keyword 1", "keyword 2"],
-    "Category Name 2": ["keyword 3", "keyword 4"]
+    "Category Name 1": ["specific keyword 1", "specific keyword 2", "specific keyword 3"],
+    "Category Name 2": ["specific keyword 4", "specific keyword 5"]
   },
-  "all_keywords": ["keyword 1", "keyword 2", "keyword 3", "keyword 4"]
+  "all_keywords": ["every individual keyword from every category, no duplicates"]
 }
-\`\`\`
 
-Important Guidelines:
-- Be as comprehensive as possible — aim for 150-400+ unique keywords depending on niche size
-- Use highly specific, searchable product terms that real buyers type into AliExpress
-- Include product variations, styles, materials, accessories, apparel, electronics, tools, storage, safety gear, consumables — everything a complete specialized store would sell
+Requirements:
+- 12 to 25 well-grouped major categories
+- 150-400 unique, highly specific keywords total (searchable on AliExpress)
+- Include product variations, styles, materials, accessories, apparel, electronics, tools, storage, safety gear, consumables — everything a complete specialised store would sell
 - For fashion/beauty niches include different styles, types, colours, sizes, and complementary accessories
-- Stay 100% relevant to the exact niche the user gave. Do not add unrelated items
-- Think like the owner of the ultimate one-stop shop in this niche
+- Stay 100% relevant to the exact niche. Do not add unrelated items
 - Prioritise evergreen, popular, profitable dropshipping products
+- "all_keywords" MUST be a flat deduplicated list of every keyword from every category
 
-Generate the complete output now for niche: "${userNiche}".`
+Generate the JSON now.`
 
   try {
     const { content } = await callClaude({
       model: NICHE_MODEL,
       system,
       messages: [{ role: 'user', content: userPrompt }],
-      maxTokens: 4000,
+      maxTokens: 8000,
     })
 
-    // Parse JSON block at the end
     let json
     try {
       json = extractJsonBlock(content)
     } catch (err) {
-      return { success: false, error: 'Failed to parse JSON from Claude response: ' + err.message, raw: content.slice(0, 500) }
+      return {
+        success: false,
+        error: 'Failed to parse JSON from Claude response: ' + err.message,
+        raw: content.slice(0, 1000),
+      }
     }
 
-    const allKeywords = Array.isArray(json.all_keywords)
-      ? [...new Set(json.all_keywords.map(k => String(k).trim()).filter(Boolean))]
+    const categories = json.main_categories || {}
+    let allKeywords = Array.isArray(json.all_keywords)
+      ? json.all_keywords.map(k => String(k).trim()).filter(Boolean)
       : []
+    // Defensive: rebuild from categories if all_keywords is missing / short
+    if (allKeywords.length < 20) {
+      const flat = []
+      for (const kws of Object.values(categories)) {
+        if (Array.isArray(kws)) kws.forEach(k => flat.push(String(k).trim()))
+      }
+      allKeywords = [...new Set([...allKeywords, ...flat])].filter(Boolean)
+    }
+    allKeywords = [...new Set(allKeywords)]
 
     if (allKeywords.length === 0) {
       return { success: false, error: 'Claude returned no keywords', raw: content.slice(0, 500) }
     }
 
-    // Strip the JSON block from the markdown for the human-readable view
-    const markdown = content.replace(/```json[\s\S]*?```/i, '').trim()
+    // Build the human-readable markdown from the JSON — more reliable than
+    // asking Claude to produce both formats
+    const title = `${userNiche.charAt(0).toUpperCase() + userNiche.slice(1)} — Complete Product List`
+    const catLines = Object.entries(categories).map(
+      ([cat, items]) => `${cat}: ${(items || []).join(', ')}`
+    )
+    const markdown = [title, '', ...catLines].join('\n')
 
     return {
       success: true,
       niche: userNiche,
       markdown,
-      categories: json.main_categories || {},
+      categories,
       allKeywords,
     }
   } catch (err) {
