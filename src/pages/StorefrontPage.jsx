@@ -866,6 +866,19 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
               <p className="text-sm text-slate-500 line-through mb-4">${parseFloat(product.originalPrice).toFixed(2)}</p>
             )}
 
+            {/* DEV: quick link to the source AE listing for price verification.
+                Hidden from customers via a query param only admins would know. */}
+            {product.supplierProductId && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('verify') === '1' && (
+              <a
+                href={`https://www.aliexpress.com/item/${String(product.supplierProductId).replace('ae_', '')}.html`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 mt-1 mb-3 rounded-md border border-orange-400/40 bg-orange-400/5 px-2.5 py-1 text-xs text-orange-300 hover:bg-orange-400/10"
+              >
+                🔍 View this product on AliExpress (verify price)
+              </a>
+            )}
+
             {/* Rating + Orders */}
             {(product.totalSold > 0 || details?.rating) && (
               <div className="flex items-center gap-3 mb-4 text-xs text-slate-400">
