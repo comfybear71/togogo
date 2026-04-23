@@ -173,8 +173,10 @@ export default async function handler(req, res) {
             (async () => {
               const details = await getProductDetails(aeId)
               if (details) realProductCost = details.cost || p.cost || 0
+              // Extract first SKU id — ds.freight.query requires it for Choice products
+              const firstSkuId = details?.variants?.[0]?.skuId || ''
               // Try DS freight first, then old freight API, then product details shipping
-              let freightOptions = await queryDSFreight(aeId, 'AU', 1)
+              let freightOptions = await queryDSFreight(aeId, 'AU', 1, firstSkuId)
               if (!freightOptions || freightOptions.length === 0) {
                 freightOptions = await calculateFreight(aeId, 1, 'AU')
               }

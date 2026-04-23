@@ -49,7 +49,7 @@ export default async function handler(req, res) {
 
     for (const item of items) {
       const { rows: products } = await sql`
-        SELECT id, title, image, supplier, supplier_cost, sale_price, supplier_product_id
+        SELECT id, title, image, supplier, supplier_cost, sale_price, shipping_cost, supplier_product_id
         FROM user_products
         WHERE id = ${item.productId} AND is_active = true
       `
@@ -115,6 +115,7 @@ export default async function handler(req, res) {
         supplierProductId: product.supplier_product_id,
         supplierCost: parseFloat(product.supplier_cost),
         salePrice: parseFloat(product.sale_price),
+        shippingCost: parseFloat(product.shipping_cost) || 0,
         quantity: qty,
       })
 
@@ -128,13 +129,15 @@ export default async function handler(req, res) {
     // No separate shipping fee — shipping + tax included in product price (Temu model)
     const totalAmount = lineItems.reduce((s, li) => s + li.price_data.unit_amount * li.quantity, 0)
 
-    // Shipping fee — configurable from admin settings (default A$6, set to 0 to remove)
-    let shippingFeeAUD = 6.00
+    // Shipping is already included in sale_price via cron's markup formula
+    // (wholesale = product_cost + shipping, sale = wholesale × markup).
+    // Admin platform flat fee is additive on top if configured (handling fee).
+    let platformShippingAUD = 0
     try {
       const { rows: feeRows } = await sql`SELECT value FROM admin_settings WHERE key = 'shipping_fee_aud'`
-      if (feeRows[0]) shippingFeeAUD = parseFloat(feeRows[0].value) || 0
-    } catch { /* use default */ }
-    const shippingFeeCents = Math.round(shippingFeeAUD * 100)
+      if (feeRows[0]) platformShippingAUD = parseFloat(feeRows[0].value) || 0
+    } catch { /* default 0 */ }
+    const shippingFeeCents = Math.round(platformShippingAUD * 100)
     if (shippingFeeCents > 0) {
       lineItems.push({
         price_data: {

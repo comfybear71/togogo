@@ -107,7 +107,7 @@ export default async function handler(req, res) {
     const productResult = await sql.query(
       `SELECT * FROM (
         SELECT DISTINCT ON (supplier_product_id) id, title, description, image, images, supplier, supplier_cost,
-               sale_price, category, total_sold, created_at, supplier_product_id,
+               sale_price, shipping_cost, category, total_sold, created_at, supplier_product_id,
                product_rating, orders_count, original_price, discount_percent, in_stock
         FROM user_products
         WHERE is_active = true
@@ -136,6 +136,7 @@ export default async function handler(req, res) {
       image: p.image || (images[0] || ''),
       images,
       price: parseFloat(p.sale_price) || 0,
+      shipping: parseFloat(p.shipping_cost) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
       supplierProductId: p.supplier_product_id || '',
       category: p.category || 'General',
