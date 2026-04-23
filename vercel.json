@@ -25,6 +25,10 @@
     {
       "path": "/api/cron/backup-db",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-ae-token",
+      "schedule": "0 2 * * *"
     }
   ]
 }
