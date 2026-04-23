@@ -103,10 +103,14 @@ export default async function handler(req, res) {
       : ''
 
     // Price integrity gate: only surface products that have been priced
-    // under the new USD+variants model. Old products with AUD-mislabelled
-    // prices are hidden from the storefront until the rebuild cron heals
-    // them. Keeps us honest — never display a wrong price to a customer.
-    const pricedWhere = ` AND variants_updated_at IS NOT NULL AND price_currency = 'USD'`
+    // under the new USD+variants model. Three checks because we've been
+    // burned:
+    //   1. variants_updated_at set  → rebuild cron has touched the row
+    //   2. price_currency = 'USD'   → not an old AUD-mislabelled row
+    //   3. min_variant_price_usd>0  → we actually have a real variant price,
+    //                                 not just a timestamp from a skipped
+    //                                 rebuild attempt
+    const pricedWhere = ` AND variants_updated_at IS NOT NULL AND price_currency = 'USD' AND COALESCE(min_variant_price_usd, 0) > 0`
 
     // Get total product count (with filters applied)
     const countResult = await sql.query(

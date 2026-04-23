@@ -35,10 +35,13 @@ async function rebuildOne(row) {
   ])
 
   if (!details) {
-    // Couldn't fetch — mark attempted so we don't re-pick immediately,
-    // but don't deactivate (might be a transient timeout)
+    // Couldn't fetch — probably transient (timeout / rate limit). Back off
+    // 1 hour instead of 24h so we retry soon. Leaves the row "not healed"
+    // (min_variant_price_usd unchanged) so the storefront gate still hides it.
     await sql`
-      UPDATE user_products SET variants_updated_at = NOW() WHERE id = ${row.id}
+      UPDATE user_products
+      SET variants_updated_at = NOW() - INTERVAL '23 hours'
+      WHERE id = ${row.id}
     `
     return { skipped: true, reason: 'details_unavailable' }
   }
