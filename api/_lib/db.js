@@ -210,6 +210,15 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_built_at TIMESTAMPTZ` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS niches TEXT[] DEFAULT ARRAY[]::TEXT[]` } catch { /* */ }
   try { await sql`CREATE INDEX IF NOT EXISTS idx_user_products_niches ON user_products USING GIN (niches)` } catch { /* */ }
+  // Per-SKU variants with real USD prices — the source of truth for pricing.
+  // Each entry: { skuId, skuAttr, priceUsd, stock, properties{Color,Size,...}, colorImage }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS variants JSONB` } catch { /* */ }
+  // Cheapest variant's break-even USD cost (product + shipping + ~14% tax).
+  // Used for the "From $X" card price on the storefront listing.
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS min_variant_price_usd NUMERIC(10,2)` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS max_variant_price_usd NUMERIC(10,2)` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS shipping_usd NUMERIC(10,2)` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS variants_updated_at TIMESTAMPTZ` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS price_verified BOOLEAN DEFAULT false` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS in_stock BOOLEAN DEFAULT true` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }

@@ -4,6 +4,7 @@
 // ACCURATE PRICING: fetches real shipping cost via freight calculator API
 import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpress, getProductDetails, calculateFreight, queryDSFreight } from '../_lib/suppliers.js'
+import { summarisePricing } from '../_lib/pricing.js'
 
 export default async function handler(req, res) {
   // Auth: allow Vercel cron, JWT_SECRET as query param, or admin JWT token
@@ -212,44 +213,30 @@ export default async function handler(req, res) {
         }
       }
 
-      // Calculate wholesale cost (what ToGoGo actually pays on AliExpress)
-      // API returns USD despite target_currency:AUD — convert to real AUD
-      // Rate stored in admin_settings — update from admin panel when it changes
-      let usdToAud = 1.45
-      try {
-        const { rows: rateRows } = await sql`SELECT value FROM admin_settings WHERE key = 'usd_to_aud_rate'`
-        if (rateRows[0]) usdToAud = parseFloat(rateRows[0].value) || 1.45
-      } catch { /* use default */ }
-      const productCostAUD = realProductCost * usdToAud
-      // Freight returns USD — convert to AUD. No minimum — real cost captured at order time
-      const shippingAUD = Math.round(shippingCost * usdToAud * 100) / 100
-      // NO separate tax — AliExpress charges tax at their checkout, included in the total
-      // supplier_cost = product + shipping (what we actually pay)
-      const taxAUD = 0
-      const wholesaleCost = productCostAUD + shippingAUD
+      // NEW PRICING MODEL (2026-04-23): everything in USD, break-even only.
+      // No markup yet — we're verifying the data is correct first. Every
+      // number traces back to AE's real sku_price. See api/_lib/pricing.js.
+      const variants = enrichedDetails?.variants || []
+      const summary = summarisePricing(variants, shippingCost)
+      // Store cheapest variant's break-even as the "headline" sale_price.
+      // Storefront shows "From $X" and the variant picker will show real
+      // per-variant prices. breakEvenMinUsd = min sku_price + shipping + 14% tax.
+      const salePriceUsd = summary.breakEvenMinUsd
+      const supplierCostUsd = summary.breakEvenMinUsd  // identical — no markup
 
-      // Store sale price = wholesale × markup (configurable from admin settings or per-store)
-      let defaultMarkup = 1.3
-      try {
-        const { rows: markupRows } = await sql`SELECT value FROM admin_settings WHERE key = 'default_markup'`
-        if (markupRows[0]) defaultMarkup = parseFloat(markupRows[0].value) || 1.3
-      } catch { /* use default */ }
-      const salePrice = Math.ceil(wholesaleCost * defaultMarkup * 100) / 100
+      // Skip obviously broken rows (no variants at all). Old products imported
+      // before this fix will be healed by the rebuild cron.
+      if (!variants.length || salePriceUsd <= 0) {
+        console.log(`[Cron] ${aeId}: skipped — no variants (details fetch failed or empty)`)
+        continue
+      }
 
-      // Skip products over A$1000
-      if (salePrice > 1000) continue
-
-      // Prefer real metrics from ds.product.get when we have them (rating,
-      // sales count, real discount %). Feed data is less reliable. Never
-      // invent values — if we don't know, store 0.
+      // Prefer real metrics from ds.product.get. Never invent values.
       const rating = enrichedDetails?.rating || p.rating || 0
       const ordersCount = enrichedDetails?.orders || p.orders || 0
       const discountPercent = enrichedDetails?.discountPercent || p.discount || 0
-      const originalPriceAUD = enrichedDetails?.originalPrice
-        ? Math.round(enrichedDetails.originalPrice * usdToAud * defaultMarkup * 100) / 100
-        : (discountPercent > 0
-            ? Math.round(salePrice / (1 - discountPercent / 100) * 100) / 100
-            : 0)
+      // original_price only stored when we have a real one from AE (not fake)
+      const originalPriceUsd = enrichedDetails?.originalPrice || 0
 
       // Import ONCE into shared catalog (use first store's user_id for DB constraint)
       try {
@@ -260,23 +247,27 @@ export default async function handler(req, res) {
             supplier_product_id, supplier_cost, sale_price,
             api_price, shipping_cost, tax_amount,
             price_currency, category, is_active,
-            product_rating, orders_count, original_price, discount_percent
+            product_rating, orders_count, original_price, discount_percent,
+            variants, min_variant_price_usd, max_variant_price_usd,
+            shipping_usd, variants_updated_at
           ) VALUES (
             ${stores[0].user_id}, ${p.title}, ${p.title},
             ${p.image || ''}, ${imgArray},
             ${'AliExpress'}, ${p.productId || p.id},
-            ${wholesaleCost}, ${salePrice},
-            ${productCostAUD}, ${shippingAUD}, ${taxAUD},
-            ${'AUD'}, ${p.category || 'General'}, true,
+            ${supplierCostUsd}, ${salePriceUsd},
+            ${realProductCost}, ${shippingCost}, 0,
+            ${'USD'}, ${p.category || 'General'}, true,
             ${rating}, ${ordersCount},
-            ${originalPriceAUD},
-            ${discountPercent}
+            ${originalPriceUsd}, ${discountPercent},
+            ${JSON.stringify(variants)}::jsonb,
+            ${summary.minUsd}, ${summary.maxUsd},
+            ${shippingCost}, NOW()
           )
         `
         totalImported++
       } catch { /* skip duplicates */ }
 
-      console.log(`[Cron] → AUD: product=$${productCostAUD.toFixed(2)} ship=$${shippingAUD.toFixed(2)} tax=$${taxAUD.toFixed(2)} wholesale=$${wholesaleCost.toFixed(2)} sale=$${salePrice.toFixed(2)} "${p.title?.slice(0, 50)}"`)
+      console.log(`[Cron] → USD: variants=${variants.length} priceRange=$${summary.minUsd.toFixed(2)}-$${summary.maxUsd.toFixed(2)} ship=$${shippingCost.toFixed(2)} breakEven(min)=$${supplierCostUsd.toFixed(2)} "${p.title?.slice(0, 50)}"`)
     }
 
     // Log to cron history

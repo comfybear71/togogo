@@ -13,13 +13,17 @@
 //
 // Auth: Vercel cron header, CRON_SECRET, or signed admin JWT.
 import { sql, ensureSchema } from '../_lib/db.js'
-import { searchAliExpressDirect } from '../_lib/suppliers.js'
+import { searchAliExpressDirect, getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
+import { summarisePricing } from '../_lib/pricing.js'
 
-const BATCH_SIZE = 5
-const PRODUCTS_PER_KEYWORD = 30
+// Reduced from 5/30 when we switched to real-variant imports.
+// Each new product now costs 2 API calls (ds.product.get + ds.freight.query)
+// so the batch must be smaller to stay within Vercel's 60s cap.
+const BATCH_SIZE = 2
+const PRODUCTS_PER_KEYWORD = 10
 const PER_KEYWORD_TIMEOUT_MS = 8000
 
-async function processOne(row, usdToAud, defaultMarkup) {
+async function processOne(row) {
   const keyword = row.keyword
   let products = []
   try {
@@ -70,13 +74,44 @@ async function processOne(row, usdToAud, defaultMarkup) {
       }
     } catch { continue }
 
-    const productCostUSD = parseFloat(p.cost) || 0
-    const productCostAUD = Math.round(productCostUSD * usdToAud * 100) / 100
-    const wholesaleCost = productCostAUD
-    const salePrice = Math.ceil(wholesaleCost * defaultMarkup * 100) / 100
-    if (salePrice > 1000) continue
+    // NEW PRICING MODEL: fetch real variants via ds.product.get, then use
+    // the cheapest variant's break-even USD as the headline. No guessing
+    // from the search-feed price (which is often a teaser). If we can't
+    // get variants, we DON'T import the product — better to miss a row
+    // than store wrong pricing.
+    let details = null
+    try {
+      details = await Promise.race([
+        getProductDetails(aeId),
+        new Promise(r => setTimeout(() => r(null), 6000)),
+      ])
+    } catch { /* timeout / network */ }
 
-    const imgArray = Array.isArray(p.images) ? p.images : []
+    if (!details || !Array.isArray(details.variants) || details.variants.length === 0) {
+      // Skip — can't price accurately without real variant data
+      continue
+    }
+
+    // Real shipping via ds.freight.query for the cheapest SKU — good enough
+    // baseline. Per-SKU freight can be recomputed at checkout.
+    let shippingUsd = 0
+    try {
+      const firstSkuId = details.variants[0]?.skuId || ''
+      const freight = await Promise.race([
+        queryDSFreight(aeId, 'AU', 1, firstSkuId),
+        new Promise(r => setTimeout(() => r(null), 6000)),
+      ])
+      if (Array.isArray(freight) && freight.length > 0) {
+        const cheapest = freight.reduce((m, o) => o.cost < m.cost ? o : m, freight[0])
+        shippingUsd = cheapest.cost || 0
+      }
+    } catch { /* freight unknown — sale_price will reflect that */ }
+
+    const summary = summarisePricing(details.variants, shippingUsd)
+    const salePriceUsd = summary.breakEvenMinUsd
+    if (salePriceUsd <= 0) continue
+
+    const imgArray = Array.isArray(details.images) ? details.images : (Array.isArray(p.images) ? p.images : [])
     const nichesArr = niche ? [niche] : []
     try {
       await sql`
@@ -86,17 +121,22 @@ async function processOne(row, usdToAud, defaultMarkup) {
           api_price, shipping_cost, tax_amount,
           price_currency, category, is_active,
           product_rating, orders_count, original_price, discount_percent,
-          niches
+          niches,
+          variants, min_variant_price_usd, max_variant_price_usd,
+          shipping_usd, variants_updated_at
         ) VALUES (
-          ${row.user_id}, ${p.title}, ${p.title || ''},
-          ${p.image || imgArray[0] || ''}, ${imgArray},
+          ${row.user_id}, ${details.title || p.title}, ${details.title || p.title || ''},
+          ${details.image || imgArray[0] || ''}, ${imgArray},
           'AliExpress', ${aeId},
-          ${wholesaleCost}, ${salePrice},
-          ${productCostAUD}, 0, 0,
-          'AUD', ${row.category || 'General'}, true,
-          ${parseFloat(p.rating) || 0}, ${parseInt(p.orders) || 0},
-          0, 0,
-          ${nichesArr}
+          ${salePriceUsd}, ${salePriceUsd},
+          ${summary.minUsd}, ${shippingUsd}, 0,
+          'USD', ${row.category || 'General'}, true,
+          ${details.rating || 0}, ${details.orders || 0},
+          ${details.originalPrice || 0}, ${details.discountPercent || 0},
+          ${nichesArr},
+          ${JSON.stringify(details.variants)}::jsonb,
+          ${summary.minUsd}, ${summary.maxUsd},
+          ${shippingUsd}, NOW()
         )
       `
       inserted++
@@ -127,17 +167,6 @@ export default async function handler(req, res) {
 
   await ensureSchema()
 
-  // Exchange rate + markup
-  let usdToAud = 1.45
-  let defaultMarkup = 1.3
-  try {
-    const { rows } = await sql`SELECT key, value FROM admin_settings WHERE key IN ('usd_to_aud_rate', 'default_markup')`
-    for (const r of rows) {
-      if (r.key === 'usd_to_aud_rate') usdToAud = parseFloat(r.value) || 1.45
-      if (r.key === 'default_markup') defaultMarkup = parseFloat(r.value) || 1.3
-    }
-  } catch { /* defaults */ }
-
   // Lock + grab the next batch (oldest pending first)
   const { rows: batch } = await sql`
     SELECT id, store_id, user_id, niche, category, keyword
@@ -161,7 +190,7 @@ export default async function handler(req, res) {
   let totalProductsFound = 0
   const results = []
   for (const row of batch) {
-    const result = await processOne(row, usdToAud, defaultMarkup)
+    const result = await processOne(row)
     if (result.error) {
       await sql`
         UPDATE store_build_queue
