@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/enrich-products",
       "schedule": "30 */6 * * *"
+    },
+    {
+      "path": "/api/cron/process-build-queue",
+      "schedule": "* * * * *"
     }
   ]
 }

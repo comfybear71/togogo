@@ -205,6 +205,9 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_id TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS stripe_connect_status TEXT DEFAULT 'not_connected'` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS store_settings JSONB DEFAULT '{}'::jsonb` } catch { /* */ }
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche TEXT` } catch { /* */ }
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_categories JSONB` } catch { /* */ }
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_built_at TIMESTAMPTZ` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS price_verified BOOLEAN DEFAULT false` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS in_stock BOOLEAN DEFAULT true` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD CONSTRAINT user_stores_user_id_key UNIQUE (user_id)` } catch { /* already exists */ }
@@ -343,6 +346,27 @@ export async function initializeSchema() {
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_shipping_failures_supplier ON shipping_failures(supplier_product_id)`
   await sql`CREATE INDEX IF NOT EXISTS idx_shipping_failures_created ON shipping_failures(created_at DESC)`
+
+  // Niche-based store builder queue — one row per keyword to be searched
+  // on AliExpress when a customer creates a niched store. Cron processes
+  // this batch by batch so we don't blow Vercel's function timeout.
+  await sql`
+    CREATE TABLE IF NOT EXISTS store_build_queue (
+      id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+      store_id UUID,
+      user_id UUID,
+      niche TEXT,
+      category TEXT,
+      keyword TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      products_found INTEGER DEFAULT 0,
+      error TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      processed_at TIMESTAMPTZ
+    )
+  `
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_status ON store_build_queue(status, created_at)`
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_store ON store_build_queue(store_id)`
 
   // Indexes
   await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`

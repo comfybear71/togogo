@@ -35,6 +35,7 @@ const AdminStores = lazy(() => import('./pages/admin/StoresPage'))
 const AdminSettings = lazy(() => import('./pages/admin/SettingsPage'))
 const AdminSearchAliExpress = lazy(() => import('./pages/admin/SearchAliExpressPage'))
 const AdminApiTester = lazy(() => import('./pages/admin/ApiTesterPage'))
+const AdminStoreBuilder = lazy(() => import('./pages/admin/StoreBuilderPage'))
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
 const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
@@ -144,6 +145,7 @@ export default function App() {
         <Route path="/admin/settings" element={<AdminRoute><AdminLayout><AdminSettings /></AdminLayout></AdminRoute>} />
         <Route path="/admin/search" element={<AdminRoute><AdminLayout><AdminSearchAliExpress /></AdminLayout></AdminRoute>} />
         <Route path="/admin/api-tester" element={<AdminRoute><AdminLayout><AdminApiTester /></AdminLayout></AdminRoute>} />
+        <Route path="/admin/store-builder" element={<AdminRoute><AdminLayout><AdminStoreBuilder /></AdminLayout></AdminRoute>} />
 
         <Route element={<AppLayout />}>
           <Route path="*" element={<NotFoundPage />} />
