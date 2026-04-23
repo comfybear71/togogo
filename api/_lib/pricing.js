@@ -36,12 +36,15 @@ export function parseVariant(skuRaw) {
     // Any property with an image is treated as the colour-swatch image
     if (image && !colorImage) colorImage = image
   }
-  // AE's "offer_sale_price" and "sku_price" are observed to match for
-  // normal listings. Some products have a promotional offer_sale_price
-  // that AE won't actually honour via API — take the MAX to be safe.
+  // AE charges offer_sale_price at checkout (confirmed empirically 2026-04-23
+  // via the BALASHOV garlic chopper: offer=$3.82, sku_price=$8.90, AE cart
+  // total used $3.82). sku_price is the strikethrough/original list price,
+  // NOT what AE actually bills the buyer. Fall back to sku_price only if
+  // offer is missing. NEVER take the max — that produced the $16.70 on a
+  // $3.82 product in the first rebuild run.
   const offer = parseFloat(skuRaw.offer_sale_price || '0')
   const regular = parseFloat(skuRaw.sku_price || '0')
-  const priceUsd = Math.max(offer, regular) || 0
+  const priceUsd = offer > 0 ? offer : regular
   return {
     skuId: String(skuRaw.sku_id || skuRaw.id || ''),
     skuAttr: String(skuRaw.sku_attr || skuRaw.id || ''),
