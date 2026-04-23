@@ -297,17 +297,38 @@ export default function StoreBuilderPage() {
             </p>
           </div>
 
-          {/* Recent product reveal */}
+          {/* Tease reel — products land live as the build progresses */}
           {recentImages.length > 0 && (
-            <div>
-              <p className="text-xs text-zinc-500 mb-2 text-center">Latest finds</p>
-              <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
+            <div className="rounded-lg border border-white/[0.06] bg-[#0a0a0a] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-[#FF6B35]" />
+                  Just landed in your shop
+                </p>
+                <span className="text-xs text-zinc-500">updates live</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                 {recentImages.map((p, i) => (
                   <div
                     key={p.supplier_product_id || i}
-                    className="aspect-square rounded-lg overflow-hidden bg-white/[0.04] animate-fadein"
+                    className="group rounded-lg overflow-hidden bg-white/[0.04] animate-fadein border border-white/[0.04] hover:border-[#FF6B35]/40 transition-colors"
                   >
-                    {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
+                    <div className="aspect-square overflow-hidden">
+                      {p.image && (
+                        <img
+                          src={p.image}
+                          alt=""
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                        />
+                      )}
+                    </div>
+                    <div className="p-2">
+                      <p className="text-[11px] text-zinc-300 line-clamp-2 leading-tight">{p.title || ''}</p>
+                      {p.sale_price && (
+                        <p className="mt-1 text-xs font-bold text-[#FF6B35]">A${parseFloat(p.sale_price).toFixed(2)}</p>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

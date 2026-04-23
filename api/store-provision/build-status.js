@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     FROM user_stores WHERE id = ${storeId} LIMIT 1
   `
   if (!store[0]) return res.status(404).json({ error: 'Store not found' })
+  const storeNiche = store[0].niche
 
   // Aggregate queue progress
   const { rows: queueAgg } = await sql`
@@ -42,19 +43,33 @@ export default async function handler(req, res) {
   const processedKeywords = (agg.done || 0) + (agg.failed || 0)
   const percent = totalKeywords > 0 ? Math.round((processedKeywords / totalKeywords) * 100) : 0
 
-  // The 8 most recent product images we added — frontend can stream them
-  // into the "look what we just found!" reveal carousel
-  const { rows: recentProducts } = await sql`
-    SELECT image, title, supplier_product_id
-    FROM user_products
-    WHERE supplier_product_id IS NOT NULL
-      AND created_at > COALESCE(
-        (SELECT MIN(created_at) FROM store_build_queue WHERE store_id = ${storeId}),
-        NOW() - INTERVAL '1 hour'
-      )
-    ORDER BY created_at DESC
-    LIMIT 8
-  `
+  // Authoritative count: products actually tagged with this store's niche
+  // (works for both newly-inserted and existing products newly-tagged)
+  let productsInShop = 0
+  if (storeNiche) {
+    const { rows: cntRows } = await sql`
+      SELECT COUNT(*)::int AS cnt
+      FROM user_products
+      WHERE is_active = true AND niches @> ARRAY[${storeNiche}]::TEXT[]
+    `
+    productsInShop = cntRows[0]?.cnt || 0
+  }
+
+  // "Tease" reel: 12 products matching this niche, most recently
+  // updated first so fresh tags surface immediately
+  let recentProducts = []
+  if (storeNiche) {
+    const { rows: teaseRows } = await sql`
+      SELECT image, title, supplier_product_id, sale_price
+      FROM user_products
+      WHERE is_active = true
+        AND niches @> ARRAY[${storeNiche}]::TEXT[]
+        AND image IS NOT NULL AND image <> ''
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC
+      LIMIT 12
+    `
+    recentProducts = teaseRows
+  }
 
   const status = totalKeywords === 0
     ? 'idle'
@@ -82,7 +97,10 @@ export default async function handler(req, res) {
       done: agg.done || 0,
       failed: agg.failed || 0,
       percent,
-      productsFound: agg.products_found || 0,
+      // Queue sum (tally of inserts+tags reported by cron) — useful for debug
+      queueReported: agg.products_found || 0,
+      // Authoritative: how many products now live on the store
+      productsFound: productsInShop,
       lastProcessedAt: agg.last_processed_at || null,
     },
     recentProducts,

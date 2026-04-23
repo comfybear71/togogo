@@ -82,7 +82,9 @@ export default async function handler(req, res) {
     else if (sortBy === 'discount') orderBy = 'COALESCE(discount_percent, 0) DESC'
 
     // Try Redis cache (cache per store+page+filters, 2 min TTL)
-    const cacheKey = `store:${subdomain}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
+    // Cache key includes niche so setting/changing a store's niche
+    // naturally invalidates the old "all products" cached result.
+    const cacheKey = `store:${subdomain}:n${store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
     if (redis && page > 0) {
       try {
         const cached = await redis.get(cacheKey)
