@@ -38,10 +38,11 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get store info
+    // Get store info — includes `niche` which gates which products this
+    // storefront sees (NULL niche = general store, sees everything)
     const { rows: stores } = await sql`
       SELECT s.id, s.subdomain, s.full_domain, s.store_name, s.status, s.created_at,
-             s.theme_id,
+             s.theme_id, s.niche,
              u.id AS owner_id, u.name AS owner_name, u.avatar_url AS owner_avatar, u.email AS owner_email
       FROM user_stores s
       JOIN users u ON u.id = s.user_id
@@ -92,11 +93,18 @@ export default async function handler(req, res) {
       } catch { /* cache miss, continue */ }
     }
 
+    // Niche gate: a store with a `niche` set only sees products tagged with
+    // that niche. NULL-niche stores (your pre-existing general stores) see
+    // everything. Uses GIN index on user_products.niches for speed.
+    const nicheWhere = store.niche
+      ? ` AND niches @> ARRAY['${String(store.niche).replace(/'/g, "''")}']::TEXT[]`
+      : ''
+
     // Get total product count (with filters applied)
     const countResult = await sql.query(
       `SELECT COUNT(*) as total FROM (
         SELECT DISTINCT ON (supplier_product_id) id, sale_price, category, title
-        FROM user_products WHERE is_active = true
+        FROM user_products WHERE is_active = true${nicheWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped WHERE true${whereExtra}`,
       []
@@ -110,7 +118,7 @@ export default async function handler(req, res) {
                sale_price, shipping_cost, category, total_sold, created_at, supplier_product_id,
                product_rating, orders_count, original_price, discount_percent, in_stock
         FROM user_products
-        WHERE is_active = true
+        WHERE is_active = true${nicheWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) products
       WHERE true${whereExtra}
@@ -179,30 +187,33 @@ export default async function handler(req, res) {
       }
     }
 
-    // Get ALL categories with counts (not just current page)
-    const { rows: catRows } = await sql`
-      SELECT category, COUNT(*) as count FROM (
+    // Get ALL categories with counts (not just current page). Niche-gated
+    // so the sidebar only shows categories that have matching products.
+    const { rows: catRows } = await sql.query(
+      `SELECT category, COUNT(*) as count FROM (
         SELECT DISTINCT ON (supplier_product_id) category, supplier_product_id
-        FROM user_products WHERE is_active = true
+        FROM user_products WHERE is_active = true${nicheWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped
-      GROUP BY category ORDER BY count DESC
-    `
+      GROUP BY category ORDER BY count DESC`,
+      []
+    )
     const categories = catRows.map(r => ({ name: r.category || 'General', count: parseInt(r.count) }))
 
-    // Get price range counts
-    const { rows: priceRows } = await sql`
-      SELECT
+    // Get price range counts (niche-gated)
+    const { rows: priceRows } = await sql.query(
+      `SELECT
         COUNT(*) FILTER (WHERE sale_price < 10) as under10,
         COUNT(*) FILTER (WHERE sale_price >= 10 AND sale_price < 20) as range10to20,
         COUNT(*) FILTER (WHERE sale_price >= 20 AND sale_price < 50) as range20to50,
         COUNT(*) FILTER (WHERE sale_price >= 50) as over50
       FROM (
         SELECT DISTINCT ON (supplier_product_id) sale_price, supplier_product_id
-        FROM user_products WHERE is_active = true
+        FROM user_products WHERE is_active = true${nicheWhere}
         ORDER BY supplier_product_id, created_at DESC
-      ) deduped
-    `
+      ) deduped`,
+      []
+    )
     const priceRanges = priceRows[0] ? {
       under10: parseInt(priceRows[0].under10) || 0,
       '10to20': parseInt(priceRows[0].range10to20) || 0,

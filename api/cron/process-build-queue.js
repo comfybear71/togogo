@@ -36,26 +36,45 @@ async function processOne(row, usdToAud, defaultMarkup) {
   }
 
   let inserted = 0
+  let tagged = 0
+  const niche = row.niche || null
   for (const p of products) {
     const aeId = String(p.productId || p.id || '').replace('ae_', '')
     if (!aeId) continue
 
-    // Skip if already in catalogue (avoid duplicates across stores)
+    // If product already exists, just append this niche to its niches[]
+    // so multi-niche products (e.g. phone accessories + electronics) show
+    // on every relevant store
     try {
       const { rows: existing } = await sql`
-        SELECT id FROM user_products WHERE supplier_product_id = ${aeId} LIMIT 1
+        SELECT id, niches FROM user_products WHERE supplier_product_id = ${aeId} LIMIT 1
       `
-      if (existing.length > 0) continue
+      if (existing.length > 0) {
+        if (niche) {
+          const current = Array.isArray(existing[0].niches) ? existing[0].niches : []
+          if (!current.includes(niche)) {
+            try {
+              await sql`
+                UPDATE user_products
+                SET niches = array_append(COALESCE(niches, ARRAY[]::TEXT[]), ${niche})
+                WHERE id = ${existing[0].id}
+              `
+              tagged++
+            } catch { /* non-critical */ }
+          }
+        }
+        continue
+      }
     } catch { continue }
 
     const productCostUSD = parseFloat(p.cost) || 0
     const productCostAUD = Math.round(productCostUSD * usdToAud * 100) / 100
-    // Shipping unknown until enrich-products runs — use 0
     const wholesaleCost = productCostAUD
     const salePrice = Math.ceil(wholesaleCost * defaultMarkup * 100) / 100
     if (salePrice > 1000) continue
 
     const imgArray = Array.isArray(p.images) ? p.images : []
+    const nichesArr = niche ? [niche] : []
     try {
       await sql`
         INSERT INTO user_products (
@@ -63,7 +82,8 @@ async function processOne(row, usdToAud, defaultMarkup) {
           supplier_product_id, supplier_cost, sale_price,
           api_price, shipping_cost, tax_amount,
           price_currency, category, is_active,
-          product_rating, orders_count, original_price, discount_percent
+          product_rating, orders_count, original_price, discount_percent,
+          niches
         ) VALUES (
           ${row.user_id}, ${p.title}, ${p.title || ''},
           ${p.image || imgArray[0] || ''}, ${imgArray},
@@ -72,7 +92,8 @@ async function processOne(row, usdToAud, defaultMarkup) {
           ${productCostAUD}, 0, 0,
           'AUD', ${row.category || 'General'}, true,
           ${parseFloat(p.rating) || 0}, ${parseInt(p.orders) || 0},
-          0, 0
+          0, 0,
+          ${nichesArr}
         )
       `
       inserted++
@@ -81,7 +102,7 @@ async function processOne(row, usdToAud, defaultMarkup) {
     }
   }
 
-  return { productsFound: inserted }
+  return { productsFound: inserted, tagged }
 }
 
 export default async function handler(req, res) {
