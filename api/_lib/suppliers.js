@@ -694,20 +694,33 @@ export async function calculateFreight(productId, quantity = 1, countryCode = 'A
 
 // ============================================
 // DS FREIGHT QUERY — aliexpress.ds.freight.query
-// DS-specific freight calculation (may work without OAuth unlike the logistics API)
+// Proven via /admin/api-tester (2026-04-23):
+//   Params MUST be wrapped in a `queryDeliveryReq` JSON string with camelCase
+//   fields: productId, selectedSkuId, quantity, shipToCountry, sendGoodsCountryCode,
+//   language, locale, currency. All required.
+// Response path: aliexpress_ds_freight_query_response.result.delivery_options
+//   .delivery_option_d_t_o[] — each has shipping_fee_cent (USD), free_shipping,
+//   mayHavePFS (Platform Free Shipping eligibility), code, company, delivery days.
 // ============================================
 
 export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1, skuId = '') {
   try {
-    const params = {
-      product_id: String(productId),
-      country_code: countryCode,
-      product_num: String(quantity),
-      send_goods_country_code: 'CN',
-      ...(skuId ? { sku_id: String(skuId) } : {}),
+    const deliveryReq = {
+      productId: String(productId),
+      quantity: String(quantity),
+      shipToCountry: countryCode,
+      sendGoodsCountryCode: 'CN',
+      language: 'en_US',
+      locale: 'en_US',
+      currency: 'USD',
+      ...(skuId ? { selectedSkuId: String(skuId) } : {}),
     }
 
-    // Try without OAuth first, then with
+    const params = {
+      queryDeliveryReq: JSON.stringify(deliveryReq),
+    }
+
+    // Try without OAuth first, then with (proved it works with OAuth; may also work without)
     let data
     try {
       data = await callAPI('aliexpress.ds.freight.query', params)
@@ -715,20 +728,28 @@ export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1
       data = await callAuthenticatedAPI('aliexpress.ds.freight.query', params)
     }
 
-    console.log(`[AliExpress] DS freight query for ${productId}: ${JSON.stringify(data).slice(0, 500)}`)
-
     const result = data?.aliexpress_ds_freight_query_response?.result
-      || data?.result
-    if (!result) return null
+    if (!result || result.success === false) {
+      console.log(`[AliExpress] DS freight query empty for ${productId}: ${result?.msg || 'no result'}`)
+      return null
+    }
 
-    const options = result.freight_list?.freight || result.aeop_freight_calculate_result_for_buyer_d_t_o_list?.aeop_freight_calculate_result_for_buyer_dto || []
+    const options = result.delivery_options?.delivery_option_d_t_o || []
 
     return options.map(o => ({
-      serviceName: o.service_name || o.logistics_service_name || '',
-      cost: parseFloat(o.freight?.amount || o.shipping_fee || '0'),
-      currency: o.freight?.currency_code || o.currency || 'USD',
-      estimatedDays: o.estimated_delivery_time || o.delivery_time || '',
-      trackingAvailable: o.tracking_available === true || o.tracking_available === 'true',
+      serviceCode: o.code || '',
+      serviceName: o.company || '',
+      cost: parseFloat(o.shipping_fee_cent || '0'),
+      currency: o.shipping_fee_currency || 'USD',
+      freeShipping: !!o.free_shipping,
+      mayHavePFS: !!o.mayHavePFS,
+      trackingAvailable: !!o.tracking,
+      minDeliveryDays: parseInt(o.min_delivery_days || '0') || null,
+      maxDeliveryDays: parseInt(o.max_delivery_days || '0') || null,
+      deliveryDateDesc: o.delivery_date_desc || '',
+      shipFromCountry: o.ship_from_country || 'CN',
+      availableStock: o.available_stock ? parseInt(o.available_stock) : null,
+      displayFormat: o.shipping_fee_format || '',
     }))
   } catch (err) {
     console.error('[AliExpress] DS freight query error:', err.message)

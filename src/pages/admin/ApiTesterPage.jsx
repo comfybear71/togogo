@@ -20,7 +20,7 @@ const METHODS = [
   { name: 'aliexpress.ds.product.get', desc: 'Full product details (OAuth required)', oauth: true, preset: '{\n  "product_id": "1005007746629992",\n  "target_currency": "AUD",\n  "target_language": "EN",\n  "ship_to_country": "AU"\n}' },
   { name: 'aliexpress.ds.product.wholesale.get', desc: 'Tier / bulk pricing', oauth: true, preset: '{\n  "product_id": "1005007746629992"\n}' },
   { name: 'aliexpress.ds.product.specialinfo.get', desc: 'Promotional info', oauth: false, preset: '{\n  "product_id": "1005007746629992"\n}' },
-  { name: 'aliexpress.ds.freight.query', desc: 'Shipping cost per product', oauth: false, preset: '{\n  "product_id": "1005007746629992",\n  "country_code": "AU",\n  "product_num": "1",\n  "send_goods_country_code": "CN"\n}' },
+  { name: 'aliexpress.ds.freight.query', desc: 'Shipping cost per product (params must be wrapped in queryDeliveryReq JSON string)', oauth: true, preset: '{\n  "queryDeliveryReq": "{\\"productId\\":\\"1005007746629992\\",\\"selectedSkuId\\":\\"12000042073395983\\",\\"quantity\\":\\"1\\",\\"shipToCountry\\":\\"AU\\",\\"sendGoodsCountryCode\\":\\"CN\\",\\"language\\":\\"en_US\\",\\"locale\\":\\"en_US\\",\\"currency\\":\\"USD\\"}"\n}' },
   { name: 'aliexpress.ds.order.create', desc: 'Create order — ⚠ PLACES REAL ORDER WITH AUTO-PAY', oauth: false, preset: '{}', warning: true },
   { name: 'aliexpress.ds.order.pay', desc: 'Pay for an existing order', oauth: false, preset: '{\n  "out_order_id": ""\n}' },
   { name: 'aliexpress.ds.order.tracking.get', desc: 'Tracking info', oauth: false, preset: '{\n  "ae_order_id": ""\n}' },
