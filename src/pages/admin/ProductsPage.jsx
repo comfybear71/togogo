@@ -222,6 +222,15 @@ export default function ProductsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button
+            onClick={handleEnrichProducts}
+            disabled={enriching || megaImporting || importing}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2.5 text-sm font-medium text-white hover:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Fetch real rating, sales count, discount and shipping for products still missing that data"
+          >
+            {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {enriching ? 'Enriching...' : 'Enrich Data'}
+          </button>
+          <button
             onClick={() => setShowImportPanel(!showImportPanel)}
             className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white transition-colors ${showImportPanel ? 'bg-zinc-700' : 'bg-[#FF6B35] hover:bg-[#e85d2c]'}`}
           >
@@ -239,25 +248,14 @@ export default function ProductsPage() {
               <h3 className="text-sm font-bold text-white">Import Products by Category</h3>
               <p className="text-xs text-zinc-500 mt-1">Each click imports ~20 products with accurate freight pricing. 30 second cooldown between imports.</p>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleEnrichProducts}
-                disabled={enriching || megaImporting || importing}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white border border-white/[0.08] bg-black hover:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-                title="Fetch real rating, sales count, discount and shipping for products still missing that data"
-              >
-                {enriching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                {enriching ? 'Enriching...' : 'Enrich Data'}
-              </button>
-              <button
-                onClick={handleMegaImport}
-                disabled={megaImporting || importing || cooldown > 0}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
-              >
-                {megaImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
-                {megaImporting ? 'Importing...' : 'Import ALL Categories'}
-              </button>
-            </div>
+            <button
+              onClick={handleMegaImport}
+              disabled={megaImporting || importing || cooldown > 0}
+              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all whitespace-nowrap"
+            >
+              {megaImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+              {megaImporting ? 'Importing...' : 'Import ALL Categories'}
+            </button>
           </div>
           {megaProgress && (
             <div className="rounded-xl p-3 text-sm bg-purple-500/10 text-purple-400 mb-3">
