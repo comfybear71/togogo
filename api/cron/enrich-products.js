@@ -63,14 +63,19 @@ async function enrichOne(row, usdToAud) {
 export default async function handler(req, res) {
   const authHeader = req.headers.authorization
   const cronSecret = process.env.CRON_SECRET
-  const jwtSecret = process.env.JWT_SECRET
   const querySecret = req.query.secret
 
-  const authorized = (
-    (cronSecret && authHeader === `Bearer ${cronSecret}`)
-    || (cronSecret && querySecret === cronSecret)
-    || (jwtSecret && querySecret === jwtSecret)
-  )
+  let authorized = false
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) authorized = true
+  if (querySecret === process.env.JWT_SECRET) authorized = true
+  // Accept signed admin JWT from localStorage (same pattern as import-products)
+  if (!authorized && querySecret) {
+    try {
+      const { verifyToken } = await import('../_lib/auth.js')
+      const payload = verifyToken(querySecret)
+      if (payload && payload.role === 'admin') authorized = true
+    } catch { /* fall through */ }
+  }
   if (!authorized) return res.status(401).json({ error: 'Unauthorized' })
 
   await ensureSchema()
@@ -82,15 +87,17 @@ export default async function handler(req, res) {
     if (rows[0]) usdToAud = parseFloat(rows[0].value) || 1.45
   } catch { /* default */ }
 
-  // Pick batch: products missing enrichment data, oldest-updated first.
-  // NULL supplier_product_id or local-only products are skipped.
+  // Pick batch: products missing any enrichment field, excluding those we
+  // already attempted in the last 6 hours (some AE products genuinely have
+  // no rating/orders — we'd otherwise re-process them forever).
   const { rows: batch } = await sql`
     SELECT id, supplier_product_id, shipping_cost, original_price
     FROM user_products
     WHERE is_active = true
       AND supplier_product_id IS NOT NULL
       AND supplier_product_id NOT LIKE '%-%'
-      AND (product_rating = 0 AND orders_count = 0 AND shipping_cost = 0)
+      AND (product_rating = 0 OR orders_count = 0 OR shipping_cost = 0)
+      AND (updated_at IS NULL OR updated_at < NOW() - INTERVAL '6 hours')
     ORDER BY updated_at ASC NULLS FIRST
     LIMIT ${BATCH_SIZE}
   `

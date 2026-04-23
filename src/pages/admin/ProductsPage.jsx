@@ -87,26 +87,41 @@ export default function ProductsPage() {
     }
   }
 
+  const [enrichResult, setEnrichResult] = useState(null);
+
   async function handleEnrichProducts() {
     if (enriching) return;
     setEnriching(true);
+    setEnrichResult(null);
     setImportResult(null);
     let totalEnriched = 0;
+    let totalSkipped = 0;
+    let totalPasses = 0;
+    let lastError = null;
     // Run multiple passes to chew through the backlog
     for (let pass = 0; pass < 5; pass++) {
       try {
         const token = localStorage.getItem('togogo-token');
         const res = await fetch(`/api/cron/enrich-products?secret=${token}`);
         const data = await res.json();
+        totalPasses++;
+        if (!res.ok) { lastError = data.error || `HTTP ${res.status}`; break; }
         if (data.status === 'idle') break;
-        if (typeof data.enriched === 'number') totalEnriched += data.enriched;
+        totalEnriched += data.enriched || 0;
+        totalSkipped += data.skipped || 0;
         if (!data.enriched && !data.skipped) break;
-      } catch {}
+      } catch (err) { lastError = err.message; break; }
       await new Promise(r => setTimeout(r, 1500));
     }
     setEnriching(false);
-    setImportResult({ success: true, newProducts: 0, stores: 0, catalogSize: 0, enriched: totalEnriched });
-    fetchProducts(page, searchQuery, categoryFilter, storeFilter);
+    setEnrichResult({
+      success: !lastError,
+      error: lastError,
+      enriched: totalEnriched,
+      skipped: totalSkipped,
+      passes: totalPasses,
+    });
+    if (totalEnriched > 0) fetchProducts(page, searchQuery, categoryFilter, storeFilter);
   }
 
   async function handleMegaImport() {
@@ -293,6 +308,13 @@ export default function ProductsPage() {
           {importResult.success
             ? `Imported ${importResult.newProducts || importResult.totalImported || 0} new products across ${importResult.stores || 0} stores (${importResult.catalogSize || importResult.totalImported || 0} total)`
             : `Import failed: ${importResult.error || importResult.message || 'Unknown error'}`}
+        </div>
+      )}
+      {enrichResult && (
+        <div className={`rounded-xl p-3 text-sm ${enrichResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
+          {enrichResult.success
+            ? `Enriched ${enrichResult.enriched} product${enrichResult.enriched === 1 ? '' : 's'} across ${enrichResult.passes} pass${enrichResult.passes === 1 ? '' : 'es'}${enrichResult.skipped ? ` — ${enrichResult.skipped} skipped (no AE data available)` : ''}${enrichResult.enriched === 0 ? ' — queue empty or nothing to update' : ''}`
+            : `Enrich failed: ${enrichResult.error || 'Unknown error'}`}
         </div>
       )}
 
