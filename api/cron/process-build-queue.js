@@ -23,16 +23,19 @@ async function processOne(row, usdToAud, defaultMarkup) {
   const keyword = row.keyword
   let products = []
   try {
-    products = await Promise.race([
+    // searchAliExpressDirect returns { products: [...], total: N } (not a bare array).
+    // On timeout we default to { products: [] } so the shape stays consistent.
+    const searchResult = await Promise.race([
       searchAliExpressDirect(keyword, 1, { pageSize: PRODUCTS_PER_KEYWORD, country: 'AU' }),
-      new Promise(r => setTimeout(() => r([]), PER_KEYWORD_TIMEOUT_MS)),
+      new Promise(r => setTimeout(() => r({ products: [] }), PER_KEYWORD_TIMEOUT_MS)),
     ])
+    products = Array.isArray(searchResult?.products) ? searchResult.products : []
   } catch (err) {
     return { error: `search failed: ${err.message}` }
   }
 
-  if (!Array.isArray(products) || products.length === 0) {
-    return { productsFound: 0 }
+  if (products.length === 0) {
+    return { productsFound: 0, tagged: 0 }
   }
 
   let inserted = 0
