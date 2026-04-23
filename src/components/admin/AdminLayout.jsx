@@ -1,13 +1,14 @@
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Store,
-  Megaphone, Settings, ArrowLeft, Search, Terminal,
+  Megaphone, Settings, ArrowLeft, Search, Terminal, Wand2,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/admin/users', label: 'Users', icon: Users },
   { to: '/admin/products', label: 'Products', icon: Package },
+  { to: '/admin/store-builder', label: 'AI Builder', icon: Wand2 },
   { to: '/admin/search', label: 'Search AE', icon: Search },
   { to: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/admin/stores', label: 'Stores', icon: Store },
