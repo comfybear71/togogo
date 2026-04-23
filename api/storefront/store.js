@@ -102,11 +102,17 @@ export default async function handler(req, res) {
       ? ` AND niches @> ARRAY['${String(store.niche).replace(/'/g, "''")}']::TEXT[]`
       : ''
 
+    // Price integrity gate: only surface products that have been priced
+    // under the new USD+variants model. Old products with AUD-mislabelled
+    // prices are hidden from the storefront until the rebuild cron heals
+    // them. Keeps us honest — never display a wrong price to a customer.
+    const pricedWhere = ` AND variants_updated_at IS NOT NULL AND price_currency = 'USD'`
+
     // Get total product count (with filters applied)
     const countResult = await sql.query(
       `SELECT COUNT(*) as total FROM (
         SELECT DISTINCT ON (supplier_product_id) id, sale_price, category, title
-        FROM user_products WHERE is_active = true${nicheWhere}
+        FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped WHERE true${whereExtra}`,
       []
@@ -117,10 +123,11 @@ export default async function handler(req, res) {
     const productResult = await sql.query(
       `SELECT * FROM (
         SELECT DISTINCT ON (supplier_product_id) id, title, description, image, images, supplier, supplier_cost,
-               sale_price, shipping_cost, category, total_sold, created_at, supplier_product_id,
-               product_rating, orders_count, original_price, discount_percent, in_stock
+               sale_price, shipping_cost, price_currency, category, total_sold, created_at, supplier_product_id,
+               product_rating, orders_count, original_price, discount_percent, in_stock,
+               variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
         FROM user_products
-        WHERE is_active = true${nicheWhere}
+        WHERE is_active = true${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) products
       WHERE true${whereExtra}
@@ -146,9 +153,16 @@ export default async function handler(req, res) {
       image: p.image || (images[0] || ''),
       images,
       price: parseFloat(p.sale_price) || 0,
-      shipping: parseFloat(p.shipping_cost) || 0,
+      currency: p.price_currency || 'USD',
+      shipping: parseFloat(p.shipping_usd ?? p.shipping_cost) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
       supplierProductId: p.supplier_product_id || '',
+      // Real per-SKU variants — let the frontend render color/size picker
+      variants: Array.isArray(p.variants) ? p.variants
+        : (typeof p.variants === 'string' ? (() => { try { return JSON.parse(p.variants) } catch { return [] } })() : []),
+      minPriceUsd: parseFloat(p.min_variant_price_usd) || 0,
+      maxPriceUsd: parseFloat(p.max_variant_price_usd) || 0,
+      variantsUpdatedAt: p.variants_updated_at || null,
       category: p.category || 'General',
       totalSold: p.total_sold || 0,
       rating: parseFloat(p.product_rating) || 0,
@@ -194,7 +208,7 @@ export default async function handler(req, res) {
     const { rows: catRows } = await sql.query(
       `SELECT category, COUNT(*) as count FROM (
         SELECT DISTINCT ON (supplier_product_id) category, supplier_product_id
-        FROM user_products WHERE is_active = true${nicheWhere}
+        FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped
       GROUP BY category ORDER BY count DESC`,
@@ -211,7 +225,7 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE sale_price >= 50) as over50
       FROM (
         SELECT DISTINCT ON (supplier_product_id) sale_price, supplier_product_id
-        FROM user_products WHERE is_active = true${nicheWhere}
+        FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped`,
       []

@@ -3,6 +3,7 @@
 // OAuth token unlocks: ds.product.get, ds.order.submit, ds.order.get
 import crypto from 'crypto'
 import { sql } from './db.js'
+import { parseVariant } from './pricing.js'
 
 // ============================================
 // NSFW / INAPPROPRIATE CONTENT FILTER
@@ -293,26 +294,10 @@ export async function getProductDetails(productId) {
       currency: baseInfo.sale_price?.currency_code || 'AUD',
       category: baseInfo.category_id || '',
       categoryName: baseInfo.product_category_name || '',
-      // SKU variants (sizes, colors, etc.)
-      variants: skuInfo.map(sku => {
-        const props = sku.ae_sku_property_dtos?.ae_sku_property_d_t_o || []
-        // Build human-readable label from property values
-        const labelParts = props.map(p => p.property_value_definition_name || p.sku_property_value || '').filter(Boolean)
-        const image = props.find(p => p.sku_image)?.sku_image || ''
-        return {
-          skuId: sku.id,
-          skuAttr: sku.sku_attr || '',
-          label: labelParts.join(' / ') || '',
-          properties: props.map(p => ({
-            name: p.sku_property_name || '',
-            value: p.property_value_definition_name || p.sku_property_value || '',
-            image: p.sku_image || '',
-          })),
-          price: parseFloat(sku.offer_sale_price || sku.sku_price || '0'),
-          stock: sku.sku_stock ? parseInt(sku.sku_stock) : null,
-          image,
-        }
-      }),
+      // Canonical variants — every SKU with its real USD price, stock, and
+      // colour-swatch image. One source of truth for storefront variant UI
+      // and for rebuild-time price calculation. See api/_lib/pricing.js.
+      variants: skuInfo.map(parseVariant).filter(v => v.priceUsd > 0),
       // Shipping options (old-schema only — new DS API returns empty list)
       shipping: shippingInfo.map(s => ({
         company: s.logistics_company || '',

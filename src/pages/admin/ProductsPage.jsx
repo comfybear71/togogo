@@ -88,6 +88,48 @@ export default function ProductsPage() {
   }
 
   const [enrichResult, setEnrichResult] = useState(null);
+  const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildResult, setRebuildResult] = useState(null);
+
+  async function handleRebuildPrices() {
+    if (rebuilding) return;
+    setRebuilding(true);
+    setRebuildResult(null);
+    let totalRebuilt = 0;
+    let totalDeactivated = 0;
+    let totalSkipped = 0;
+    let lastError = null;
+    let lastProgress = null;
+    // Burn through several batches on one click (each batch = 10 products,
+    // limited by Vercel 60s). 10 passes = up to 100 products per click.
+    for (let pass = 0; pass < 10; pass++) {
+      try {
+        const token = localStorage.getItem('togogo-token');
+        const res = await fetch(`/api/cron/rebuild-product-variants?secret=${token}`);
+        const data = await res.json();
+        if (!res.ok) { lastError = data.error || `HTTP ${res.status}`; break; }
+        if (data.status === 'idle') break;
+        totalRebuilt += data.rebuilt || 0;
+        totalDeactivated += data.deactivated || 0;
+        totalSkipped += data.skipped || 0;
+        lastProgress = data.progress || lastProgress;
+        if (!data.rebuilt && !data.deactivated && !data.skipped) break;
+      } catch (err) { lastError = err.message; break; }
+      await new Promise(r => setTimeout(r, 800));
+    }
+    setRebuilding(false);
+    setRebuildResult({
+      success: !lastError,
+      error: lastError,
+      rebuilt: totalRebuilt,
+      deactivated: totalDeactivated,
+      skipped: totalSkipped,
+      progress: lastProgress,
+    });
+    if (totalRebuilt > 0 || totalDeactivated > 0) {
+      fetchProducts(page, searchQuery, categoryFilter, storeFilter);
+    }
+  }
 
   async function handleEnrichProducts() {
     if (enriching) return;
@@ -237,8 +279,17 @@ export default function ProductsPage() {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button
+            onClick={handleRebuildPrices}
+            disabled={rebuilding || enriching || megaImporting || importing}
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Re-fetch variants + real USD pricing from ds.product.get for every product. 100 products per click, or let the cron chew through it in the background."
+          >
+            {rebuilding ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {rebuilding ? 'Rebuilding...' : 'Rebuild Prices'}
+          </button>
+          <button
             onClick={handleEnrichProducts}
-            disabled={enriching || megaImporting || importing}
+            disabled={enriching || rebuilding || megaImporting || importing}
             className="flex items-center gap-2 rounded-xl border border-white/[0.08] px-3 py-2.5 text-sm font-medium text-white hover:bg-white/[0.04] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             title="Fetch real rating, sales count, discount and shipping for products still missing that data"
           >
@@ -315,6 +366,18 @@ export default function ProductsPage() {
           {enrichResult.success
             ? `Enriched ${enrichResult.enriched} product${enrichResult.enriched === 1 ? '' : 's'} across ${enrichResult.passes} pass${enrichResult.passes === 1 ? '' : 'es'}${enrichResult.skipped ? ` — ${enrichResult.skipped} skipped (no AE data available)` : ''}${enrichResult.enriched === 0 ? ' — queue empty or nothing to update' : ''}`
             : `Enrich failed: ${enrichResult.error || 'Unknown error'}`}
+        </div>
+      )}
+      {rebuildResult && (
+        <div className={`rounded-xl p-3 text-sm ${rebuildResult.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+          {rebuildResult.success
+            ? <>
+                Rebuilt <strong>{rebuildResult.rebuilt}</strong> product{rebuildResult.rebuilt === 1 ? '' : 's'} with real USD pricing
+                {rebuildResult.deactivated ? `, deactivated ${rebuildResult.deactivated} (no longer on AE)` : ''}
+                {rebuildResult.skipped ? `, ${rebuildResult.skipped} skipped` : ''}
+                {rebuildResult.progress ? ` · Catalog progress: ${rebuildResult.progress.healed}/${rebuildResult.progress.total_active} healed` : ''}
+              </>
+            : `Rebuild failed: ${rebuildResult.error || 'Unknown error'}`}
         </div>
       )}
 

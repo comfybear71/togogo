@@ -97,7 +97,7 @@ export default async function handler(req, res) {
 
       lineItems.push({
         price_data: {
-          currency: 'aud',
+          currency: 'usd',
           product_data: {
             name: product.title.slice(0, 200),
             ...(product.image ? { images: [product.image] } : {}),
@@ -141,7 +141,7 @@ export default async function handler(req, res) {
     if (shippingFeeCents > 0) {
       lineItems.push({
         price_data: {
-          currency: 'aud',
+          currency: 'usd',
           product_data: { name: 'Shipping' },
           unit_amount: shippingFeeCents,
         },
