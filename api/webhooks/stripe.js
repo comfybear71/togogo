@@ -302,20 +302,13 @@ export default async function handler(req, res) {
                     // Log the final address being used
                     console.log(`[Webhook] Address for AE: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
 
-                    // Smart coupon: pick the best AUAP code based on order value
-                    // These are AliExpress platform codes (ends Apr 8, new ones always come)
-                    const COUPON_TIERS = [
-                      { code: 'AUAP35', minOrder: 280 },
-                      { code: 'AUAP23', minOrder: 175 },
-                      { code: 'AUAP15', minOrder: 116 },
-                      { code: 'AUAP12', minOrder: 85 },
-                      { code: 'AUAP06', minOrder: 43 },
-                      { code: 'AUAP03', minOrder: 23 },
-                    ]
-                    // orderAmount is in AUD — pick the highest discount that qualifies
-                    const couponCode = COUPON_TIERS.find(t => orderAmount >= t.minOrder)?.code || 'AUAP03'
+                    // Promo codes disabled (2026-04-23): the AUAP* codes expired
+                    // and AE rejected every order with CheckException. Leave as
+                    // undefined until a live code is configured (ideally via
+                    // admin_settings, not hardcoded here).
+                    const couponCode = undefined
 
-                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})${couponCode ? ' with coupon: ' + couponCode : ''}`)
+                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})${couponCode ? ' with coupon: ' + couponCode : ' without coupon'}`)
                     const result = await submitOrder({
                       productId,
                       skuId: null,
