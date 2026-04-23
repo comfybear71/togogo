@@ -131,15 +131,15 @@ export default async function handler(req, res) {
   await ensureSchema()
 
   // Pick oldest variants_updated_at first (NULLs first = never rebuilt).
-  // Exclude anything we've already touched in the last 24h so we don't
-  // rebuild the same rows over and over.
+  // 1h cooldown so formula bugs get healed fast — we already lost money
+  // once with the wrong MAX(offer, sku_price) formula.
   const { rows: batch } = await sql`
     SELECT id, supplier_product_id, product_rating, orders_count
     FROM user_products
     WHERE is_active = true
       AND supplier_product_id IS NOT NULL
       AND supplier_product_id NOT LIKE '%-%'
-      AND (variants_updated_at IS NULL OR variants_updated_at < NOW() - INTERVAL '24 hours')
+      AND (variants_updated_at IS NULL OR variants_updated_at < NOW() - INTERVAL '1 hour')
     ORDER BY variants_updated_at ASC NULLS FIRST
     LIMIT ${BATCH_SIZE}
   `
