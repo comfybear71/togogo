@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   } catch { /* non-critical */ }
 
   try {
-    const { subdomain, items, customer } = req.body
+    const { subdomain, items, customer, acknowledgedDriftTotal } = req.body
 
     if (!subdomain || !items?.length || !customer?.name || !customer?.email) {
       return res.status(400).json({ error: 'subdomain, items, and customer (name, email) required' })
@@ -156,17 +156,20 @@ export default async function handler(req, res) {
       const shippingUsd = liveShippingUsd != null ? liveShippingUsd
         : (parseFloat(product.shipping_cost) || 0)
 
-      // BREAK-EVEN ONLY — product + shipping, NO tax (AE doesn't expose it)
+      // Three transparent line items: Product + Shipping + Est. tax.
+      // Matches the storefront product-page breakdown so customer sees
+      // the same numbers at cart, storefront and Stripe checkout.
+      const TAX_RATE = 0.10  // flat estimate (see api/_lib/pricing.js)
+      const taxUsd = Math.round(variantPriceUsd * TAX_RATE * 100) / 100
       const productCents = Math.round(variantPriceUsd * 100)
       const shippingCents = Math.round(shippingUsd * 100)
+      const taxCents = Math.round(taxUsd * 100)
 
       const variantTitle = chosenVariant?.label
         ? `${product.title.slice(0, 160)} — ${chosenVariant.label.slice(0, 40)}`
         : product.title.slice(0, 200)
       const variantImage = chosenVariant?.colorImage || chosenVariant?.image || product.image
 
-      // Two line items: product and shipping shown separately (matches how
-      // AE displays their own checkout — honest breakdown, no hidden buffers).
       lineItems.push({
         price_data: {
           currency: 'usd',
@@ -188,7 +191,17 @@ export default async function handler(req, res) {
           quantity: qty,
         })
       }
-      const chargePriceUsd = variantPriceUsd + shippingUsd
+      if (taxCents > 0) {
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: `Est. tax — ${product.title.slice(0, 80)}` },
+            unit_amount: taxCents,
+          },
+          quantity: qty,
+        })
+      }
+      const chargePriceUsd = variantPriceUsd + shippingUsd + taxUsd
       const unitPrice = Math.round(chargePriceUsd * 100)
 
       orderItems.push({
@@ -238,6 +251,29 @@ export default async function handler(req, res) {
       })
     }
     const totalWithShipping = totalAmount + shippingFeeCents
+
+    // PRICE DRIFT CHECK — if the fresh AE total is HIGHER than what the
+    // customer saw in their cart, pause before creating the Stripe session
+    // and return the new figure so the frontend can show a "Price updated"
+    // banner and ask them to confirm. Drift in our favour (cheaper) passes
+    // silently — per user spec, they keep that margin.
+    const cartTotalCents = items.reduce(
+      (s, i) => s + Math.round((parseFloat(i.cartTotalUsd) || 0) * 100) * (i.quantity || 1),
+      0
+    )
+    if (cartTotalCents > 0 && totalWithShipping > cartTotalCents) {
+      const acknowledgedCents = Math.round((parseFloat(acknowledgedDriftTotal) || 0) * 100)
+      // Only bounce back if customer hasn't already acknowledged this specific
+      // total — otherwise an "accept new price" retry would re-bounce forever.
+      if (acknowledgedCents !== totalWithShipping) {
+        return res.json({
+          priceUpdated: true,
+          oldTotalUsd: cartTotalCents / 100,
+          newTotalUsd: totalWithShipping / 100,
+          message: `AliExpress price updated. Previous total US $${(cartTotalCents / 100).toFixed(2)} — current US $${(totalWithShipping / 100).toFixed(2)}.`,
+        })
+      }
+    }
 
     const totalSupplierCostCents = Math.round(totalSupplierCost * 100)
     // Commission on PROFIT (sale minus cost), not on total sale

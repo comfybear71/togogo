@@ -862,20 +862,24 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
     title: details.title || product.title,
   } : product
 
-  // Variant-aware pricing — NO tax (AE doesn't expose it via API; guessing
-  // would be fake data). Customer sees product price + shipping; if AE
-  // charges tax at their checkout we absorb it.
-  //
-  // Formula matches api/_lib/pricing.js → breakEvenUsd:
-  //   break_even_usd = variant.priceUsd + shipping_usd
+  // Variant-aware pricing — three transparent components:
+  //   Product:   from variant.priceUsd (live AE API)
+  //   Shipping:  from ds.freight.query (live AE API)
+  //   Est. tax:  10% of product (flat estimate — AE doesn't expose tax
+  //              via API; labelled "Est. tax" so customer knows it's an
+  //              estimate, not a guarantee)
+  // Matches api/_lib/pricing.js → breakEvenUsd
+  const TAX_RATE = 0.10
   const productShippingUsd = Number(product.shipping) || 0
   const basePrice = Number(product.price) || 0
   const selectedProductUsd = selectedVariant?.priceUsd > 0 ? selectedVariant.priceUsd : null
-  // Total displayed = product + shipping. Stripe charges the same split.
-  const displayProductUsd = selectedProductUsd != null ? selectedProductUsd
-    : Math.max(0, basePrice - productShippingUsd)   // strip shipping from stored break-even
+  // For products without a selected variant, derive product-only subtotal
+  // by stripping shipping and reversing the 10% tax from stored sale_price.
+  const baseProductDerived = Math.max(0, (basePrice - productShippingUsd) / (1 + TAX_RATE))
+  const displayProductUsd = selectedProductUsd != null ? selectedProductUsd : baseProductDerived
   const displayShippingUsd = productShippingUsd
-  const displayPrice = Math.round((displayProductUsd + displayShippingUsd) * 100) / 100
+  const displayTaxUsd = Math.round(displayProductUsd * TAX_RATE * 100) / 100
+  const displayPrice = Math.round((displayProductUsd + displayShippingUsd + displayTaxUsd) * 100) / 100
   const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
   const needsVariantChoice = hasVariants && !selectedVariant
   const availableStock = selectedVariant?.stock ?? null
@@ -901,12 +905,26 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
           <div>
             <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
             <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
-            <p className="text-3xl font-bold text-white mb-1">
+            <p className="text-3xl font-bold text-white mb-2">
               US ${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">USD</span>
             </p>
-            <p className="text-xs text-slate-400 mb-2">
-              US ${displayProductUsd.toFixed(2)} product + US ${displayShippingUsd.toFixed(2)} shipping
-            </p>
+            {/* Transparent 3-line breakdown so customer sees what they're paying for.
+                Matches how AE displays their own checkout. "Est. tax" labelled
+                clearly — flat 10% because AE doesn't expose tax via any API. */}
+            <div className="text-xs text-slate-400 mb-3 space-y-0.5">
+              <div className="flex justify-between max-w-[240px]">
+                <span>Product</span>
+                <span className="tabular-nums">US ${displayProductUsd.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between max-w-[240px]">
+                <span>Shipping</span>
+                <span className="tabular-nums">US ${displayShippingUsd.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between max-w-[240px]">
+                <span>Est. tax</span>
+                <span className="tabular-nums">US ${displayTaxUsd.toFixed(2)}</span>
+              </div>
+            </div>
             {selectedVariant && (
               <p className="text-xs text-slate-500 mb-2">
                 {selectedVariant.label || Object.values(selectedVariant.propertyMap || {}).join(' / ')}
@@ -1244,6 +1262,11 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const [shippingFee, setShippingFee] = useState(0)
+  // Price drift state — populated when server detects the live AE total is
+  // higher than what the customer saw in the cart. Setting the acknowledged
+  // total causes the next submit to skip the drift check server-side.
+  const [priceDrift, setPriceDrift] = useState(null)
+  const [driftAcknowledgedTotal, setDriftAcknowledgedTotal] = useState(0)
 
   // Fetch shipping fee from admin settings
   useEffect(() => {
@@ -1276,7 +1299,13 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             // customer's chosen SKU instead of auto-resolving.
             skuId: i.skuId || null,
             skuAttr: i.skuAttr || null,
+            // What customer saw in their cart — used server-side to detect
+            // price drift against them and show a warning if it happened.
+            cartTotalUsd: (i.price + (i.shipping || 0)),
           })),
+          // Set by the drift-confirmation flow: re-submit after customer
+          // acknowledges the new total so server skips the drift check.
+          acknowledgedDriftTotal: driftAcknowledgedTotal || undefined,
           customer: {
             name: form.name,
             email: form.email,
@@ -1295,6 +1324,19 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create checkout')
 
+      // Server flagged a price drift against the customer — surface the
+      // new total in a banner and let them confirm before we create
+      // the Stripe session.
+      if (data.priceUpdated) {
+        setPriceDrift({
+          oldTotalUsd: data.oldTotalUsd,
+          newTotalUsd: data.newTotalUsd,
+          message: data.message,
+        })
+        setSubmitting(false)
+        return
+      }
+
       // Redirect to Stripe Checkout
       if (data.url) {
         window.location.href = data.url
@@ -1306,6 +1348,19 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // Customer clicked "Continue with new price" on the drift banner.
+  // Record the acknowledged total and re-run handleSubmit so the server
+  // skips the drift check.
+  const confirmDriftAndSubmit = async () => {
+    if (!priceDrift) return
+    setDriftAcknowledgedTotal(priceDrift.newTotalUsd)
+    setPriceDrift(null)
+    // Re-submit programmatically — next handleSubmit sees the ack'd total
+    setTimeout(() => {
+      document.querySelector('form')?.requestSubmit()
+    }, 0)
   }
 
   const inputClass = `rounded-lg border px-3 py-2.5 text-base ${theme.cardBg} ${theme.textPrimary} focus:outline-none`
@@ -1322,6 +1377,36 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-8">
+        {/* Price drift banner — shown when live AE total came back higher
+            than what the customer saw in their cart. They confirm or
+            cancel; no silent price increases. */}
+        {priceDrift && (
+          <div className="mb-5 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4">
+            <p className="text-sm font-semibold text-amber-300 mb-1">Price updated at checkout</p>
+            <p className="text-xs text-amber-200/80 mb-3">
+              AliExpress changed the price while you were browsing.
+              Previous: <span className="tabular-nums">US ${priceDrift.oldTotalUsd.toFixed(2)}</span>
+              {' → '}
+              New: <span className="tabular-nums font-semibold">US ${priceDrift.newTotalUsd.toFixed(2)}</span>
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={confirmDriftAndSubmit}
+                className="rounded-lg bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-semibold text-black"
+              >
+                Continue at new price
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPriceDrift(null); onBack() }}
+                className="rounded-lg border border-white/[0.1] px-4 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"
+              >
+                Back to cart
+              </button>
+            </div>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Order Summary */}
           <div className={`rounded-xl ${theme.cardBg} ${theme.cardBorder} p-5 shadow-sm`}>

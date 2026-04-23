@@ -75,13 +75,13 @@ export function parseVariant(skuRaw) {
   }
 }
 
-// Compute break-even USD cost for a single variant — product + shipping.
-// Tax is omitted: AE doesn't expose it via any API, and guessing would
-// be fake data. If AE charges tax at their checkout we absorb it.
+// Compute break-even USD cost for a single variant.
+// = product + shipping + 10% est. tax (labelled clearly everywhere it's shown)
 export function breakEvenUsd(variantPriceUsd, shippingUsd = DEFAULT_SHIPPING_USD) {
   const product = Math.max(0, Number(variantPriceUsd) || 0)
   const shipping = Math.max(0, Number(shippingUsd) || 0)
-  return Math.round((product + shipping) * 100) / 100
+  const tax = estimateTax(product)
+  return Math.round((product + shipping + tax) * 100) / 100
 }
 
 // Build the derived price summary for a product given its variants[].
