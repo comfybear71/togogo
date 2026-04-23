@@ -90,7 +90,10 @@ export default function StorefrontPage({ subdomain }) {
     } else if (newView === 'grid') {
       setView('grid')
       setSelectedProduct(null)
-      // Don't push — let popstate handle it, or replace
+      // Replace the current history entry with grid so the back button
+      // doesn't return to cart / orders / checkout / success that the
+      // user just clicked away from
+      window.history.replaceState({ view: 'grid' }, '')
     } else {
       setView(newView)
       window.history.pushState({ view: newView }, '')
@@ -249,7 +252,7 @@ export default function StorefrontPage({ subdomain }) {
           Thank you for your order. {store.owner} will process it shortly and you'll receive updates via email.
         </p>
         <button
-          onClick={() => { setView('grid'); cart.clear() }}
+          onClick={() => { cart.clear(); navigateTo('grid') }}
           className="rounded-xl px-6 py-3 text-sm font-medium text-white transition-colors"
           style={{ backgroundColor: theme.accent }}
         >
@@ -261,7 +264,7 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Order Tracking View ─────────────────────────────────────────────
   if (view === 'orders') return (
-    <OrderTrackingView store={store} theme={theme} subdomain={subdomain} cart={cart} onBack={() => setView('grid')} />
+    <OrderTrackingView store={store} theme={theme} subdomain={subdomain} cart={cart} onBack={() => navigateTo('grid')} />
   )
 
   // ─── Checkout View ──────────────────────────────────────────────────
@@ -293,7 +296,7 @@ export default function StorefrontPage({ subdomain }) {
 
   // ─── Cart View with availability verification ─────────────────────
   if (view === 'cart') return (
-    <CartView store={store} cart={cart} theme={theme} subdomain={subdomain} onBack={() => setView('grid')} onCheckout={() => setView('checkout')} />
+    <CartView store={store} cart={cart} theme={theme} subdomain={subdomain} onBack={() => navigateTo('grid')} onCheckout={() => setView('checkout')} />
   )
 
   // ─── Product Grid (default view) ───────────────────────────────────
