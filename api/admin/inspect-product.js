@@ -57,8 +57,12 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Could not resolve AE product id' })
   }
 
-  // POST with ?force=1 → re-heal this product right now, bypassing cron cooldown
-  if (req.method === 'POST' && stored) {
+  // POST with ?force=1 OR GET with ?rebuild=1 → re-heal this product right
+  // now, bypassing cron cooldown. The GET path is purely for convenience —
+  // admin can just paste a URL into their browser to force a re-heal instead
+  // of needing curl/PowerShell. Still gated by the admin secret check above.
+  const shouldRebuild = req.method === 'POST' || req.query.rebuild === '1'
+  if (shouldRebuild && stored) {
     try {
       const details = await getProductDetails(resolvedAeId)
       if (!details || !Array.isArray(details.variants) || details.variants.length === 0) {
