@@ -862,22 +862,20 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
     title: details.title || product.title,
   } : product
 
-  // Variant-aware pricing: if the user has picked a specific SKU, show
-  // that SKU's real break-even USD price. Otherwise fall back to the
-  // product's "From" price (cheapest variant's stored sale_price).
+  // Variant-aware pricing — NO tax (AE doesn't expose it via API; guessing
+  // would be fake data). Customer sees product price + shipping; if AE
+  // charges tax at their checkout we absorb it.
   //
   // Formula matches api/_lib/pricing.js → breakEvenUsd:
-  //   supplier_cost_usd = variant.priceUsd + shipping + variant.priceUsd × 0.14
-  //   sale_price_usd    = supplier_cost_usd   (no markup yet)
-  const TAX_RATE = 0.14
+  //   break_even_usd = variant.priceUsd + shipping_usd
   const productShippingUsd = Number(product.shipping) || 0
   const basePrice = Number(product.price) || 0
-  const selectedBreakEven = selectedVariant?.priceUsd > 0
-    ? Math.round(
-        (selectedVariant.priceUsd + productShippingUsd + selectedVariant.priceUsd * TAX_RATE) * 100
-      ) / 100
-    : null
-  const displayPrice = selectedBreakEven ?? basePrice
+  const selectedProductUsd = selectedVariant?.priceUsd > 0 ? selectedVariant.priceUsd : null
+  // Total displayed = product + shipping. Stripe charges the same split.
+  const displayProductUsd = selectedProductUsd != null ? selectedProductUsd
+    : Math.max(0, basePrice - productShippingUsd)   // strip shipping from stored break-even
+  const displayShippingUsd = productShippingUsd
+  const displayPrice = Math.round((displayProductUsd + displayShippingUsd) * 100) / 100
   const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
   const needsVariantChoice = hasVariants && !selectedVariant
   const availableStock = selectedVariant?.stock ?? null
@@ -903,11 +901,14 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
           <div>
             <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
             <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
-            <p className="text-3xl font-bold text-white mb-2">
+            <p className="text-3xl font-bold text-white mb-1">
               US ${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">USD</span>
             </p>
+            <p className="text-xs text-slate-400 mb-2">
+              US ${displayProductUsd.toFixed(2)} product + US ${displayShippingUsd.toFixed(2)} shipping
+            </p>
             {selectedVariant && (
-              <p className="text-xs text-slate-400 mb-2">
+              <p className="text-xs text-slate-500 mb-2">
                 {selectedVariant.label || Object.values(selectedVariant.propertyMap || {}).join(' / ')}
               </p>
             )}

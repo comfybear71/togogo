@@ -3,7 +3,7 @@
 import Stripe from 'stripe'
 import { sql } from '../_lib/db.js'
 import { getCommissionRate } from '../_lib/commission.js'
-import { verifyProduct } from '../_lib/suppliers.js'
+import { verifyProduct, getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   // CORS
@@ -114,27 +114,59 @@ export default async function handler(req, res) {
         }
       }
 
-      // Per-variant break-even pricing (USD). Same formula as pricing.js:
-      //   supplier_cost_usd = variant.priceUsd + shipping + variant.priceUsd × 0.14
-      const TAX_RATE = 0.14
-      const shippingUsd = parseFloat(product.shipping_cost) || 0
-      const variantPriceUsd = chosenVariant?.priceUsd > 0
-        ? chosenVariant.priceUsd
-        : (parseFloat(product.min_variant_price_usd) || parseFloat(product.sale_price) || 0)
-      const variantBreakEvenUsd = Math.round(
-        (variantPriceUsd + shippingUsd + variantPriceUsd * TAX_RATE) * 100
-      ) / 100
-      // Defensive floor — if we have no usable number, fall back to stored
-      // sale_price so we don't charge $0. This shouldn't happen once the
-      // rebuild cron has fully run.
-      const chargePriceUsd = variantBreakEvenUsd > 0 ? variantBreakEvenUsd : parseFloat(product.sale_price) || 0
-      const unitPrice = Math.round(chargePriceUsd * 100)
+      // FRESH PRICE AT CHECKOUT TIME — no stale stored data.
+      // Call ds.product.get + ds.freight.query live for this exact SKU.
+      // Fall back to stored data only if the live call fails (network/timeout).
+      let livePriceUsd = null
+      let liveShippingUsd = null
+      if (aeId && !aeId.includes('-')) {
+        try {
+          const details = await Promise.race([
+            getProductDetails(aeId),
+            new Promise(r => setTimeout(() => r(null), 5000)),
+          ])
+          if (details?.variants?.length > 0) {
+            const match = chosenVariant?.skuId
+              ? details.variants.find(v => String(v.skuId) === String(chosenVariant.skuId))
+              : null
+            livePriceUsd = match?.priceUsd || details.variants[0].priceUsd || null
+          }
+          // Fresh shipping for this exact SKU
+          const skuForFreight = chosenVariant?.skuId || details?.variants?.[0]?.skuId || ''
+          if (skuForFreight) {
+            const freight = await Promise.race([
+              queryDSFreight(aeId, customer?.address?.country || 'AU', qty, skuForFreight),
+              new Promise(r => setTimeout(() => r(null), 5000)),
+            ])
+            if (Array.isArray(freight) && freight.length > 0) {
+              liveShippingUsd = freight.reduce((m, o) => o.cost < m.cost ? o : m, freight[0]).cost || 0
+            }
+          }
+        } catch (err) {
+          console.log(`[Checkout] Live pricing fetch failed for ${aeId}: ${err.message}`)
+        }
+      }
+
+      // Product price — live if we got it, else the stored variant price
+      const variantPriceUsd = livePriceUsd != null ? livePriceUsd
+        : (chosenVariant?.priceUsd > 0
+            ? chosenVariant.priceUsd
+            : (parseFloat(product.min_variant_price_usd) || parseFloat(product.sale_price) || 0))
+      // Shipping — live if we got it, else stored
+      const shippingUsd = liveShippingUsd != null ? liveShippingUsd
+        : (parseFloat(product.shipping_cost) || 0)
+
+      // BREAK-EVEN ONLY — product + shipping, NO tax (AE doesn't expose it)
+      const productCents = Math.round(variantPriceUsd * 100)
+      const shippingCents = Math.round(shippingUsd * 100)
 
       const variantTitle = chosenVariant?.label
         ? `${product.title.slice(0, 160)} — ${chosenVariant.label.slice(0, 40)}`
         : product.title.slice(0, 200)
       const variantImage = chosenVariant?.colorImage || chosenVariant?.image || product.image
 
+      // Two line items: product and shipping shown separately (matches how
+      // AE displays their own checkout — honest breakdown, no hidden buffers).
       lineItems.push({
         price_data: {
           currency: 'usd',
@@ -142,10 +174,22 @@ export default async function handler(req, res) {
             name: variantTitle,
             ...(variantImage ? { images: [variantImage] } : {}),
           },
-          unit_amount: unitPrice,
+          unit_amount: productCents,
         },
         quantity: qty,
       })
+      if (shippingCents > 0) {
+        lineItems.push({
+          price_data: {
+            currency: 'usd',
+            product_data: { name: `Shipping — ${product.title.slice(0, 80)}` },
+            unit_amount: shippingCents,
+          },
+          quantity: qty,
+        })
+      }
+      const chargePriceUsd = variantPriceUsd + shippingUsd
+      const unitPrice = Math.round(chargePriceUsd * 100)
 
       orderItems.push({
         productId: product.id,

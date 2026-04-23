@@ -1,20 +1,22 @@
 // Break-even pricing helpers — one source of truth for every variant price
 // used by imports, rebuilds, and storefront display.
 //
-// Invariant: everything is USD. No conversion. No markup (for now).
-// When we're confident the data is right, we can layer markup on top.
+// Invariants:
+//   - Everything in USD (AE's native currency)
+//   - NO tax (we don't know AE's rate — it varies 7-14%, only visible at
+//     AE checkout). Absorbed by us if charged.
+//   - NO markup (we're proving correctness first)
+//   - NO currency conversion
 //
-// Formula per variant:
-//   supplier_cost_usd = sku_price_usd + shipping_usd + tax_buffer
-//   sale_price_usd    = supplier_cost_usd            // break-even, no markup
+// Formula per variant — only real AE API numbers:
+//   supplier_cost_usd = sku_price_usd + shipping_usd
+//   sale_price_usd    = supplier_cost_usd
 //
-// Where tax_buffer approximates AE's actual checkout tax (observed 12–14%).
-// Using 14% is conservative for an AU destination.
+// When AE adds tax / Choice discounts / promo codes at their checkout,
+// that delta lands in our margin — positive some orders, negative others.
+// No invented buffer. Pure API data.
 
-export const TAX_RATE = 0.14
-export const DEFAULT_SHIPPING_USD = 0  // 0 when we don't know — we'd rather
-                                        // under-quote and reject at checkout
-                                        // than lie about the price
+export const DEFAULT_SHIPPING_USD = 0
 
 // Parse a variant from ds.product.get's ae_item_sku_info_d_t_o[] shape.
 // Returns the canonical variant shape we store in user_products.variants.
@@ -62,12 +64,13 @@ export function parseVariant(skuRaw) {
   }
 }
 
-// Compute break-even USD cost for a single variant
+// Compute break-even USD cost for a single variant — product + shipping.
+// Tax is omitted: AE doesn't expose it via any API, and guessing would
+// be fake data. If AE charges tax at their checkout we absorb it.
 export function breakEvenUsd(variantPriceUsd, shippingUsd = DEFAULT_SHIPPING_USD) {
   const product = Math.max(0, Number(variantPriceUsd) || 0)
   const shipping = Math.max(0, Number(shippingUsd) || 0)
-  const tax = product * TAX_RATE
-  return Math.round((product + shipping + tax) * 100) / 100
+  return Math.round((product + shipping) * 100) / 100
 }
 
 // Build the derived price summary for a product given its variants[].
