@@ -95,6 +95,11 @@ export default function StorefrontPage({ subdomain }) {
       setView(newView)
       window.history.pushState({ view: newView }, '')
     }
+    // View changes are React state swaps, not real navigations — browser keeps
+    // the previous scroll position. Reset to top so every view starts fresh.
+    if (newView !== 'grid') {
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    }
   }, [])
 
   // Always use midnight (dark) theme — stored in database, never localStorage
