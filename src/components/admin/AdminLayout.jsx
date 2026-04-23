@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, ShoppingCart, Store,
-  Megaphone, Settings, ArrowLeft, Search,
+  Megaphone, Settings, ArrowLeft, Search, Terminal,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/admin/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/admin/stores', label: 'Stores', icon: Store },
   { to: '/admin/marketing', label: 'Marketing', icon: Megaphone },
+  { to: '/admin/api-tester', label: 'API Tester', icon: Terminal },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
