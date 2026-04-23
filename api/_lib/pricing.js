@@ -19,15 +19,22 @@ export const DEFAULT_SHIPPING_USD = 0  // 0 when we don't know — we'd rather
 // Parse a variant from ds.product.get's ae_item_sku_info_d_t_o[] shape.
 // Returns the canonical variant shape we store in user_products.variants.
 export function parseVariant(skuRaw) {
-  const props = skuRaw?.ae_sku_property_dtos?.ae_sku_property_d_t_o || []
+  const propsRaw = skuRaw?.ae_sku_property_dtos?.ae_sku_property_d_t_o || []
   const properties = {}
+  const propertiesArray = []
   let colorImage = null
-  for (const p of props) {
+  const labelParts = []
+  for (const p of propsRaw) {
     const name = p.sku_property_name || ''
     const value = p.property_value_definition_name || p.sku_property_value || ''
-    if (name && value) properties[name] = value
+    const image = p.sku_image || ''
+    if (name && value) {
+      properties[name] = value
+      labelParts.push(value)
+    }
+    propertiesArray.push({ name, value, image })
     // Any property with an image is treated as the colour-swatch image
-    if (p.sku_image && !colorImage) colorImage = p.sku_image
+    if (image && !colorImage) colorImage = image
   }
   // AE's "offer_sale_price" and "sku_price" are observed to match for
   // normal listings. Some products have a promotional offer_sale_price
@@ -39,9 +46,16 @@ export function parseVariant(skuRaw) {
     skuId: String(skuRaw.sku_id || skuRaw.id || ''),
     skuAttr: String(skuRaw.sku_attr || skuRaw.id || ''),
     priceUsd,
+    // `price` kept for backward-compat with UI that reads v.price
+    price: priceUsd,
     stock: parseInt(skuRaw.sku_available_stock || '0') || 0,
-    properties,
+    // New canonical shape (object, keyed by property name)
+    properties: propertiesArray,
+    // Flat object view for quick lookup by property name
+    propertyMap: properties,
     colorImage,
+    image: colorImage,
+    label: labelParts.join(' / ') || '',
   }
 }
 
