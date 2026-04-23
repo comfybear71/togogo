@@ -159,8 +159,9 @@ export default async function handler(req, res) {
       // Three transparent line items: Product + Shipping + Est. tax.
       // Matches the storefront product-page breakdown so customer sees
       // the same numbers at cart, storefront and Stripe checkout.
-      const TAX_RATE = 0.10  // flat estimate (see api/_lib/pricing.js)
-      const taxUsd = Math.round(variantPriceUsd * TAX_RATE * 100) / 100
+      // AE taxes product + shipping at ~10% (observed). See api/_lib/pricing.js
+      const TAX_RATE = 0.10
+      const taxUsd = Math.round((variantPriceUsd + shippingUsd) * TAX_RATE * 100) / 100
       const productCents = Math.round(variantPriceUsd * 100)
       const shippingCents = Math.round(shippingUsd * 100)
       const taxCents = Math.round(taxUsd * 100)

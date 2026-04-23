@@ -878,7 +878,8 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
   const baseProductDerived = Math.max(0, (basePrice - productShippingUsd) / (1 + TAX_RATE))
   const displayProductUsd = selectedProductUsd != null ? selectedProductUsd : baseProductDerived
   const displayShippingUsd = productShippingUsd
-  const displayTaxUsd = Math.round(displayProductUsd * TAX_RATE * 100) / 100
+  // AE taxes product + shipping at ~10% (observed). Match their formula.
+  const displayTaxUsd = Math.round((displayProductUsd + displayShippingUsd) * TAX_RATE * 100) / 100
   const displayPrice = Math.round((displayProductUsd + displayShippingUsd + displayTaxUsd) * 100) / 100
   const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
   const needsVariantChoice = hasVariants && !selectedVariant

@@ -41,6 +41,10 @@
     {
       "path": "/api/cron/rebuild-product-variants",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-orders",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

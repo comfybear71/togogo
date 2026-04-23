@@ -22,11 +22,13 @@ export const DEFAULT_SHIPPING_USD = 0
 // Flat estimate. Per-country table is future work; user approved 10% now.
 export const TAX_RATE = 0.10
 
-// Returns the tax estimate in USD for a product subtotal.
-// Labelled "Est. tax" wherever displayed — never pretend it's an exact number.
-export function estimateTax(productUsd) {
-  const p = Math.max(0, Number(productUsd) || 0)
-  return Math.round(p * TAX_RATE * 100) / 100
+// Returns the tax estimate in USD. AE calculates tax on product + shipping
+// at 10% (observed on real orders: towel $3.68+$1.99 @ 10% = $0.57, garlic
+// grinder $1.10+$5.68 @ 10% = $0.68). Tax the sum, not just the product.
+export function estimateTax(productUsd, shippingUsd = 0) {
+  const product = Math.max(0, Number(productUsd) || 0)
+  const shipping = Math.max(0, Number(shippingUsd) || 0)
+  return Math.round((product + shipping) * TAX_RATE * 100) / 100
 }
 
 // Parse a variant from ds.product.get's ae_item_sku_info_d_t_o[] shape.
@@ -76,11 +78,12 @@ export function parseVariant(skuRaw) {
 }
 
 // Compute break-even USD cost for a single variant.
-// = product + shipping + 10% est. tax (labelled clearly everywhere it's shown)
+// = product + shipping + 10% est. tax on (product+shipping), matching how
+// AE calculates tax at their checkout.
 export function breakEvenUsd(variantPriceUsd, shippingUsd = DEFAULT_SHIPPING_USD) {
   const product = Math.max(0, Number(variantPriceUsd) || 0)
   const shipping = Math.max(0, Number(shippingUsd) || 0)
-  const tax = estimateTax(product)
+  const tax = estimateTax(product, shipping)
   return Math.round((product + shipping + tax) * 100) / 100
 }
 
