@@ -308,10 +308,21 @@ export default async function handler(req, res) {
                     // admin_settings, not hardcoded here).
                     const couponCode = undefined
 
-                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId})${couponCode ? ' with coupon: ' + couponCode : ' without coupon'}`)
+                    // Pull the customer's chosen variant from order_data (written
+                    // by /api/storefront/checkout). No auto-resolve here — if
+                    // the customer picked Pink 70×140cm we submit THAT sku_attr
+                    // to AliExpress, not whatever the first variant happens to be.
+                    const orderData = typeof order.order_data === 'string'
+                      ? (() => { try { return JSON.parse(order.order_data) } catch { return {} } })()
+                      : (order.order_data || {})
+                    const chosenSkuAttr = orderData.skuAttr || null
+                    const chosenSkuId = orderData.skuId || null
+
+                    console.log(`[Webhook] Submitting order ${order.id} to AliExpress (product: ${productId}, skuAttr=${chosenSkuAttr || 'none — will auto-resolve'})`)
                     const result = await submitOrder({
                       productId,
-                      skuId: null,
+                      skuId: chosenSkuId,
+                      skuAttr: chosenSkuAttr,
                       quantity: order.quantity || 1,
                       orderAmount,
                       promotionCode: couponCode || undefined,

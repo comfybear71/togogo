@@ -17,24 +17,47 @@ function useCart(subdomain) {
   })
   const save = (next) => { setItems(next); sessionStorage.setItem(key, JSON.stringify(next)) }
 
+  // Cart items are keyed by "productId::skuId" so different variants of the
+  // same product (e.g. Pink vs Blue) are separate rows and never collide.
+  // For products without variants, skuId is null and the key is just the id.
+  const rowKey = (productId, skuId) => `${productId}::${skuId || ''}`
+
   return {
     items,
     count: items.reduce((s, i) => s + i.quantity, 0),
-    // `price` already includes the shipping markup (set by the import cron).
-    // We surface `shippingTotal` separately for transparency but the customer
-    // total equals the sum of prices — shipping is not added on top.
     total: items.reduce((s, i) => s + i.price * i.quantity, 0),
     shippingTotal: items.reduce((s, i) => s + (i.shipping || 0) * i.quantity, 0),
     add(product) {
-      const existing = items.find((i) => i.id === product.id)
-      if (existing) save(items.map((i) => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i))
-      else save([...items, { id: product.id, title: product.title, image: product.image, price: product.price, shipping: product.shipping || 0, quantity: 1 }])
+      const key = rowKey(product.id, product.skuId)
+      const existing = items.find((i) => rowKey(i.id, i.skuId) === key)
+      if (existing) {
+        save(items.map((i) => rowKey(i.id, i.skuId) === key ? { ...i, quantity: i.quantity + 1 } : i))
+      } else {
+        save([...items, {
+          id: product.id,
+          title: product.title,
+          image: product.variantImage || product.image,
+          price: product.price,                     // USD (variant break-even)
+          shipping: product.shipping || 0,
+          quantity: 1,
+          // Variant identity — flows all the way to AE order.create
+          skuId: product.skuId || null,
+          skuAttr: product.skuAttr || null,
+          variantLabel: product.variantLabel || '',
+          variantPriceUsd: product.variantPriceUsd || null,
+          supplierProductId: product.supplierProductId || null,
+        }])
+      }
     },
-    updateQty(id, qty) {
-      if (qty <= 0) save(items.filter((i) => i.id !== id))
-      else save(items.map((i) => i.id === id ? { ...i, quantity: qty } : i))
+    updateQty(id, skuId, qty) {
+      const key = rowKey(id, skuId)
+      if (qty <= 0) save(items.filter((i) => rowKey(i.id, i.skuId) !== key))
+      else save(items.map((i) => rowKey(i.id, i.skuId) === key ? { ...i, quantity: qty } : i))
     },
-    remove(id) { save(items.filter((i) => i.id !== id)) },
+    remove(id, skuId) {
+      const key = rowKey(id, skuId)
+      save(items.filter((i) => rowKey(i.id, i.skuId) !== key))
+    },
     clear() { save([]) },
   }
 }
@@ -639,6 +662,7 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
             items: cart.items.map(i => ({
               productId: i.supplierProductId || i.id,
               title: i.title,
+              skuId: i.skuId || null,
               skuAttr: i.skuAttr || '',
               quantity: i.quantity,
             })),
@@ -722,20 +746,23 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium text-white truncate ${isUnavailable ? 'line-through opacity-50' : ''}`}>{item.title}</p>
+                        {item.variantLabel && (
+                          <p className="text-[11px] text-slate-400 mt-0.5 truncate">{item.variantLabel}</p>
+                        )}
                         {!isUnavailable && (
                           <div className="flex items-center gap-2 mt-1">
-                            <button onClick={() => cart.updateQty(item.id, item.quantity - 1)} className="rounded-lg p-1 bg-white/[0.06]">
+                            <button onClick={() => cart.updateQty(item.id, item.skuId, item.quantity - 1)} className="rounded-lg p-1 bg-white/[0.06]">
                               <Minus className="h-3 w-3 text-slate-400" />
                             </button>
                             <span className="w-5 text-center text-xs font-medium text-white">{item.quantity}</span>
-                            <button onClick={() => cart.updateQty(item.id, item.quantity + 1)} className="rounded-lg p-1 bg-white/[0.06]">
+                            <button onClick={() => cart.updateQty(item.id, item.skuId, item.quantity + 1)} className="rounded-lg p-1 bg-white/[0.06]">
                               <Plus className="h-3 w-3 text-slate-400" />
                             </button>
                           </div>
                         )}
                       </div>
                       <p className={`font-semibold text-sm ${isUnavailable ? 'text-slate-600 line-through' : 'text-white'}`}>US ${(item.price * item.quantity).toFixed(2)}</p>
-                      <button onClick={() => cart.remove(item.id)} className="p-1 text-slate-500 hover:text-red-500">
+                      <button onClick={() => cart.remove(item.id, item.skuId)} className="p-1 text-slate-500 hover:text-red-500">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -745,14 +772,14 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
                         <p className="text-xs text-red-400">{status.message}</p>
                         {status.reason === 'low_stock' && status.availableQty > 0 ? (
                           <button
-                            onClick={() => cart.updateQty(item.id, status.availableQty)}
+                            onClick={() => cart.updateQty(item.id, item.skuId, status.availableQty)}
                             className="text-xs font-medium text-[#FF6B35] hover:underline"
                           >
                             Update to {status.availableQty}
                           </button>
                         ) : (
                           <button
-                            onClick={() => cart.remove(item.id)}
+                            onClick={() => cart.remove(item.id, item.skuId)}
                             className="text-xs font-medium text-red-400 hover:underline"
                           >
                             Remove
@@ -835,10 +862,26 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
     title: details.title || product.title,
   } : product
 
-  // Always use the store's sale_price (product.price) — NOT the AliExpress variant/cost price
-  // Variant selection changes the option but the store price is what customers pay
-  const displayPrice = product.price || 0
-  const hasVariants = details?.variants?.length > 1
+  // Variant-aware pricing: if the user has picked a specific SKU, show
+  // that SKU's real break-even USD price. Otherwise fall back to the
+  // product's "From" price (cheapest variant's stored sale_price).
+  //
+  // Formula matches api/_lib/pricing.js → breakEvenUsd:
+  //   supplier_cost_usd = variant.priceUsd + shipping + variant.priceUsd × 0.14
+  //   sale_price_usd    = supplier_cost_usd   (no markup yet)
+  const TAX_RATE = 0.14
+  const productShippingUsd = Number(product.shipping) || 0
+  const basePrice = Number(product.price) || 0
+  const selectedBreakEven = selectedVariant?.priceUsd > 0
+    ? Math.round(
+        (selectedVariant.priceUsd + productShippingUsd + selectedVariant.priceUsd * TAX_RATE) * 100
+      ) / 100
+    : null
+  const displayPrice = selectedBreakEven ?? basePrice
+  const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
+  const needsVariantChoice = hasVariants && !selectedVariant
+  const availableStock = selectedVariant?.stock ?? null
+  const outOfStockVariant = selectedVariant != null && (selectedVariant.stock === 0)
 
   return (
     <div className="min-h-screen bg-[#0f172a] overflow-x-hidden">
@@ -860,7 +903,14 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
           <div>
             <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
             <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
-            <p className="text-3xl font-bold text-white mb-2">US ${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">USD</span></p>
+            <p className="text-3xl font-bold text-white mb-2">
+              US ${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">USD</span>
+            </p>
+            {selectedVariant && (
+              <p className="text-xs text-slate-400 mb-2">
+                {selectedVariant.label || Object.values(selectedVariant.propertyMap || {}).join(' / ')}
+              </p>
+            )}
 
             {product.originalPrice && product.originalPrice > displayPrice && (
               <p className="text-sm text-slate-500 line-through mb-4">${parseFloat(product.originalPrice).toFixed(2)}</p>
@@ -1029,9 +1079,24 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
               </div>
             )}
 
-            {/* Add to Cart */}
+            {/* Add to Cart — always clickable during testing. When a variant
+                is picked, its skuId/skuAttr/priceUsd flow all the way through
+                cart → checkout → Stripe → AE order.create. When nothing is
+                picked the cart gets the base price and skuId=null (AE
+                order-time will auto-resolve). */}
             <button
-              onClick={() => { cart.add({ ...product, price: displayPrice }); onCartClick() }}
+              onClick={() => {
+                cart.add({
+                  ...product,
+                  price: displayPrice,
+                  skuId: selectedVariant?.skuId || null,
+                  skuAttr: selectedVariant?.skuAttr || null,
+                  variantLabel: selectedVariant?.label || '',
+                  variantImage: selectedVariant?.colorImage || selectedVariant?.image || product.image,
+                  variantPriceUsd: selectedVariant?.priceUsd || null,
+                })
+                onCartClick()
+              }}
               className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
               style={{ backgroundColor: theme.accent }}
             >
@@ -1195,7 +1260,15 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           subdomain,
-          items: cart.items.map((i) => ({ productId: i.id, quantity: i.quantity })),
+          items: cart.items.map((i) => ({
+            productId: i.id,
+            quantity: i.quantity,
+            // Variant identity flows through so checkout.js can look up the
+            // variant's real price and the AE order.create can use the
+            // customer's chosen SKU instead of auto-resolving.
+            skuId: i.skuId || null,
+            skuAttr: i.skuAttr || null,
+          })),
           customer: {
             name: form.name,
             email: form.email,
