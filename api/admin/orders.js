@@ -18,6 +18,7 @@ export default async function handler(req, res) {
                  o.customer_name, o.customer_email, o.shipping_address,
                  o.status, o.tracking_number, o.tracking_url, o.notes,
                  o.created_at, o.updated_at,
+                 o.ae_actual_cost_usd, o.ae_actual_fetched_at, o.supplier_order_id,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_orders o
           LEFT JOIN users u ON u.id = o.user_id

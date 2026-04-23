@@ -195,6 +195,10 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS supplier_product_id TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_checkout_session TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT` } catch { /* */ }
+  // Post-order reconciliation — what AE actually billed us in USD,
+  // fetched via aliexpress.trade.ds.order.get after order.create succeeds.
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS ae_actual_cost_usd NUMERIC(10,2)` } catch { /* */ }
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS ae_actual_fetched_at TIMESTAMPTZ` } catch { /* */ }
   // Expand order status to include pending_payment
   try { await sql`ALTER TABLE user_orders DROP CONSTRAINT IF EXISTS user_orders_status_check` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD CONSTRAINT user_orders_status_check CHECK (status IN ('pending', 'pending_payment', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'))` } catch { /* */ }
