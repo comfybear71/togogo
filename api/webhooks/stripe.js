@@ -334,18 +334,29 @@ export default async function handler(req, res) {
                       },
                     })
                     if (result.success) {
-                      // If we got the real AliExpress cost, update supplier_cost + recalculate profit
-                      let updateNotes = 'Submitted to AliExpress'
-                      if (result.realCostUSD) {
-                        const usdToAud = 1.45
-                        const realCostAUD = Math.round(result.realCostUSD * usdToAud * 100) / 100
-                        const commissionRate = 0.30
-                        const realProfit = Math.round((order.sale_price - realCostAUD) * (1 - commissionRate) * 100) / 100
-                        const realCommission = Math.round((order.sale_price - realCostAUD) * commissionRate * 100) / 100
-                        await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, supplier_cost = ${realCostAUD}, profit = ${realProfit}, commission = ${realCommission}, status = 'processing', notes = ${`AE cost: US$${result.realCostUSD.toFixed(2)} = A$${realCostAUD.toFixed(2)}`}, updated_at = NOW() WHERE id = ${order.id}`
-                        console.log(`[Webhook] AliExpress order ${result.orderId}: real cost US$${result.realCostUSD.toFixed(2)} = A$${realCostAUD.toFixed(2)}, profit A$${realProfit.toFixed(2)}`)
+                      // submitOrder already calls trade.ds.order.get inside and
+                      // returns pay_amount as result.realCostUSD. Write that
+                      // straight into ae_actual_cost_usd — the reconciliation
+                      // value admin orders page reads for Real Margin.
+                      const aeActualCostUsd = result.realCostUSD && result.realCostUSD > 0
+                        ? Math.round(result.realCostUSD * 100) / 100
+                        : null
+                      if (aeActualCostUsd != null) {
+                        await sql`
+                          UPDATE user_orders
+                          SET supplier_order_id = ${result.orderId},
+                              status = 'processing',
+                              ae_actual_cost_usd = ${aeActualCostUsd},
+                              ae_actual_fetched_at = NOW(),
+                              notes = ${`Submitted to AliExpress. AE billed US$${aeActualCostUsd.toFixed(2)}`},
+                              updated_at = NOW()
+                          WHERE id = ${order.id}
+                        `
+                        const customerPaidUsd = parseFloat(order.sale_price) || 0
+                        const marginUsd = Math.round((customerPaidUsd - aeActualCostUsd) * 100) / 100
+                        console.log(`[Webhook Reconcile] ${order.id}: customer paid US$${customerPaidUsd.toFixed(2)} · AE billed US$${aeActualCostUsd.toFixed(2)} · margin US$${marginUsd.toFixed(2)}`)
                       } else {
-                        await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress'}, updated_at = NOW() WHERE id = ${order.id}`
+                        await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress (AE total not yet available — admin can re-fetch)'}, updated_at = NOW() WHERE id = ${order.id}`
                       }
                       console.log(`[Webhook] AliExpress order submitted: ${result.orderId}`)
 

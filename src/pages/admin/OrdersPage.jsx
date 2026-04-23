@@ -231,7 +231,9 @@ export default function OrdersPage() {
                   <th className="pb-3 pr-4">Buyer</th>
                   <th className="pb-3 pr-4">Seller</th>
                   <th className="pb-3 pr-4">Product</th>
-                  <th className="pb-3 pr-4 text-right">Total</th>
+                  <th className="pb-3 pr-4 text-right">Customer paid</th>
+                  <th className="pb-3 pr-4 text-right">AE billed</th>
+                  <th className="pb-3 pr-4 text-right">Real margin</th>
                   <th className="pb-3 pr-4">Status</th>
                   <th className="pb-3 pr-4">Date</th>
                   <th className="pb-3 text-right">Details</th>
@@ -242,13 +244,24 @@ export default function OrdersPage() {
                   const sc = statusConfig[o.status] || statusConfig.pending;
                   const StatusIcon = sc.icon;
                   const date = o.created_at ? new Date(o.created_at).toLocaleDateString() : '';
+                  const customerPaid = parseFloat(o.sale_price || 0)
+                  const aeBilled = o.ae_actual_cost_usd != null ? parseFloat(o.ae_actual_cost_usd) : null
+                  const realMargin = aeBilled != null ? customerPaid - aeBilled : null
+                  const marginColor = realMargin == null ? 'text-zinc-500'
+                    : realMargin > 0 ? 'text-emerald-400'
+                    : realMargin < 0 ? 'text-red-400'
+                    : 'text-zinc-400'
                   return (
                     <tr key={o.id} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]">
                       <td className="py-3 pr-4 font-mono text-sm font-medium text-[#FF6B35]">{o.id.slice(0, 8)}</td>
                       <td className="py-3 pr-4 text-white">{o.customer_name || 'Unknown'}</td>
                       <td className="py-3 pr-4 text-zinc-400">{o.seller_name || o.seller_email}</td>
                       <td className="py-3 pr-4 text-zinc-400 max-w-[200px] truncate">{o.product_title}</td>
-                      <td className="py-3 pr-4 text-right font-medium text-white">${parseFloat(o.sale_price || 0).toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-right font-medium text-white tabular-nums">${customerPaid.toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-right text-zinc-300 tabular-nums">{aeBilled != null ? `$${aeBilled.toFixed(2)}` : '—'}</td>
+                      <td className={`py-3 pr-4 text-right tabular-nums font-medium ${marginColor}`}>
+                        {realMargin != null ? `${realMargin >= 0 ? '+' : ''}$${realMargin.toFixed(2)}` : '—'}
+                      </td>
                       <td className="py-3 pr-4">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${sc.color}`}>
                           <StatusIcon className="h-3 w-3" />
