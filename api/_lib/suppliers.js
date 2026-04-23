@@ -113,6 +113,117 @@ async function callAuthenticatedAPI(method, params = {}) {
   return callAPI(method, { ...params, access_token: accessToken })
 }
 
+// Read the full saved token record (not just the access_token)
+export async function getSavedTokenRecord() {
+  try {
+    const { rows } = await sql`SELECT value FROM admin_settings WHERE key = 'aliexpress_access_token'`
+    if (!rows[0]) return null
+    return JSON.parse(rows[0].value)
+  } catch {
+    return null
+  }
+}
+
+// Exchange refresh_token for a new access_token.
+// Calls /auth/token/refresh (AliExpress System Tool — doesn't use /sync endpoint).
+// Mirrors the signing approach in api/platforms/callback/aliexpress.js.
+// Returns { success, newExpiresAt, error? }.
+export async function refreshAliExpressToken() {
+  const appKey = process.env.ALIEXPRESS_APP_KEY
+  const appSecret = process.env.ALIEXPRESS_APP_SECRET
+  if (!appKey || !appSecret) {
+    return { success: false, error: 'Missing ALIEXPRESS_APP_KEY/SECRET' }
+  }
+
+  const current = await getSavedTokenRecord()
+  if (!current?.refresh_token) {
+    return { success: false, error: 'No refresh_token saved — full re-authorization required' }
+  }
+
+  // Check if refresh_token itself has expired
+  if (current.refresh_expires_at && new Date(current.refresh_expires_at) < new Date()) {
+    return { success: false, error: 'refresh_token expired — full re-authorization required' }
+  }
+
+  const params = {
+    app_key: appKey,
+    sign_method: 'hmac-sha256',
+    timestamp: String(Date.now()),
+    refresh_token: current.refresh_token,
+  }
+  params.sign = signRequest(params, appSecret)
+
+  const qs = new URLSearchParams(params).toString()
+  let response, rawText, method
+
+  // Attempt 1: GET /auth/token/refresh
+  method = 'GET /auth/token/refresh'
+  response = await fetch(`https://api-sg.aliexpress.com/auth/token/refresh?${qs}`)
+  rawText = await response.text()
+  console.log(`[AliExpress Refresh] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
+
+  // Attempt 2: POST body /auth/token/refresh
+  if (!response.ok || !rawText || rawText.length < 10) {
+    method = 'POST body /auth/token/refresh'
+    response = await fetch('https://api-sg.aliexpress.com/auth/token/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: qs,
+    })
+    rawText = await response.text()
+    console.log(`[AliExpress Refresh] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
+  }
+
+  let data
+  try {
+    data = JSON.parse(rawText)
+  } catch {
+    return { success: false, error: `AliExpress returned non-JSON: ${rawText.slice(0, 200)}` }
+  }
+
+  if (data.error_response) {
+    return { success: false, error: data.error_response.msg || 'Refresh API error', details: data.error_response }
+  }
+
+  const tokenData = data.access_token ? data : (
+    data['/auth/token/refresh_response']
+    || data['auth_token_refresh_response']
+    || Object.values(data)[0]
+    || {}
+  )
+
+  const newAccessToken = tokenData.access_token
+  const newRefreshToken = tokenData.refresh_token || current.refresh_token
+  const newExpireTime = tokenData.expire_time
+  const newRefreshExpireTime = tokenData.refresh_token_valid_time || null
+
+  if (!newAccessToken) {
+    return { success: false, error: 'No access_token in refresh response', raw: data }
+  }
+
+  const newExpiresAt = newExpireTime ? new Date(parseInt(newExpireTime)).toISOString() : null
+  const newRefreshExpiresAt = newRefreshExpireTime
+    ? new Date(parseInt(newRefreshExpireTime)).toISOString()
+    : current.refresh_expires_at || null
+
+  const newRecord = {
+    ...current,
+    access_token: newAccessToken,
+    refresh_token: newRefreshToken,
+    expires_at: newExpiresAt,
+    refresh_expires_at: newRefreshExpiresAt,
+    refreshed_at: new Date().toISOString(),
+  }
+
+  await sql`
+    UPDATE admin_settings SET value = ${JSON.stringify(newRecord)}, updated_at = NOW()
+    WHERE key = 'aliexpress_access_token'
+  `
+
+  console.log(`[AliExpress Refresh] Token refreshed. New expiry: ${newExpiresAt}`)
+  return { success: true, newExpiresAt, newRefreshExpiresAt }
+}
+
 // ============================================
 // DS PRODUCT DETAILS — full info with all images, description, specs
 // ============================================

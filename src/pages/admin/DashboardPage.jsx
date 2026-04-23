@@ -4,6 +4,8 @@ import {
   TrendingUp, Trophy, Clock, Star, Loader2, Database, RefreshCw,
 } from 'lucide-react'
 
+import AEOAuthTokenWidget from '../../components/admin/AEOAuthTokenWidget'
+
 const AdminRevenueLineChart = lazy(() => import('../../components/charts/AdminRevenueLineChart'))
 const AdminSignupsBarChart = lazy(() => import('../../components/charts/AdminSignupsBarChart'))
 
@@ -106,6 +108,8 @@ export default function DashboardPage() {
           {backingUp ? 'Backing up...' : 'Backup Database'}
         </button>
       </div>
+
+      <AEOAuthTokenWidget />
 
       {backupResult && (
         <div className={`rounded-xl p-3 text-sm ${backupResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
