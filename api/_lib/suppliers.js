@@ -479,17 +479,25 @@ export async function getWholesalePricing(productId) {
 // DS ORDER SUBMIT — place order on AliExpress
 // ============================================
 
-export async function submitOrder({ productId, skuId, quantity, shippingAddress, orderAmount, promotionCode, orderId }) {
+export async function submitOrder({ productId, skuId, skuAttr, quantity, shippingAddress, orderAmount, promotionCode, orderId }) {
   try {
-    // Resolve SKU attr if not provided
-    let resolvedSkuAttr = skuId || ''
+    // Use the customer's explicitly-chosen skuAttr when the checkout flow
+    // provided it. Only fall back to auto-resolve (cheapest/first variant)
+    // if absolutely nothing was passed — that path existed before we tracked
+    // variants and caused mismatched-SKU losses.
+    let resolvedSkuAttr = skuAttr || skuId || ''
     let shippingMethod = 'CAINIAO_STANDARD'
     if (!resolvedSkuAttr) {
       try {
         const details = await getProductDetails(productId)
         if (details?.variants?.length > 0) {
-          resolvedSkuAttr = details.variants[0].skuAttr || ''
-          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr}`)
+          // Prefer cheapest so we never overshoot the stored cost
+          const cheapest = details.variants.reduce(
+            (m, v) => (v.priceUsd || 0) < (m.priceUsd || 0) ? v : m,
+            details.variants[0]
+          )
+          resolvedSkuAttr = cheapest.skuAttr || details.variants[0].skuAttr || ''
+          console.log(`[AliExpress] Auto-resolved SKU for product ${productId}: ${resolvedSkuAttr} (caller didn't provide skuAttr)`)
         }
         if (details?.shipping?.length > 0) {
           shippingMethod = details.shipping[0].serviceName || shippingMethod
@@ -497,6 +505,8 @@ export async function submitOrder({ productId, skuId, quantity, shippingAddress,
       } catch (err) {
         console.error(`[AliExpress] Failed to auto-resolve SKU for ${productId}:`, err.message)
       }
+    } else {
+      console.log(`[AliExpress] Using customer-chosen skuAttr=${resolvedSkuAttr} for product ${productId}`)
     }
 
     // Map country and state

@@ -49,7 +49,8 @@ export default async function handler(req, res) {
 
     for (const item of items) {
       const { rows: products } = await sql`
-        SELECT id, title, image, supplier, supplier_cost, sale_price, shipping_cost, supplier_product_id
+        SELECT id, title, image, supplier, supplier_cost, sale_price, shipping_cost, supplier_product_id,
+               variants, min_variant_price_usd
         FROM user_products
         WHERE id = ${item.productId} AND is_active = true
       `
@@ -57,6 +58,26 @@ export default async function handler(req, res) {
 
       const product = products[0]
       const qty = item.quantity || 1
+
+      // Resolve the chosen variant from the stored variants JSONB. If the
+      // customer didn't pick one, we default to the cheapest variant —
+      // same row AE would resolve for us via auto-resolve (better that
+      // this code owns the choice explicitly).
+      const allVariants = Array.isArray(product.variants) ? product.variants
+        : (typeof product.variants === 'string'
+            ? (() => { try { return JSON.parse(product.variants) } catch { return [] } })()
+            : [])
+      let chosenVariant = null
+      if (item.skuId) {
+        chosenVariant = allVariants.find(v => String(v.skuId) === String(item.skuId)) || null
+      }
+      if (!chosenVariant && item.skuAttr) {
+        chosenVariant = allVariants.find(v => v.skuAttr === item.skuAttr) || null
+      }
+      if (!chosenVariant && allVariants.length > 0) {
+        // Fallback: cheapest variant
+        chosenVariant = allVariants.reduce((min, v) => (v.priceUsd || 0) < (min.priceUsd || 0) ? v : min, allVariants[0])
+      }
 
       // SAFETY NET: Verify product on AliExpress before taking payment
       const aeId = (product.supplier_product_id || '').replace('ae_', '')
@@ -93,14 +114,33 @@ export default async function handler(req, res) {
         }
       }
 
-      const unitPrice = Math.round(parseFloat(product.sale_price) * 100) // cents
+      // Per-variant break-even pricing (USD). Same formula as pricing.js:
+      //   supplier_cost_usd = variant.priceUsd + shipping + variant.priceUsd × 0.14
+      const TAX_RATE = 0.14
+      const shippingUsd = parseFloat(product.shipping_cost) || 0
+      const variantPriceUsd = chosenVariant?.priceUsd > 0
+        ? chosenVariant.priceUsd
+        : (parseFloat(product.min_variant_price_usd) || parseFloat(product.sale_price) || 0)
+      const variantBreakEvenUsd = Math.round(
+        (variantPriceUsd + shippingUsd + variantPriceUsd * TAX_RATE) * 100
+      ) / 100
+      // Defensive floor — if we have no usable number, fall back to stored
+      // sale_price so we don't charge $0. This shouldn't happen once the
+      // rebuild cron has fully run.
+      const chargePriceUsd = variantBreakEvenUsd > 0 ? variantBreakEvenUsd : parseFloat(product.sale_price) || 0
+      const unitPrice = Math.round(chargePriceUsd * 100)
+
+      const variantTitle = chosenVariant?.label
+        ? `${product.title.slice(0, 160)} — ${chosenVariant.label.slice(0, 40)}`
+        : product.title.slice(0, 200)
+      const variantImage = chosenVariant?.colorImage || chosenVariant?.image || product.image
 
       lineItems.push({
         price_data: {
           currency: 'usd',
           product_data: {
-            name: product.title.slice(0, 200),
-            ...(product.image ? { images: [product.image] } : {}),
+            name: variantTitle,
+            ...(variantImage ? { images: [variantImage] } : {}),
           },
           unit_amount: unitPrice,
         },
@@ -110,12 +150,17 @@ export default async function handler(req, res) {
       orderItems.push({
         productId: product.id,
         title: product.title,
-        image: product.image,
+        image: variantImage,
         supplier: product.supplier,
         supplierProductId: product.supplier_product_id,
-        supplierCost: parseFloat(product.supplier_cost),
-        salePrice: parseFloat(product.sale_price),
-        shippingCost: parseFloat(product.shipping_cost) || 0,
+        // Variant identity flows into the DB + Stripe metadata + webhook
+        skuId: chosenVariant?.skuId || null,
+        skuAttr: chosenVariant?.skuAttr || null,
+        variantLabel: chosenVariant?.label || '',
+        variantPriceUsd: variantPriceUsd,
+        supplierCost: chargePriceUsd,   // break-even for the chosen variant
+        salePrice: chargePriceUsd,       // we charge exactly break-even (no markup yet)
+        shippingCost: shippingUsd,
         quantity: qty,
       })
 
@@ -205,6 +250,17 @@ export default async function handler(req, res) {
       const supplierCost = item.supplierCost * qty
       const commission = Math.round((salePrice - supplierCost) * commissionRate * 100) / 100
 
+      // order_data carries the variant identity so the Stripe webhook can
+      // hand AE order.create the customer's EXACT skuAttr — no auto-resolve
+      // that might land on the wrong SKU and cost us money.
+      const orderData = {
+        skuId: item.skuId || null,
+        skuAttr: item.skuAttr || null,
+        variantLabel: item.variantLabel || '',
+        variantPriceUsd: item.variantPriceUsd || null,
+        shippingUsd: item.shippingCost || 0,
+      }
+
       try {
         await sql`
           INSERT INTO user_orders (
@@ -212,7 +268,7 @@ export default async function handler(req, res) {
             supplier_cost, sale_price, profit, commission, commission_rate, quantity,
             platform, platform_order_id,
             customer_name, customer_email, shipping_address,
-            status, notes, stripe_checkout_session
+            status, notes, stripe_checkout_session, order_data
           ) VALUES (
             ${store.user_id}, ${item.supplier || 'AliExpress'}, ${item.supplierProductId || ''}, ${item.title}, ${item.image},
             ${supplierCost}, ${salePrice},
@@ -223,7 +279,8 @@ export default async function handler(req, res) {
             ${JSON.stringify({ ...customer.address, phone: customer.phone || '' })},
             'pending_payment',
             ${`Stripe session: ${session.id}`},
-            ${session.id}
+            ${session.id},
+            ${JSON.stringify(orderData)}::jsonb
           )
         `
       } catch (err) {
