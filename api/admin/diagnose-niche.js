@@ -20,22 +20,35 @@ export default async function handler(req, res) {
   }
 
   const storeId = req.query.storeId
-  if (!storeId) return res.status(400).json({ error: 'storeId required' })
+  const subdomain = req.query.subdomain
+  if (!storeId && !subdomain) {
+    return res.status(400).json({ error: 'storeId or subdomain required' })
+  }
 
   await ensureSchema()
 
   const out = {}
 
-  // Store row
+  // Store row — lookup by storeId or subdomain
   try {
-    const { rows } = await sql`
-      SELECT id, subdomain, store_name, niche, niche_built_at, updated_at
-      FROM user_stores WHERE id = ${storeId} LIMIT 1
-    `
+    const { rows } = storeId
+      ? await sql`
+          SELECT id, subdomain, store_name, niche, niche_built_at, updated_at
+          FROM user_stores WHERE id = ${storeId} LIMIT 1
+        `
+      : await sql`
+          SELECT id, subdomain, store_name, niche, niche_built_at, updated_at
+          FROM user_stores WHERE subdomain = ${subdomain} LIMIT 1
+        `
     out.store = rows[0] || null
   } catch (err) { out.store_error = err.message }
 
-  const nicheValue = out.store?.niche || null
+  if (!out.store) {
+    return res.status(404).json({ error: 'Store not found', ...out })
+  }
+
+  const resolvedStoreId = out.store.id
+  const nicheValue = out.store.niche || null
   out.niche_exact_value = nicheValue
   out.niche_length = nicheValue ? nicheValue.length : 0
 
@@ -54,7 +67,7 @@ export default async function handler(req, res) {
       SELECT status, COUNT(*)::int AS cnt,
              COALESCE(SUM(products_found), 0)::int AS total_found
       FROM store_build_queue
-      WHERE store_id = ${storeId}
+      WHERE store_id = ${resolvedStoreId}
       GROUP BY status
     `
     out.queue_breakdown = rows
@@ -65,7 +78,7 @@ export default async function handler(req, res) {
     const { rows } = await sql`
       SELECT keyword, category, niche, status, products_found, error, processed_at
       FROM store_build_queue
-      WHERE store_id = ${storeId} AND status IN ('done', 'failed')
+      WHERE store_id = ${resolvedStoreId} AND status IN ('done', 'failed')
       ORDER BY processed_at DESC NULLS LAST
       LIMIT 10
     `
