@@ -939,9 +939,16 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
 
             {/* Variants (sizes/colors) — grouped by property type */}
             {hasVariants && (() => {
+              // Prefer live details (fresher stock + image), fall back to the
+              // variants we stored on the product row. Using || here ensures
+              // we never touch a null object.
+              const variants = (details?.variants && details.variants.length > 0)
+                ? details.variants
+                : (Array.isArray(product.variants) ? product.variants : [])
+              if (variants.length === 0) return null
               // Group variants by property types (e.g., Color, Size)
               const propGroups = {}
-              details.variants.forEach(v => {
+              variants.forEach(v => {
                 (v.properties || []).forEach(p => {
                   if (p.name && p.value) {
                     if (!propGroups[p.name]) propGroups[p.name] = new Set()
@@ -961,7 +968,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                 }
                 setSelectedProps(next)
                 // Find the variant that matches ALL selected properties
-                const match = details.variants.find(v => {
+                const match = variants.find(v => {
                   const vProps = v.properties || []
                   return Object.entries(next).every(([k, vv]) =>
                     vProps.some(p => p.name === k && p.value === vv)
@@ -999,7 +1006,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                       <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">{groupName}</p>
                       <div className="flex flex-wrap gap-2 overflow-x-auto">
                         {[...propGroups[groupName]].map(val => {
-                          const img = details.variants.find(v =>
+                          const img = variants.find(v =>
                             (v.properties || []).some(p => p.name === groupName && p.value === val && p.image)
                           )?.properties?.find(p => p.name === groupName && p.value === val)?.image
                           const isSelected = selectedProps[groupName] === val
