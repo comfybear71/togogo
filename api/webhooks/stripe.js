@@ -326,7 +326,7 @@ export default async function handler(req, res) {
                       shippingAddress: {
                         ...shippingAddr,
                         name: order.customer_name || shippingAddr.name || '',
-                        phone: shippingAddr.phone || '',
+                        phone: (shippingAddr.phone || '').replace(/\D/g, ''),
                       },
                     })
                     if (result.success) {
