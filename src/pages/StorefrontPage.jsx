@@ -20,11 +20,15 @@ function useCart(subdomain) {
   return {
     items,
     count: items.reduce((s, i) => s + i.quantity, 0),
+    // `price` already includes the shipping markup (set by the import cron).
+    // We surface `shippingTotal` separately for transparency but the customer
+    // total equals the sum of prices — shipping is not added on top.
     total: items.reduce((s, i) => s + i.price * i.quantity, 0),
+    shippingTotal: items.reduce((s, i) => s + (i.shipping || 0) * i.quantity, 0),
     add(product) {
       const existing = items.find((i) => i.id === product.id)
       if (existing) save(items.map((i) => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i))
-      else save([...items, { id: product.id, title: product.title, image: product.image, price: product.price, quantity: 1 }])
+      else save([...items, { id: product.id, title: product.title, image: product.image, price: product.price, shipping: product.shipping || 0, quantity: 1 }])
     },
     updateQty(id, qty) {
       if (qty <= 0) save(items.filter((i) => i.id !== id))
@@ -181,15 +185,18 @@ export default function StorefrontPage({ subdomain }) {
       .finally(() => { setLoadingMore(false); loadingRef.current = false })
   }, [subdomain, currentPage, hasMore])
 
-  // Infinite scroll listener
+  // Infinite scroll listener — prefetches ~2 screen heights before the bottom
+  // so new products are visible by the time the user scrolls to them.
   useEffect(() => {
     if (view !== 'grid') return
     const handleScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 800) {
+      const fromBottom = document.body.offsetHeight - (window.innerHeight + window.scrollY)
+      const threshold = Math.max(1500, window.innerHeight * 1.5)
+      if (fromBottom <= threshold) {
         loadMore()
       }
     }
-    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [view, loadMore])
 
@@ -467,6 +474,7 @@ export default function StorefrontPage({ subdomain }) {
               const soldCount = product.ordersCount || product.totalSold || 0
               const savings = originalPrice > price ? (originalPrice - price) : 0
               const outOfStock = product.inStock === false
+              const shippingCost = product.shipping || 0
 
               return (
               <div
@@ -540,11 +548,18 @@ export default function StorefrontPage({ subdomain }) {
                     )}
                   </div>
 
-                  {/* Shipping badge */}
+                  {/* Shipping badge — shows the real AE shipping cost bundled
+                      in the price. Helps customers see we're not hiding fees. */}
                   <div className="mt-1.5">
-                    <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
-                      <Truck className="h-3 w-3" /> Free shipping
-                    </span>
+                    {shippingCost > 0 ? (
+                      <span className={`inline-flex items-center gap-0.5 text-xs ${theme.textMuted}`}>
+                        <Truck className="h-3 w-3" /> Incl. A${shippingCost.toFixed(2)} shipping
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
+                        <Truck className="h-3 w-3" /> Free shipping
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -553,11 +568,20 @@ export default function StorefrontPage({ subdomain }) {
           </>
         )}
 
-        {/* Loading more / infinite scroll indicator */}
+        {/* Skeleton placeholders while next page is loading — keeps the grid
+            pattern intact so users never see the flash of a spinner */}
         {loadingMore && (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-            <span className="ml-2 text-sm text-slate-400">Loading more products...</span>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 mt-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={`skel-${i}`} className="rounded-xl overflow-hidden bg-[#1e293b] animate-pulse">
+                <div className="aspect-square bg-white/[0.04]"></div>
+                <div className="p-2.5 space-y-2">
+                  <div className="h-3 rounded bg-white/[0.04]"></div>
+                  <div className="h-3 w-2/3 rounded bg-white/[0.04]"></div>
+                  <div className="h-4 w-1/2 rounded bg-white/[0.06]"></div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {hasMore && !loadingMore && filteredProducts.length > 0 && (
@@ -731,12 +755,23 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
               })}
             </div>
 
-            {/* Total + Checkout button */}
+            {/* Total + shipping transparency + Checkout button */}
             <div className="rounded-xl bg-[#1e293b] border border-white/[0.06] p-5 shadow-sm">
-              <div className="flex justify-between text-lg font-bold text-white mb-4">
+              <div className="flex justify-between text-lg font-bold text-white mb-1">
                 <span>Total</span>
                 <span>A${cart.total.toFixed(2)}</span>
               </div>
+              {cart.shippingTotal > 0 && (
+                <div className="flex justify-between text-xs text-slate-400 mb-4">
+                  <span>Includes shipping</span>
+                  <span>A${cart.shippingTotal.toFixed(2)}</span>
+                </div>
+              )}
+              {cart.shippingTotal === 0 && (
+                <div className="flex justify-between text-xs text-emerald-400 mb-4">
+                  <span>Free shipping</span>
+                </div>
+              )}
               <button
                 onClick={onCheckout}
                 disabled={verifying || hasIssues}
