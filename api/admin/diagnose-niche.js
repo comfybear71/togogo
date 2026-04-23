@@ -10,13 +10,27 @@
 //   - A spot-check of 5 products' niches values
 //   - Whether niches column even exists (for debugging migrations)
 import { sql, ensureSchema } from '../_lib/db.js'
-import { requireAdminOrSetup } from '../_lib/auth.js'
+import { requireAdminOrSetup, verifyToken } from '../_lib/auth.js'
 
 export default async function handler(req, res) {
-  try {
-    await requireAdminOrSetup(req)
-  } catch (err) {
-    return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
+  // Accept admin auth via header OR via ?secret= query param. Query-param
+  // mode is convenient for typing the URL into a browser to diagnose.
+  let authorized = false
+  const querySecret = req.query.secret
+  if (querySecret && querySecret === process.env.JWT_SECRET) authorized = true
+  if (!authorized && querySecret) {
+    try {
+      const payload = verifyToken(querySecret)
+      if (payload && payload.role === 'admin') authorized = true
+    } catch { /* fall through */ }
+  }
+  if (!authorized) {
+    try {
+      await requireAdminOrSetup(req)
+      authorized = true
+    } catch (err) {
+      return res.status(err?.status || 401).json({ error: err?.message || 'Authentication required' })
+    }
   }
 
   const storeId = req.query.storeId
