@@ -204,8 +204,8 @@ export default async function handler(req, res) {
                 const customerName = orderItems[0].customer_name || (customerEmail ? customerEmail.split('@')[0] : 'Customer')
                 const storeUserId = orderItems[0].user_id
                 const items = orderItems.map(o => ({ title: o.product_title, price: parseFloat(o.sale_price), quantity: o.quantity || 1 }))
-                // sale_price in DB is already total (unit_price × qty), so don't multiply again
-                const total = items.reduce((s, i) => s + i.price, 0) + 6 // +$6 shipping
+                // Use actual Stripe charge amount — avoids hardcoded shipping assumptions
+                const total = session.amount_total / 100
 
                 // Get store name
                 const { rows: storeRows } = await sql`SELECT id, store_name, subdomain FROM user_stores WHERE user_id = ${storeUserId}`
