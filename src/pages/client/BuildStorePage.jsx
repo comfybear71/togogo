@@ -224,18 +224,26 @@ export default function BuildStorePage() {
             </div>
           </div>
 
-          <label className="block mb-4">
+          <label className="block mb-2">
             <span className="block text-[15px] font-medium text-zinc-300 mb-2">What do you want to sell?</span>
-            <input
-              type="text"
+            <textarea
               value={niche}
               onChange={e => setNiche(e.target.value)}
-              placeholder="e.g. pet supplies"
-              maxLength={80}
-              className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-4 text-[19px] text-white focus:border-[#FF6B35] focus:outline-none"
-              onKeyDown={e => { if (e.key === 'Enter') handleGeneratePlan() }}
+              placeholder="e.g. ladies fashion — shoes, handbags, jewellery and accessories"
+              maxLength={300}
+              rows={3}
+              className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-4 py-3 text-[18px] text-white focus:border-[#FF6B35] focus:outline-none resize-y min-h-[112px]"
+              // Cmd/Ctrl + Enter submits so the single-line-habit users
+              // still have a keyboard shortcut, without trapping people
+              // who want to type multi-line descriptions.
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleGeneratePlan()
+              }}
             />
           </label>
+          <p className="text-[14px] text-zinc-500 mb-6">
+            The more specific, the better — tell us exactly what you want to sell. {niche.length}/300
+          </p>
 
           <div className="mb-6">
             <div className="text-[14px] text-zinc-500 mb-2">Or pick an idea:</div>
