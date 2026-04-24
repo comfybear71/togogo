@@ -22,9 +22,11 @@ import { sql } from '../_lib/db.js'
 import { getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
 import { summarisePricing } from '../_lib/pricing.js'
 
-const PARALLEL_BATCH = 20
+const PARALLEL_BATCH = 2             // was 20 — AE DS AppApiCallLimit hits hard above ~1-2 req/s
 const PER_PRODUCT_TIMEOUT_MS = 6000
-const SOFT_DEADLINE_MS = 50000  // leave 10s of Vercel's 60s cap for response
+const SOFT_DEADLINE_MS = 50000        // leave 10s of Vercel's 60s cap for response
+const INTER_BATCH_SLEEP_MS = 1500     // ~60 req/min sustained — below empirical ban threshold
+const MAX_CONSECUTIVE_SKIPS = 6       // 3 batches worth; if all failing, we're banned — bail and tell user to retry later
 
 async function refetchOne(row) {
   const aeId = (row.supplier_product_id || '').replace('ae_', '')
@@ -117,14 +119,25 @@ export default async function handler(req, res) {
   let deactivated = 0
   let skipped = 0
   let processed = 0
+  let consecutiveSkips = 0
+  let rateLimitHit = false
 
   try {
     // Loop through batches until we hit our soft deadline or run out of
     // eligible rows. Ignores the cron's 1-hour cooldown — that's the point.
+    // Respects AE's AppApiCallLimit by keeping parallelism low and pacing
+    // between batches. If rate limits cascade (MAX_CONSECUTIVE_SKIPS), we
+    // bail early and tell the caller to wait out the ban before retrying.
     while (processed < limit && Date.now() - startedAt < SOFT_DEADLINE_MS) {
       const remaining = limit - processed
       const batchSize = Math.min(PARALLEL_BATCH, remaining)
 
+      // Refetch endpoint previously set variants_updated_at = NOW() - 23h
+      // on every skip during the 20-parallel rate-limit cascade, so all
+      // ~8264 products look "recently touched" now. We can't filter by
+      // cooldown — sort oldest-first and let the SQL pick whatever needs
+      // real rebuild data (anything not actually healed will come out of
+      // the UPDATE with fresh variants).
       const { rows: batch } = await sql`
         SELECT id, supplier_product_id, product_rating, orders_count
         FROM user_products
@@ -144,11 +157,29 @@ export default async function handler(req, res) {
       }))))
 
       for (const r of settled) {
-        if (r.rebuilt) rebuilt++
-        else if (r.deactivated) deactivated++
-        else skipped++
+        if (r.rebuilt) {
+          rebuilt++
+          consecutiveSkips = 0
+        } else if (r.deactivated) {
+          deactivated++
+          consecutiveSkips = 0
+        } else {
+          skipped++
+          consecutiveSkips++
+        }
         processed++
       }
+
+      // Rate-limit cascade detector — when everything's skipping, more
+      // requests just deepen the ban. Bail out and surface a clear message.
+      if (consecutiveSkips >= MAX_CONSECUTIVE_SKIPS) {
+        rateLimitHit = true
+        break
+      }
+
+      // Pace next wave. Match AE's observed steady-state tolerance
+      // (background cron runs 10 products/minute without bans).
+      await new Promise(r => setTimeout(r, INTER_BATCH_SLEEP_MS))
     }
 
     // Progress snapshot
@@ -161,7 +192,13 @@ export default async function handler(req, res) {
     const progress = progressRow[0] || { recently_rebuilt: 0, total_active: 0 }
     const hasMore = progress.recently_rebuilt < progress.total_active
 
-    console.log(`[Force Refetch] ${processed} processed (${rebuilt} rebuilt, ${deactivated} deactivated, ${skipped} skipped) in ${Date.now() - startedAt}ms. hasMore=${hasMore}`)
+    console.log(`[Force Refetch] ${processed} processed (${rebuilt} rebuilt, ${deactivated} deactivated, ${skipped} skipped, rateLimitHit=${rateLimitHit}) in ${Date.now() - startedAt}ms. hasMore=${hasMore}`)
+
+    const nextStep = rateLimitHit
+      ? `AE rate-limit (AppApiCallLimit) hit after ${rebuilt} rebuild${rebuilt === 1 ? '' : 's'}. Wait ~60 seconds for the ban to clear, then re-run. Consider re-running with &limit=50 to reduce impact per call.`
+      : hasMore
+        ? 'Re-run this URL to continue — hasMore=true means not all products have been refetched yet.'
+        : 'Done. All active products refetched within the last 30 minutes.'
 
     return res.json({
       success: true,
@@ -169,12 +206,11 @@ export default async function handler(req, res) {
       rebuilt,
       deactivated,
       skipped,
+      rateLimitHit,
       elapsedMs: Date.now() - startedAt,
       progress,
       hasMore,
-      nextStep: hasMore
-        ? 'Re-run this URL to continue — hasMore=true means not all products have been refetched yet.'
-        : 'Done. All active products refetched within the last 30 minutes.',
+      nextStep,
     })
   } catch (err) {
     console.error('[Force Refetch] Error:', err)
