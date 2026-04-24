@@ -254,25 +254,34 @@ export default async function handler(req, res) {
     }
     const totalWithShipping = totalAmount + shippingFeeCents
 
-    // PRICE DRIFT CHECK — if the fresh AE total is HIGHER than what the
-    // customer saw in their cart, pause before creating the Stripe session
-    // and return the new figure so the frontend can show a "Price updated"
-    // banner and ask them to confirm. Drift in our favour (cheaper) passes
-    // silently — per user spec, they keep that margin.
+    // PRICE DRIFT CHECK — if the fresh AE total differs from what the customer
+    // saw in their cart (in EITHER direction) by more than 1 cent, pause before
+    // creating the Stripe session and return the new figure so the frontend
+    // can show a "Price updated" banner. We bounce in both directions to keep
+    // pricing honest — previously we silently charged cart-total when AE was
+    // cheaper (over-charging during a catalog staleness window). That's bad
+    // for the "keep prices tight to AE's real bill" goal; customers now see
+    // the corrected total either way.
     const cartTotalCents = items.reduce(
       (s, i) => s + Math.round((parseFloat(i.cartTotalUsd) || 0) * 100) * (i.quantity || 1),
       0
     )
-    if (cartTotalCents > 0 && totalWithShipping > cartTotalCents) {
+    const driftCents = Math.abs(totalWithShipping - cartTotalCents)
+    if (cartTotalCents > 0 && driftCents > 1) {
       const acknowledgedCents = Math.round((parseFloat(acknowledgedDriftTotal) || 0) * 100)
       // Only bounce back if customer hasn't already acknowledged this specific
       // total — otherwise an "accept new price" retry would re-bounce forever.
       if (acknowledgedCents !== totalWithShipping) {
+        const priceDropped = totalWithShipping < cartTotalCents
+        const message = priceDropped
+          ? `Price dropped at AliExpress since you added to cart. Was US $${(cartTotalCents / 100).toFixed(2)} — now US $${(totalWithShipping / 100).toFixed(2)}.`
+          : `AliExpress price updated. Previous total US $${(cartTotalCents / 100).toFixed(2)} — current US $${(totalWithShipping / 100).toFixed(2)}.`
         return res.json({
           priceUpdated: true,
+          priceDropped,
           oldTotalUsd: cartTotalCents / 100,
           newTotalUsd: totalWithShipping / 100,
-          message: `AliExpress price updated. Previous total US $${(cartTotalCents / 100).toFixed(2)} — current US $${(totalWithShipping / 100).toFixed(2)}.`,
+          message,
         })
       }
     }

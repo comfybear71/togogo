@@ -253,18 +253,28 @@ export async function refreshAliExpressToken() {
 
 // ============================================
 // DS PRODUCT DETAILS — full info with all images, description, specs
+//
+// Uses aliexpress.ds.product.wholesale.get (NOT ds.product.get) because
+// wholesale returns the REAL dropshipper rate in offer_sale_price — the
+// exact number AE bills us at checkout. ds.product.get returns a higher
+// retail-ish price that doesn't match actual billing. Verified empirically
+// 2026-04-24:
+//   - Airtight Container Blue 2000ML: wholesale offer_sale_price=$12.50,
+//     matches AE real checkout billing exactly
+//   - Garlic Chopper 1005009939321631: wholesale offer_sale_price=$1.10,
+//     matches trade.ds.order.get pay_amount exactly
 // ============================================
 
 export async function getProductDetails(productId) {
   try {
-    const data = await callAuthenticatedAPI('aliexpress.ds.product.get', {
+    const data = await callAuthenticatedAPI('aliexpress.ds.product.wholesale.get', {
       product_id: String(productId),
-      target_currency: 'AUD',
+      target_currency: 'USD',
       target_language: 'EN',
       ship_to_country: 'AU',
     })
 
-    const result = data?.aliexpress_ds_product_get_response?.result
+    const result = data?.aliexpress_ds_product_wholesale_get_response?.result
     if (!result) return null
 
     const baseInfo = result.ae_item_base_info_dto || {}
@@ -283,6 +293,20 @@ export async function getProductDetails(productId) {
     // All images
     const imageUrls = multimedia.image_urls ? multimedia.image_urls.split(';').filter(Boolean) : []
 
+    // Parse variants first — we derive cost/originalPrice/currency from them
+    // because ds.product.wholesale.get doesn't return base-level sale_price
+    // / price the way ds.product.get does.
+    const variants = skuInfo.map(parseVariant).filter(v => v.priceUsd > 0)
+    const variantPrices = variants.map(v => v.priceUsd)
+    const variantRegularPrices = skuInfo
+      .map(s => parseFloat(s.sku_price || '0'))
+      .filter(p => p > 0)
+    const derivedCost = variantPrices.length > 0 ? Math.min(...variantPrices) : 0
+    const derivedOriginalPrice = variantRegularPrices.length > 0
+      ? Math.max(...variantRegularPrices)
+      : derivedCost
+    const derivedCurrency = skuInfo[0]?.currency_code || baseInfo.currency_code || 'USD'
+
     return {
       productId: String(productId),
       title: baseInfo.subject || '',
@@ -290,15 +314,15 @@ export async function getProductDetails(productId) {
       images: imageUrls,
       image: imageUrls[0] || '',
       videoUrl: multimedia.ae_video_dtos?.ae_video_d_t_o?.[0]?.media_url || '',
-      cost: parseFloat(baseInfo.sale_price?.amount || baseInfo.price?.amount || '0'),
-      originalPrice: parseFloat(baseInfo.price?.amount || '0'),
-      currency: baseInfo.sale_price?.currency_code || 'AUD',
+      cost: derivedCost,
+      originalPrice: derivedOriginalPrice,
+      currency: derivedCurrency,
       category: baseInfo.category_id || '',
       categoryName: baseInfo.product_category_name || '',
-      // Canonical variants — every SKU with its real USD price, stock, and
-      // colour-swatch image. One source of truth for storefront variant UI
-      // and for rebuild-time price calculation. See api/_lib/pricing.js.
-      variants: skuInfo.map(parseVariant).filter(v => v.priceUsd > 0),
+      // Canonical variants — every SKU with its real USD dropshipper price,
+      // stock, and colour-swatch image. One source of truth for storefront
+      // variant UI and for rebuild-time price calculation. See api/_lib/pricing.js.
+      variants,
       // Shipping options (old-schema only — new DS API returns empty list)
       shipping: shippingInfo.map(s => ({
         company: s.logistics_company || '',
@@ -316,8 +340,8 @@ export async function getProductDetails(productId) {
         name: storeInfo.store_name || '',
         rating: storeInfo.evaluation_positive_rate || '',
       },
-      // Real product metrics from ds.product.get — parsed from raw strings
-      // (AE returns "10000+" for sales, "4.6" for rating, etc.)
+      // Real product metrics — parsed from raw strings (AE returns "10000+" for
+      // sales, "4.6" for rating, etc.)
       orders: (() => {
         const s = baseInfo.sales_count
         if (!s) return 0
@@ -328,16 +352,14 @@ export async function getProductDetails(productId) {
         ? Math.min(5, parseFloat(baseInfo.avg_evaluation_rating) || 0)
         : 0,
       evaluationCount: parseInt(baseInfo.evaluation_count || '0', 10) || 0,
-      // Computed discount % from original vs sale price
+      // Discount % from max(sku_price) vs min(offer_sale_price) across variants
       discountPercent: (() => {
-        const orig = parseFloat(baseInfo.price?.amount || '0')
-        const sale = parseFloat(baseInfo.sale_price?.amount || '0')
-        if (!orig || !sale || sale >= orig) return 0
-        return Math.round((1 - sale / orig) * 100)
+        if (!derivedOriginalPrice || !derivedCost || derivedCost >= derivedOriginalPrice) return 0
+        return Math.round((1 - derivedCost / derivedOriginalPrice) * 100)
       })(),
     }
   } catch (err) {
-    console.error(`[AliExpress] ds.product.get failed for ${productId}:`, err.message)
+    console.error(`[AliExpress] ds.product.wholesale.get failed for ${productId}:`, err.message)
     return null
   }
 }
