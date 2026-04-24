@@ -1,7 +1,17 @@
-// User's own store info API — returns the authenticated user's store details
-// No admin access required — scoped to the logged-in user
+// User's own store info API — returns (and updates) the authenticated
+// user's store details. Scoped to the logged-in user; ownership enforced
+// inline via WHERE user_id = user.id.
+//
+// GET    /api/my-shop/store          → returns the caller's store
+// PATCH  /api/my-shop/store          → updates store name / markup / theme
 import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
+
+// Allowed theme IDs — keep in sync with src/lib/storefrontThemes.js.
+// Defined here rather than shared because server and client use
+// different module systems (plain ESM vs Vite bundled), and the list
+// is short + stable.
+const ALLOWED_THEMES = new Set(['sunset', 'midnight', 'forest', 'lavender', 'coral'])
 
 export default async function handler(req, res) {
   let user
@@ -11,25 +21,79 @@ export default async function handler(req, res) {
     return res.status(err?.status || 401).json({ error: err?.message || 'Authentication required' })
   }
 
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' })
-  }
-
-  try {
-    const { rows } = await sql`
-      SELECT id, subdomain, full_domain, store_name, status, tier, created_at, updated_at
-      FROM user_stores
-      WHERE user_id = ${user.id}
-      LIMIT 1
-    `
-
-    if (!rows[0]) {
+  if (req.method === 'GET') {
+    try {
+      const { rows } = await sql`
+        SELECT id, subdomain, full_domain, store_name, status, tier, theme_id,
+               markup_percent, stripe_connect_status, stripe_connect_id,
+               created_at, updated_at
+        FROM user_stores
+        WHERE user_id = ${user.id}
+        LIMIT 1
+      `
+      if (!rows[0]) return res.json({ store: null })
+      return res.json({ store: rows[0] })
+    } catch (err) {
+      console.error('My store GET error:', err)
       return res.json({ store: null })
     }
-
-    return res.json({ store: rows[0] })
-  } catch (err) {
-    console.error('My store info error:', err)
-    return res.json({ store: null })
   }
+
+  if (req.method === 'PATCH') {
+    // Accept a subset of editable fields. Reject unknown keys silently;
+    // we'd rather ignore than return 400 and break the UI.
+    const { store_name, markup_percent, theme_id } = req.body || {}
+
+    // Validate each field that's present. Missing fields aren't an error.
+    if (store_name !== undefined) {
+      if (typeof store_name !== 'string' || !store_name.trim() || store_name.length > 100) {
+        return res.status(400).json({ error: 'store_name must be 1-100 characters' })
+      }
+    }
+    if (markup_percent !== undefined) {
+      const mp = parseFloat(markup_percent)
+      if (!Number.isFinite(mp) || mp < 0 || mp > 500) {
+        return res.status(400).json({ error: 'markup_percent must be a number between 0 and 500' })
+      }
+    }
+    if (theme_id !== undefined) {
+      if (typeof theme_id !== 'string' || !ALLOWED_THEMES.has(theme_id)) {
+        return res.status(400).json({
+          error: `theme_id must be one of: ${[...ALLOWED_THEMES].join(', ')}`,
+        })
+      }
+    }
+
+    // Run a single UPDATE with COALESCE so only provided fields change.
+    // WHERE user_id = ${user.id} is our ownership guard — if the caller
+    // doesn't own a store, rowCount is 0 and we return 404.
+    try {
+      const result = await sql`
+        UPDATE user_stores
+        SET store_name     = COALESCE(${store_name ?? null}, store_name),
+            markup_percent = COALESCE(${markup_percent ?? null}::numeric, markup_percent),
+            theme_id       = COALESCE(${theme_id ?? null}, theme_id),
+            updated_at     = NOW()
+        WHERE user_id = ${user.id}
+      `
+      if (!result.rowCount) {
+        return res.status(404).json({ error: 'No store found for your account' })
+      }
+
+      const { rows } = await sql`
+        SELECT id, subdomain, full_domain, store_name, status, tier, theme_id,
+               markup_percent, stripe_connect_status, stripe_connect_id,
+               created_at, updated_at
+        FROM user_stores
+        WHERE user_id = ${user.id}
+        LIMIT 1
+      `
+      return res.json({ success: true, store: rows[0] || null })
+    } catch (err) {
+      console.error('My store PATCH error:', err)
+      return res.status(500).json({ error: 'Failed to update store' })
+    }
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' })
 }
