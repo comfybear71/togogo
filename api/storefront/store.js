@@ -3,6 +3,7 @@
 // Supports pagination: ?page=1&limit=20 for infinite scroll
 import { sql } from '../_lib/db.js'
 import { searchAliExpress } from '../_lib/suppliers.js'
+import { getAudRate, usdToAud } from '../_lib/pricing.js'
 import { Redis } from '@upstash/redis'
 
 // Redis caching (optional — works with Upstash REST API)
@@ -63,6 +64,12 @@ export default async function handler(req, res) {
     const markupPercent = parseFloat(store.markup_percent ?? 40) || 0
     const markupMultiplier = 1 + markupPercent / 100
 
+    // Customers see AUD throughout. Store all prices come out of the DB in
+    // USD (AE's native currency); we apply markup, then convert to AUD using
+    // the live admin rate before sending to the frontend. Single source of
+    // truth — the storefront page never multiplies by a rate itself.
+    const audRate = await getAudRate()
+
     // Pagination params
     const page = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 30))
@@ -73,11 +80,13 @@ export default async function handler(req, res) {
     const search = req.query.search || ''
 
     // Build WHERE conditions — price thresholds are filter buckets the
-    // customer sees ("Under $10", "$10-$20" etc). Convert to break-even
-    // space because sale_price in the DB is pre-markup.
-    const t10s = (10 / markupMultiplier).toFixed(4)
-    const t20s = (20 / markupMultiplier).toFixed(4)
-    const t50s = (50 / markupMultiplier).toFixed(4)
+    // customer sees ("Under A$10", "A$10–A$20" etc). The customer-facing
+    // numbers are AUD-after-markup; sale_price in the DB is pre-markup
+    // USD. Convert each threshold from AUD → USD-break-even before the
+    // SQL comparison: (audThreshold / audRate / markupMultiplier).
+    const t10s = (10 / audRate / markupMultiplier).toFixed(4)
+    const t20s = (20 / audRate / markupMultiplier).toFixed(4)
+    const t50s = (50 / audRate / markupMultiplier).toFixed(4)
     let whereExtra = ''
     if (category) whereExtra += ` AND category = '${category.replace(/'/g, "''")}'`
     if (priceRange === 'under10') whereExtra += ` AND sale_price < ${t10s}`
@@ -162,15 +171,17 @@ export default async function handler(req, res) {
         try { images = JSON.parse(images) } catch { images = images.replace(/[{}]/g, '').split(',').filter(Boolean) }
       }
       if (!Array.isArray(images)) images = []
-      // Stored sale_price is break-even (our AE cost). Apply the store's
-      // markup here so every field the frontend reads (product.price,
-      // product.originalPrice) is customer-facing. break_even_usd is
-      // preserved for debugging / commission math on the server side.
+      // Stored sale_price is break-even (our AE cost in USD). Apply the
+      // store's markup, then convert USD → AUD with the live admin rate
+      // so every customer-facing field (price, originalPrice) is AUD.
+      // breakEvenUsd is preserved for debugging / commission math on the
+      // server side.
       const breakEvenUsd = parseFloat(p.sale_price) || 0
-      const markedPrice = Math.round(breakEvenUsd * markupMultiplier * 100) / 100
+      const markedUsd = Math.round(breakEvenUsd * markupMultiplier * 100) / 100
+      const markedPrice = usdToAud(markedUsd, audRate)
       const breakEvenOriginal = parseFloat(p.original_price) || 0
       const markedOriginal = breakEvenOriginal > 0
-        ? Math.round(breakEvenOriginal * markupMultiplier * 100) / 100
+        ? usdToAud(breakEvenOriginal * markupMultiplier, audRate)
         : 0
       return {
       id: p.id,
@@ -181,7 +192,7 @@ export default async function handler(req, res) {
       images,
       price: markedPrice,
       breakEvenUsd,
-      currency: p.price_currency || 'USD',
+      currency: 'AUD',
       shipping: parseFloat(p.shipping_usd ?? p.shipping_cost) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
       supplierProductId: p.supplier_product_id || '',
@@ -214,7 +225,10 @@ export default async function handler(req, res) {
             description: p.description,
             image: p.image,
             images: p.images || [],
-            price: p.suggestedPrice || 0,
+            // Live AliExpress fallback prices come back in USD; convert
+            // to AUD for the storefront's AUD-only display contract.
+            price: usdToAud(p.suggestedPrice || 0, audRate),
+            currency: 'AUD',
             supplierCost: p.cost || 0,
             category: p.category || 'General',
             totalSold: p.orders || 0,

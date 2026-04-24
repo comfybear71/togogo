@@ -2,9 +2,15 @@
 // used by imports, rebuilds, and storefront display.
 //
 // Invariants:
-//   - Everything in USD (AE's native currency)
-//   - NO markup (we're proving correctness first)
-//   - NO currency conversion
+//   - Internal pricing is USD (AE's native currency). supplier_cost,
+//     ae_actual_cost_usd and sale_price as written by the cron all live
+//     in USD.
+//   - The single conversion to AUD happens at the Stripe boundary
+//     (storefront/checkout.js uses currency: 'aud' on line items) and
+//     at storefront/admin display time. Use `usdToAud` and `getAudRate`
+//     below — never multiply by a literal exchange rate inline.
+//   - NO markup at the cron stage. The store owner's per-shop
+//     markup_percent is applied later, at storefront display + checkout.
 //
 // Formula per variant — real AE API numbers plus a clearly-labelled tax
 // estimate (AE doesn't expose tax via any pre-order API; we pass through
@@ -21,6 +27,7 @@
 // make their actual bill lower than our estimate, that delta is our
 // margin. Choice is a discount AE gives store owners for selling
 // through the platform — the user has explicitly said we keep it.
+import { sql } from './db.js'
 
 export const DEFAULT_SHIPPING_USD = 0
 // Flat estimate. Per-country table is future work; user approved 10% now.
@@ -87,6 +94,42 @@ export function breakEvenUsd(variantPriceUsd, shippingUsd = DEFAULT_SHIPPING_USD
   const shipping = Math.max(0, Number(shippingUsd) || 0)
   const tax = estimateTax(product + shipping)
   return Math.round((product + shipping + tax) * 100) / 100
+}
+
+// Default USD→AUD rate when admin_settings is missing or unreadable.
+// Set above the spot rate by design — it's the buffer we keep against FX
+// fluctuation between the Stripe charge and AE's USD bill landing on our
+// statement. Admin can tune via /admin/settings → "USD to AUD Exchange Rate".
+export const DEFAULT_USD_TO_AUD = 1.45
+
+// Read the configured USD→AUD rate from admin_settings. Returns a Number
+// (not a string), guaranteed > 0. Falls back to DEFAULT_USD_TO_AUD on any
+// error. Cheap query — call it once per request handler and pass the value
+// down rather than re-querying inside a loop.
+export async function getAudRate() {
+  try {
+    const { rows } = await sql`SELECT value FROM admin_settings WHERE key = 'usd_to_aud_rate'`
+    const v = parseFloat(rows[0]?.value)
+    return Number.isFinite(v) && v > 0 ? v : DEFAULT_USD_TO_AUD
+  } catch {
+    return DEFAULT_USD_TO_AUD
+  }
+}
+
+// Convert a USD amount to AUD using the supplied rate. Always rounds to
+// 2 decimals — never let half-cent drift accumulate across line items.
+export function usdToAud(usd, rate) {
+  const u = Number(usd) || 0
+  const r = Number(rate) || DEFAULT_USD_TO_AUD
+  return Math.round(u * r * 100) / 100
+}
+
+// Same as usdToAud but returns Stripe-style integer cents (×100).
+// For line items and application_fee_amount, which Stripe wants as ints.
+export function usdToAudCents(usd, rate) {
+  const u = Number(usd) || 0
+  const r = Number(rate) || DEFAULT_USD_TO_AUD
+  return Math.round(u * r * 100)
 }
 
 // Build the derived price summary for a product given its variants[].

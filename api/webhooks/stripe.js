@@ -5,6 +5,7 @@ import Stripe from 'stripe'
 import { registerDomain } from '../domains/register.js'
 import { sendEmail, orderConfirmationEmail, newOrderAlertEmail } from '../_lib/email.js'
 import { submitOrder, reportOrderForDSLevel } from '../_lib/suppliers.js'
+import { getAudRate, usdToAud, DEFAULT_USD_TO_AUD } from '../_lib/pricing.js'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
@@ -254,7 +255,7 @@ export default async function handler(req, res) {
                 try {
                   const { rows: fullOrders } = await sql`
                     SELECT id, supplier_product_id, quantity, shipping_address, customer_name, customer_email,
-                           supplier_cost, sale_price, stripe_checkout_session
+                           supplier_cost, sale_price, stripe_checkout_session, order_data
                     FROM user_orders WHERE platform_order_id = ${orderRef} AND supplier = 'AliExpress'
                   `
                   for (const order of fullOrders) {
@@ -342,26 +343,37 @@ export default async function handler(req, res) {
                         ? Math.round(result.realCostUSD * 100) / 100
                         : null
                       if (aeActualCostUsd != null) {
-                        // Compute the AE bonus at the same time so /admin/orders
-                        // shows ToGoGo + Bonus + Owner summing to Real Margin on
-                        // brand-new orders without anyone running the backfill.
-                        // Both values in USD; clamp negative (AE overcharges) to 0.
+                        // AE bonus = supplier_cost (USD) − AE's real bill (USD),
+                        // converted to AUD for display alongside the AUD-stored
+                        // commission/profit columns. Use the rate snapshotted on
+                        // the order at checkout time so the post-charge math
+                        // matches the pre-charge math even if the admin tweaks
+                        // the rate later. Falls back to the live rate, then to
+                        // the default constant.
                         const supplierCostUsd = parseFloat(order.supplier_cost) || 0
-                        const aeBonus = Math.max(0, Math.round((supplierCostUsd - aeActualCostUsd) * 100) / 100)
+                        const bonusUsd = Math.max(0, Math.round((supplierCostUsd - aeActualCostUsd) * 100) / 100)
+                        let orderAudRate = null
+                        try {
+                          const od = typeof order.order_data === 'string' ? JSON.parse(order.order_data) : order.order_data
+                          orderAudRate = parseFloat(od?.audRate) || null
+                        } catch { /* */ }
+                        const audRate = orderAudRate || (await getAudRate().catch(() => DEFAULT_USD_TO_AUD))
+                        const aeBonusAud = usdToAud(bonusUsd, audRate)
                         await sql`
                           UPDATE user_orders
                           SET supplier_order_id = ${result.orderId},
                               status = 'processing',
                               ae_actual_cost_usd = ${aeActualCostUsd},
                               ae_actual_fetched_at = NOW(),
-                              ae_bonus = ${aeBonus},
-                              notes = ${`Submitted to AliExpress. AE billed US$${aeActualCostUsd.toFixed(2)}. AE bonus US$${aeBonus.toFixed(2)}.`},
+                              ae_bonus = ${aeBonusAud},
+                              notes = ${`Submitted to AliExpress. AE billed US$${aeActualCostUsd.toFixed(2)}. AE bonus A$${aeBonusAud.toFixed(2)} @ rate ${audRate}.`},
                               updated_at = NOW()
                           WHERE id = ${order.id}
                         `
-                        const customerPaidUsd = parseFloat(order.sale_price) || 0
-                        const marginUsd = Math.round((customerPaidUsd - aeActualCostUsd) * 100) / 100
-                        console.log(`[Webhook Reconcile] ${order.id}: customer paid US$${customerPaidUsd.toFixed(2)} · AE billed US$${aeActualCostUsd.toFixed(2)} · margin US$${marginUsd.toFixed(2)} · bonus US$${aeBonus.toFixed(2)}`)
+                        const customerPaidAud = parseFloat(order.sale_price) || 0
+                        const aeActualAud = usdToAud(aeActualCostUsd, audRate)
+                        const marginAud = Math.round((customerPaidAud - aeActualAud) * 100) / 100
+                        console.log(`[Webhook Reconcile] ${order.id}: customer paid A$${customerPaidAud.toFixed(2)} · AE billed US$${aeActualCostUsd.toFixed(2)} (A$${aeActualAud.toFixed(2)}) · margin A$${marginAud.toFixed(2)} · bonus A$${aeBonusAud.toFixed(2)}`)
                       } else {
                         await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress (AE total not yet available — admin can re-fetch)'}, updated_at = NOW() WHERE id = ${order.id}`
                       }

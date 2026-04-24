@@ -278,8 +278,19 @@ export default function OrdersPage() {
                   const StatusIcon = sc.icon;
                   const date = o.created_at ? new Date(o.created_at).toLocaleDateString() : '';
                   const customerPaid = parseFloat(o.sale_price || 0)
-                  const aeBilled = o.ae_actual_cost_usd != null ? parseFloat(o.ae_actual_cost_usd) : null
-                  const realMargin = aeBilled != null ? customerPaid - aeBilled : null
+                  // pricing_currency stamps each row: 'AUD' for orders since
+                  // the cutover, 'USD' for legacy rows. Customer-facing
+                  // money columns prefix accordingly. AE billed is always
+                  // shown in AUD (server already converted via order_data
+                  // rate) so Real Margin = Customer − AE stays apples to
+                  // apples — except for legacy USD orders where the API
+                  // sends back ae_actual_cost_aud = USD value (no conversion).
+                  const currency = o.pricing_currency === 'USD' ? 'USD' : 'AUD'
+                  const moneyPrefix = currency === 'USD' ? '$' : 'A$'
+                  const aeBilledDisplay = o.ae_actual_cost_aud != null
+                    ? parseFloat(o.ae_actual_cost_aud)
+                    : (o.ae_actual_cost_usd != null ? parseFloat(o.ae_actual_cost_usd) : null)
+                  const realMargin = aeBilledDisplay != null ? customerPaid - aeBilledDisplay : null
                   const marginColor = realMargin == null ? 'text-zinc-500'
                     : realMargin > 0 ? 'text-emerald-400'
                     : realMargin < 0 ? 'text-red-400'
@@ -287,7 +298,8 @@ export default function OrdersPage() {
                   // commission (ToGoGo's 30% cut, frozen at checkout), profit
                   // (owner's 70%) and ae_bonus (AE discount captured at
                   // reconciliation — 100% to ToGoGo) all come straight from
-                  // the order row. ToGoGo + Bonus + Owner = Real Margin.
+                  // the order row, in the same currency as sale_price.
+                  // ToGoGo + Bonus + Owner = Real Margin.
                   const togogoCommission = parseFloat(o.commission || 0)
                   const ownerProfit = parseFloat(o.profit || 0)
                   const aeBonus = o.ae_bonus != null ? parseFloat(o.ae_bonus) : null
@@ -300,19 +312,19 @@ export default function OrdersPage() {
                       <td className="py-3 pr-4 text-white">{o.customer_name || 'Unknown'}</td>
                       <td className="py-3 pr-4 text-zinc-400">{o.seller_name || o.seller_email}</td>
                       <td className="py-3 pr-4 text-zinc-400 max-w-[200px] truncate">{o.product_title}</td>
-                      <td className="py-3 pr-4 text-right font-medium text-white tabular-nums">${customerPaid.toFixed(2)}</td>
-                      <td className="py-3 pr-4 text-right text-zinc-300 tabular-nums">{aeBilled != null ? `$${aeBilled.toFixed(2)}` : '—'}</td>
+                      <td className="py-3 pr-4 text-right font-medium text-white tabular-nums">{moneyPrefix}{customerPaid.toFixed(2)}</td>
+                      <td className="py-3 pr-4 text-right text-zinc-300 tabular-nums">{aeBilledDisplay != null ? `${moneyPrefix}${aeBilledDisplay.toFixed(2)}` : '—'}</td>
                       <td className={`py-3 pr-4 text-right tabular-nums font-medium ${marginColor}`}>
-                        {realMargin != null ? `${realMargin >= 0 ? '+' : ''}$${realMargin.toFixed(2)}` : '—'}
+                        {realMargin != null ? `${realMargin >= 0 ? '+' : ''}${moneyPrefix}${realMargin.toFixed(2)}` : '—'}
                       </td>
                       <td className="py-3 pr-4 text-right tabular-nums text-emerald-400">
-                        {togogoCommission > 0 ? `+$${togogoCommission.toFixed(2)}` : '—'}
+                        {togogoCommission > 0 ? `+${moneyPrefix}${togogoCommission.toFixed(2)}` : '—'}
                       </td>
                       <td className="py-3 pr-4 text-right tabular-nums text-amber-400">
-                        {aeBonus != null && aeBonus > 0 ? `+$${aeBonus.toFixed(2)}` : '—'}
+                        {aeBonus != null && aeBonus > 0 ? `+${moneyPrefix}${aeBonus.toFixed(2)}` : '—'}
                       </td>
                       <td className={`py-3 pr-4 text-right tabular-nums font-medium ${profitColor}`}>
-                        {ownerProfit !== 0 ? `${ownerProfit > 0 ? '+' : '−'}$${Math.abs(ownerProfit).toFixed(2)}` : '—'}
+                        {ownerProfit !== 0 ? `${ownerProfit > 0 ? '+' : '−'}${moneyPrefix}${Math.abs(ownerProfit).toFixed(2)}` : '—'}
                       </td>
                       <td className="py-3 pr-4">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${sc.color}`}>
@@ -392,10 +404,10 @@ export default function OrdersPage() {
               <div className="rounded-xl bg-[#0a0a0a] p-4">
                 <h3 className="text-sm font-semibold text-zinc-300">Product</h3>
                 <p className="text-base font-medium text-white">{selectedOrder.product_title}</p>
-                <p className="mt-1 text-2xl font-bold text-[#FF6B35]">${parseFloat(selectedOrder.sale_price || 0).toFixed(2)}</p>
+                <p className="mt-1 text-2xl font-bold text-[#FF6B35]">{selectedOrder.pricing_currency === 'USD' ? '$' : 'A$'}{parseFloat(selectedOrder.sale_price || 0).toFixed(2)}</p>
                 <p className="text-xs text-zinc-500">
-                  Commission: ${parseFloat(selectedOrder.commission || 0).toFixed(2)} &middot;
-                  Seller profit: ${parseFloat(selectedOrder.profit || 0).toFixed(2)}
+                  Commission: {selectedOrder.pricing_currency === 'USD' ? '$' : 'A$'}{parseFloat(selectedOrder.commission || 0).toFixed(2)} &middot;
+                  Seller profit: {selectedOrder.pricing_currency === 'USD' ? '$' : 'A$'}{parseFloat(selectedOrder.profit || 0).toFixed(2)}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">

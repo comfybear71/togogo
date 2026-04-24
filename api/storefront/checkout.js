@@ -3,6 +3,7 @@
 import Stripe from 'stripe'
 import { sql } from '../_lib/db.js'
 import { getCommissionRate } from '../_lib/commission.js'
+import { getAudRate, usdToAud, usdToAudCents } from '../_lib/pricing.js'
 import { verifyProduct, getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
@@ -46,10 +47,13 @@ export default async function handler(req, res) {
     const markupPercent = parseFloat(store.markup_percent ?? 40) || 0
     const markupMultiplier = 1 + markupPercent / 100
 
-    // Build line items from cart
+    // Build line items from cart. Internal pricing math stays USD (AE's
+    // native currency); convert once to AUD when we hand to Stripe so
+    // customers are charged in AUD on their statement, not USD.
     const lineItems = []
     const orderItems = []
     const commissionRate = await getCommissionRate()
+    const audRate = await getAudRate()
     let totalSupplierCost = 0
 
     for (const item of items) {
@@ -173,8 +177,12 @@ export default async function handler(req, res) {
       // shipping / tax) after markup inflates the "shipping" and "tax"
       // line artificially, which looks like price-gouging to customers.
       // Internal breakdown is preserved in orderItems for reporting.
+      // Stripe is charged in AUD: convert USD price using the live admin
+      // rate. The customer's statement reads AUD directly — no per-bank
+      // FX surprises.
       const chargePriceUsd = Math.round(breakEvenUsd * markupMultiplier * 100) / 100
-      const chargePriceCents = Math.round(chargePriceUsd * 100)
+      const chargePriceAud = usdToAud(chargePriceUsd, audRate)
+      const chargePriceCents = usdToAudCents(chargePriceUsd, audRate)
 
       const variantTitle = chosenVariant?.label
         ? `${product.title.slice(0, 160)} — ${chosenVariant.label.slice(0, 40)}`
@@ -183,7 +191,7 @@ export default async function handler(req, res) {
 
       lineItems.push({
         price_data: {
-          currency: 'usd',
+          currency: 'aud',
           product_data: {
             name: variantTitle,
             ...(variantImage ? { images: [variantImage] } : {}),
@@ -192,7 +200,6 @@ export default async function handler(req, res) {
         },
         quantity: qty,
       })
-      const unitPrice = chargePriceCents
 
       orderItems.push({
         productId: product.id,
@@ -205,19 +212,21 @@ export default async function handler(req, res) {
         skuAttr: chosenVariant?.skuAttr || null,
         variantLabel: chosenVariant?.label || '',
         variantPriceUsd: variantPriceUsd,
-        // supplierCost is what AE bills us (break-even). salePrice is what
-        // the customer pays (break-even × markupMultiplier). The gap is
-        // the margin that splits between store owner and ToGoGo via the
-        // Stripe Connect application_fee computed below.
+        // supplierCost stays USD — that's AE's invoice currency and it
+        // reconciles 1:1 with their bill. salePrice is AUD — it's the
+        // customer's actual debit. The split between store owner and
+        // ToGoGo via Stripe Connect application_fee is computed below
+        // entirely in AUD cents.
         supplierCost: breakEvenUsd,
-        salePrice: chargePriceUsd,
+        salePrice: chargePriceAud,
         shippingCost: shippingUsd,
         quantity: qty,
       })
 
       // Use the real per-item break-even (not the stored product.supplier_cost
       // which may be stale / pre-markup-aware). This powers the Stripe
-      // Connect application_fee split below.
+      // Connect application_fee split below. Kept in USD until the final
+      // application_fee math, where it's converted alongside profit.
       totalSupplierCost += breakEvenUsd * qty
     }
 
@@ -225,12 +234,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No valid products found' })
     }
 
-    // No separate shipping fee — shipping + tax included in product price (Temu model)
+    // Total customer charge in AUD cents (Stripe sees this).
     const totalAmount = lineItems.reduce((s, li) => s + li.price_data.unit_amount * li.quantity, 0)
 
-    // Shipping is already included in sale_price via cron's markup formula
-    // (wholesale = product_cost + shipping, sale = wholesale × markup).
-    // Admin platform flat fee is additive on top if configured (handling fee).
+    // Optional flat handling fee — already configured in AUD by admin.
+    // Currency on the line item is AUD to match the rest of the cart.
     let platformShippingAUD = 0
     try {
       const { rows: feeRows } = await sql`SELECT value FROM admin_settings WHERE key = 'shipping_fee_aud'`
@@ -240,7 +248,7 @@ export default async function handler(req, res) {
     if (shippingFeeCents > 0) {
       lineItems.push({
         price_data: {
-          currency: 'usd',
+          currency: 'aud',
           product_data: { name: 'Shipping' },
           unit_amount: shippingFeeCents,
         },
@@ -250,13 +258,10 @@ export default async function handler(req, res) {
     const totalWithShipping = totalAmount + shippingFeeCents
 
     // PRICE DRIFT CHECK — if the fresh AE total differs from what the customer
-    // saw in their cart (in EITHER direction) by more than 1 cent, pause before
-    // creating the Stripe session and return the new figure so the frontend
-    // can show a "Price updated" banner. We bounce in both directions to keep
-    // pricing honest — previously we silently charged cart-total when AE was
-    // cheaper (over-charging during a catalog staleness window). That's bad
-    // for the "keep prices tight to AE's real bill" goal; customers now see
-    // the corrected total either way.
+    // saw in their cart (in EITHER direction) by more than 1 cent, pause and
+    // return the new figure so the frontend can show a "Price updated" banner.
+    // The cart sends cartTotalUsd (cents-of-AUD now since the storefront
+    // displays AUD); compare in AUD cents.
     const cartTotalCents = items.reduce(
       (s, i) => s + Math.round((parseFloat(i.cartTotalUsd) || 0) * 100) * (i.quantity || 1),
       0
@@ -269,8 +274,8 @@ export default async function handler(req, res) {
       if (acknowledgedCents !== totalWithShipping) {
         const priceDropped = totalWithShipping < cartTotalCents
         const message = priceDropped
-          ? `Price dropped at AliExpress since you added to cart. Was US $${(cartTotalCents / 100).toFixed(2)} — now US $${(totalWithShipping / 100).toFixed(2)}.`
-          : `AliExpress price updated. Previous total US $${(cartTotalCents / 100).toFixed(2)} — current US $${(totalWithShipping / 100).toFixed(2)}.`
+          ? `Price dropped at AliExpress since you added to cart. Was A$${(cartTotalCents / 100).toFixed(2)} — now A$${(totalWithShipping / 100).toFixed(2)}.`
+          : `AliExpress price updated. Previous total A$${(cartTotalCents / 100).toFixed(2)} — current A$${(totalWithShipping / 100).toFixed(2)}.`
         return res.json({
           priceUpdated: true,
           priceDropped,
@@ -281,26 +286,25 @@ export default async function handler(req, res) {
       }
     }
 
-    const totalSupplierCostCents = Math.round(totalSupplierCost * 100)
-    // Commission on PROFIT (sale minus cost), not on total sale.
-    const profitCents = totalAmount - totalSupplierCostCents
     // APPLICATION FEE = what Stripe holds back for the PLATFORM (ToGoGo),
     // while the remainder transfers to the store owner's Connect account.
     //
     // ToGoGo must keep enough to BOTH reimburse itself for the AE bill
-    // (supplier cost — paid by our master PayPal auto-pay via DS Center)
-    // AND its commission on profit. If we only held back commission,
-    // ToGoGo would bleed $supplierCost on every order.
+    // (supplier cost — paid by our master PayPal auto-pay via DS Center,
+    // in USD) AND its commission on profit. Convert the USD supplier
+    // cost into AUD using the same rate so the application_fee currency
+    // (AUD cents) matches the line items.
     //
-    //   applicationFee = supplierCost + (profit × commissionRate) + shippingFee
+    //   applicationFee_aud = supplierCost_aud + (profit_aud × commissionRate) + shippingFee_aud
     //
     // Then the destination (store owner) receives:
-    //   destination = totalAmount − applicationFee
-    //                = profit × (1 − commissionRate)
-    //                = store owner's 70% of profit (with 30% commissionRate).
+    //   destination_aud = totalAmount_aud − applicationFee_aud
+    //                   = profit_aud × (1 − commissionRate)
+    //                   = store owner's 70% of profit (with 30% commissionRate).
     // Any AE discount (estimate vs actual bill) stays entirely on ToGoGo's
     // Stripe balance because applicationFee was locked in using the estimate.
-    // The rollup into the commission column happens at reconciliation.
+    const totalSupplierCostCents = usdToAudCents(totalSupplierCost, audRate)
+    const profitCents = totalAmount - totalSupplierCostCents
     const applicationFee = totalSupplierCostCents
       + Math.round(Math.max(profitCents, 0) * commissionRate)
       + shippingFeeCents
@@ -350,9 +354,17 @@ export default async function handler(req, res) {
     // Save pending order to database
     for (const item of orderItems) {
       const qty = item.quantity
-      const salePrice = item.salePrice * qty
-      const supplierCost = item.supplierCost * qty
-      const commission = Math.round((salePrice - supplierCost) * commissionRate * 100) / 100
+      // sale_price is AUD (customer's actual debit); supplier_cost stays
+      // USD (matches AE's invoice). Profit + commission are AUD — owner
+      // gets paid AUD via Stripe Connect; ToGoGo's commission lives in
+      // AUD too. Use the same audRate captured at session start so all
+      // numbers come from one rate snapshot.
+      const salePriceAud = Math.round(item.salePrice * qty * 100) / 100
+      const supplierCostUsd = Math.round(item.supplierCost * qty * 100) / 100
+      const supplierCostAud = usdToAud(supplierCostUsd, audRate)
+      const grossProfitAud = Math.round((salePriceAud - supplierCostAud) * 100) / 100
+      const commissionAud = Math.round(Math.max(grossProfitAud, 0) * commissionRate * 100) / 100
+      const ownerProfitAud = Math.round((grossProfitAud - commissionAud) * 100) / 100
 
       // order_data carries the variant identity so the Stripe webhook can
       // hand AE order.create the customer's EXACT skuAttr — no auto-resolve
@@ -363,6 +375,9 @@ export default async function handler(req, res) {
         variantLabel: item.variantLabel || '',
         variantPriceUsd: item.variantPriceUsd || null,
         shippingUsd: item.shippingCost || 0,
+        // Snapshot the rate used for this order so the webhook + admin
+        // tools can reproduce the math without re-reading admin_settings.
+        audRate,
       }
 
       try {
@@ -372,19 +387,20 @@ export default async function handler(req, res) {
             supplier_cost, sale_price, profit, commission, commission_rate, quantity,
             platform, platform_order_id,
             customer_name, customer_email, shipping_address,
-            status, notes, stripe_checkout_session, order_data
+            status, notes, stripe_checkout_session, order_data, pricing_currency
           ) VALUES (
             ${store.user_id}, ${item.supplier || 'AliExpress'}, ${item.supplierProductId || ''}, ${item.title}, ${item.image},
-            ${supplierCost}, ${salePrice},
-            ${Math.round((salePrice - supplierCost - commission) * 100) / 100},
-            ${commission}, ${commissionRate}, ${qty},
+            ${supplierCostUsd}, ${salePriceAud},
+            ${ownerProfitAud},
+            ${commissionAud}, ${commissionRate}, ${qty},
             'togogo-store', ${orderRef},
             ${customer.name}, ${customer.email},
             ${JSON.stringify({ ...customer.address, phone: customer.phone || '' })},
             'pending_payment',
             ${`Stripe session: ${session.id}`},
             ${session.id},
-            ${JSON.stringify(orderData)}::jsonb
+            ${JSON.stringify(orderData)}::jsonb,
+            'AUD'
           )
         `
       } catch (err) {
@@ -392,7 +408,7 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`[Checkout] Session ${session.id} created for ${orderRef} (${lineItems.length} items, $${(totalAmount / 100).toFixed(2)} AUD)`)
+    console.log(`[Checkout] Session ${session.id} created for ${orderRef} (${lineItems.length} items, A$${(totalAmount / 100).toFixed(2)} @ rate ${audRate})`)
 
     return res.json({
       success: true,

@@ -37,7 +37,7 @@ function useCart(subdomain) {
           id: product.id,
           title: product.title,
           image: product.variantImage || product.image,
-          price: product.price,                     // USD (variant break-even)
+          price: product.price,                     // AUD (post-markup, server-converted)
           shipping: product.shipping || 0,
           quantity: 1,
           // Variant identity — flows all the way to AE order.create
@@ -361,7 +361,7 @@ export default function StorefrontPage({ subdomain }) {
                     </div>
                     <p className="text-xs text-white line-clamp-2 leading-tight mb-0.5">{p.title}</p>
                     {p.ordersCount > 0 && <p className="text-[10px] text-slate-500">{p.ordersCount}+ sold</p>}
-                    <p className="text-sm font-bold text-red-500">US ${(p.price || 0).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-red-500">A${(p.price || 0).toFixed(2)}</p>
                   </div>
                 ))}
               </div>
@@ -555,15 +555,15 @@ export default function StorefrontPage({ subdomain }) {
 
                   {/* Price section */}
                   <div className="mb-1">
-                    <span className="text-lg font-bold text-red-500">US ${price.toFixed(2)}</span>
+                    <span className="text-lg font-bold text-red-500">A${price.toFixed(2)}</span>
                     {originalPrice > price && (
-                      <span className={`text-xs ${theme.textMuted} line-through ml-1.5`}>US ${originalPrice.toFixed(2)}</span>
+                      <span className={`text-xs ${theme.textMuted} line-through ml-1.5`}>A${originalPrice.toFixed(2)}</span>
                     )}
                   </div>
 
                   {/* Savings callout */}
                   {savings > 0 && (
-                    <p className="text-xs text-green-500 font-medium mb-1">Save US ${savings.toFixed(2)}</p>
+                    <p className="text-xs text-green-500 font-medium mb-1">Save A${savings.toFixed(2)}</p>
                   )}
 
                   {/* Rating + sold */}
@@ -587,7 +587,7 @@ export default function StorefrontPage({ subdomain }) {
                   {shippingCost > 0 && (
                     <div className="mt-1.5">
                       <span className={`inline-flex items-center gap-0.5 text-xs ${theme.textMuted}`}>
-                        <Truck className="h-3 w-3" /> Incl. US ${shippingCost.toFixed(2)} shipping
+                        <Truck className="h-3 w-3" /> Incl. A${shippingCost.toFixed(2)} shipping
                       </span>
                     </div>
                   )}
@@ -758,7 +758,7 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
                           </div>
                         )}
                       </div>
-                      <p className={`font-semibold text-sm ${isUnavailable ? 'text-slate-600 line-through' : 'text-white'}`}>US ${(item.price * item.quantity).toFixed(2)}</p>
+                      <p className={`font-semibold text-sm ${isUnavailable ? 'text-slate-600 line-through' : 'text-white'}`}>A${(item.price * item.quantity).toFixed(2)}</p>
                       <button onClick={() => cart.remove(item.id, item.skuId)} className="p-1 text-slate-500 hover:text-red-500">
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -793,7 +793,7 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
             <div className="rounded-xl bg-[#1e293b] border border-white/[0.06] p-5 shadow-sm">
               <div className="flex justify-between text-lg font-bold text-white mb-1">
                 <span>Total</span>
-                <span>US ${cart.total.toFixed(2)}</span>
+                <span>A${cart.total.toFixed(2)}</span>
               </div>
               {/* Shipping is bundled into total post-markup, so the
                   separate shipping line here was removed. */}
@@ -916,7 +916,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
             <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
             <p className="text-3xl font-bold text-white mb-2">
-              US ${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">USD</span>
+              A${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">AUD</span>
             </p>
             {/* Transparent 3-line breakdown so customer sees what they're paying for.
                 Matches how AE displays their own checkout. "Est. tax" labelled
@@ -924,15 +924,15 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <div className="text-xs text-slate-400 mb-3 space-y-0.5">
               <div className="flex justify-between max-w-[240px]">
                 <span>Product</span>
-                <span className="tabular-nums">US ${displayProductUsd.toFixed(2)}</span>
+                <span className="tabular-nums">A${displayProductUsd.toFixed(2)}</span>
               </div>
               <div className="flex justify-between max-w-[240px]">
                 <span>Shipping</span>
-                <span className="tabular-nums">US ${displayShippingUsd.toFixed(2)}</span>
+                <span className="tabular-nums">A${displayShippingUsd.toFixed(2)}</span>
               </div>
               <div className="flex justify-between max-w-[240px]">
                 <span>Est. tax</span>
-                <span className="tabular-nums">US ${displayTaxUsd.toFixed(2)}</span>
+                <span className="tabular-nums">A${displayTaxUsd.toFixed(2)}</span>
               </div>
             </div>
             {selectedVariant && (
@@ -1136,7 +1136,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
               className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-colors hover:opacity-90"
               style={{ backgroundColor: theme.accent }}
             >
-              Add to Cart — US ${displayPrice.toFixed(2)}
+              Add to Cart — A${displayPrice.toFixed(2)}
             </button>
           </div>
         </div>
@@ -1187,7 +1187,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                       </div>
                       <div className="p-2">
                         <h4 className="text-xs text-white line-clamp-2 mb-1">{p.title}</h4>
-                        <span className="text-sm font-bold text-red-500">US ${(p.price || 0).toFixed(2)}</span>
+                        <span className="text-sm font-bold text-red-500">A${(p.price || 0).toFixed(2)}</span>
                         {p.ordersCount > 0 && <span className="text-[10px] text-slate-500 ml-1">{p.ordersCount}+ sold</span>}
                       </div>
                     </div>
@@ -1396,9 +1396,9 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             <p className="text-sm font-semibold text-amber-300 mb-1">Price updated at checkout</p>
             <p className="text-xs text-amber-200/80 mb-3">
               AliExpress changed the price while you were browsing.
-              Previous: <span className="tabular-nums">US ${priceDrift.oldTotalUsd.toFixed(2)}</span>
+              Previous: <span className="tabular-nums">A${priceDrift.oldTotalUsd.toFixed(2)}</span>
               {' → '}
-              New: <span className="tabular-nums font-semibold">US ${priceDrift.newTotalUsd.toFixed(2)}</span>
+              New: <span className="tabular-nums font-semibold">A${priceDrift.newTotalUsd.toFixed(2)}</span>
             </p>
             <div className="flex gap-2">
               <button
@@ -1435,21 +1435,21 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
                   <p className={`text-sm font-medium ${theme.textPrimary} line-clamp-2`}>{item.title}</p>
                   <p className={`text-xs ${theme.textMuted}`}>Qty: {item.quantity}</p>
                 </div>
-                <span className={`font-semibold ${theme.textPrimary} text-sm`}>US ${(item.price * item.quantity).toFixed(2)}</span>
+                <span className={`font-semibold ${theme.textPrimary} text-sm`}>A${(item.price * item.quantity).toFixed(2)}</span>
               </div>
             ))}
             <div className={`mt-3 border-t pt-3 space-y-2`} style={{ borderColor: theme.accentLight }}>
               <div className={`flex justify-between text-sm ${theme.textSecondary}`}>
                 <span>Subtotal</span>
-                <span>US ${cart.total.toFixed(2)}</span>
+                <span>A${cart.total.toFixed(2)}</span>
               </div>
               <div className={`flex justify-between text-sm ${shippingFee > 0 ? theme.textSecondary : 'text-emerald-400'}`}>
                 <span>Shipping</span>
-                <span>{shippingFee > 0 ? `US $${shippingFee.toFixed(2)}` : 'Free'}</span>
+                <span>{shippingFee > 0 ? `A$${shippingFee.toFixed(2)}` : 'Free'}</span>
               </div>
               <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
                 <span>Total</span>
-                <span>US ${(cart.total + shippingFee).toFixed(2)}</span>
+                <span>A${(cart.total + shippingFee).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -1488,7 +1488,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             className="w-full rounded-xl py-3.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors"
             style={{ backgroundColor: theme.accent }}
           >
-            {submitting ? 'Placing Order...' : `Place Order — US $${(cart.total + shippingFee).toFixed(2)}`}
+            {submitting ? 'Placing Order...' : `Place Order — A$${(cart.total + shippingFee).toFixed(2)}`}
           </button>
 
           <p className={`text-center text-xs ${theme.textMuted}`}>
@@ -1669,7 +1669,7 @@ function OrderTrackingView({ store, theme, subdomain, cart, onBack }) {
         {customer && (
           <div className="mb-6 rounded-xl bg-white/[0.03] border border-white/[0.06] p-4">
             <p className="text-sm text-slate-400">Welcome back, <span className="text-white font-medium">{customer.name}</span></p>
-            <p className="text-xs text-slate-500 mt-1">{customer.order_count} order{customer.order_count !== 1 ? 's' : ''} · ${parseFloat(customer.total_spent || 0).toFixed(2)} USD total</p>
+            <p className="text-xs text-slate-500 mt-1">{customer.order_count} order{customer.order_count !== 1 ? 's' : ''} · A${parseFloat(customer.total_spent || 0).toFixed(2)} total</p>
           </div>
         )}
 

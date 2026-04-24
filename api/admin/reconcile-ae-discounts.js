@@ -10,11 +10,13 @@
 // GET /api/admin/reconcile-ae-discounts?secret=JWT              (dry run)
 // GET /api/admin/reconcile-ae-discounts?secret=JWT&apply=1      (writes)
 import { sql, ensureSchema } from '../_lib/db.js'
+import { getAudRate, usdToAud, DEFAULT_USD_TO_AUD } from '../_lib/pricing.js'
 
-// Both supplier_cost and ae_actual_cost_usd are stored in USD — checkout.js
-// uses currency: 'usd' on Stripe line items and writes breakEvenUsd straight
-// into supplier_cost. Do NOT multiply by any exchange rate here; that was
-// the original bug that produced bonus=0 on every past order.
+// supplier_cost and ae_actual_cost_usd are both USD (the latter literally
+// in its column name; checkout writes breakEvenUsd straight into the
+// former). Their delta is the AE discount in USD. ae_bonus stores it in
+// the order's pricing currency — AUD for orders since the cutover, USD
+// for legacy rows.
 const OLD_ROLLED_MARKER = 'rolled into commission'
 
 export default async function handler(req, res) {
@@ -39,12 +41,14 @@ export default async function handler(req, res) {
   try {
     const { rows: orders } = await sql`
       SELECT id, platform_order_id, product_title,
-             supplier_cost, ae_actual_cost_usd, commission, ae_bonus, notes
+             supplier_cost, ae_actual_cost_usd, commission, ae_bonus, notes,
+             order_data, pricing_currency
       FROM user_orders
       WHERE ae_actual_cost_usd IS NOT NULL
         AND status NOT IN ('cancelled', 'refunded')
     `
 
+    const fallbackRate = await getAudRate().catch(() => DEFAULT_USD_TO_AUD)
     const toUpdate = []
     let skipped = 0
 
@@ -54,7 +58,20 @@ export default async function handler(req, res) {
 
       const supplierCost = parseFloat(order.supplier_cost) || 0
       const aeActualUsd = parseFloat(order.ae_actual_cost_usd) || 0
-      const bonus = Math.max(0, Math.round((supplierCost - aeActualUsd) * 100) / 100)
+      const bonusUsd = Math.max(0, Math.round((supplierCost - aeActualUsd) * 100) / 100)
+
+      // Convert the USD discount to the order's pricing currency. Legacy
+      // USD orders keep the USD value; AUD orders use the rate snapshotted
+      // at checkout (so the math reproduces what the storefront promised),
+      // falling back to the live admin rate.
+      let orderRate = null
+      try {
+        const od = typeof order.order_data === 'string' ? JSON.parse(order.order_data) : order.order_data
+        orderRate = parseFloat(od?.audRate) || null
+      } catch { /* */ }
+      const isUsdOrder = order.pricing_currency === 'USD'
+      const rate = isUsdOrder ? 1 : (orderRate || fallbackRate)
+      const bonusStored = isUsdOrder ? bonusUsd : usdToAud(bonusUsd, rate)
 
       // If the short-lived commission-rollup version ran against this order,
       // the bonus is currently sitting inside commission. Back it out so the
@@ -62,16 +79,19 @@ export default async function handler(req, res) {
       const hadOldRollup = (order.notes || '').includes(OLD_ROLLED_MARKER)
       const currentCommission = parseFloat(order.commission) || 0
       const commissionAfter = hadOldRollup
-        ? Math.round((currentCommission - bonus) * 100) / 100
+        ? Math.round((currentCommission - bonusStored) * 100) / 100
         : currentCommission
 
       toUpdate.push({
         id: order.id,
         platform_order_id: order.platform_order_id,
         product_title: order.product_title?.slice(0, 60),
+        pricingCurrency: isUsdOrder ? 'USD' : 'AUD',
+        rateUsed: rate,
         supplierCostUsd: supplierCost,
         aeActualUsd,
-        bonus,
+        bonusUsd,
+        bonus: bonusStored,
         commissionBefore: currentCommission,
         commissionAfter,
         backedOutRollup: hadOldRollup,
