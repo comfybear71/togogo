@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Package, Loader2, CheckCircle2, Clock, Truck, XCircle, AlertCircle,
 } from 'lucide-react'
@@ -21,12 +22,25 @@ const STATUS_META = {
 }
 
 export default function MyOrdersPage() {
+  const navigate = useNavigate()
+  const user = useAuthStore(s => s.user)
   const token = useAuthStore(s => s.token)
+  const authLoading = useAuthStore(s => s.loading)
+
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
 
+  // Kick auth init on cold start
   useEffect(() => {
+    if (authLoading) useAuthStore.getState().initialize?.()
+  }, [])
+
+  // Wait for auth to settle; otherwise first fetch goes out without a
+  // valid bearer token and /api/my-shop/orders returns 401.
+  useEffect(() => {
+    if (authLoading) return
+    if (!user || !token) { navigate('/auth?redirect=/my-shop/orders'); return }
     let cancelled = false
     async function load() {
       setLoading(true); setErr(null)
@@ -45,7 +59,7 @@ export default function MyOrdersPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [token])
+  }, [user, token, authLoading])
 
   if (loading) {
     return (
