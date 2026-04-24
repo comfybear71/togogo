@@ -62,21 +62,33 @@ export default async function handler(req, res) {
           continue
         }
 
-        // Extract the actual cost
-        const payAmount = parseFloat(orderResult.pay_amount || '0')
-        const productAmount = parseFloat(orderResult.total_product_amount || orderResult.product_amount || '0')
-        const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
-        const taxAmount = parseFloat(orderResult.tax_amount || '0')
+        // Extract the actual cost from AE's trade.ds.order.get response shape:
+        //   order_amount.amount = total AE billed (primary source — what we pay)
+        //   child_order_list.aeop_child_order_info[] = per-line breakdown
+        //     (product_price × product_count + shipping_fee + actual_tax_fee)
+        const orderAmountTotal = parseFloat(orderResult.order_amount?.amount || '0')
+
+        const childOrders = orderResult.child_order_list?.aeop_child_order_info || []
+        let productAmount = 0
+        let shippingAmount = 0
+        let taxAmount = 0
+        for (const child of childOrders) {
+          const unitPrice = parseFloat(child.product_price?.amount || '0')
+          const count = parseInt(child.product_count) || 1
+          productAmount += unitPrice * count
+          shippingAmount += parseFloat(child.shipping_fee?.amount || '0')
+          taxAmount += parseFloat(child.actual_tax_fee?.amount || '0')
+        }
 
         let realCostUSD = null
         let costBreakdown = ''
 
-        if (payAmount > 0) {
-          realCostUSD = payAmount
-          costBreakdown = `pay_amount (total charged)`
+        if (orderAmountTotal > 0) {
+          realCostUSD = orderAmountTotal
+          costBreakdown = `order_amount (product: $${productAmount.toFixed(2)} + shipping: $${shippingAmount.toFixed(2)} + tax: $${taxAmount.toFixed(2)})`
         } else if (productAmount > 0 || shippingAmount > 0 || taxAmount > 0) {
           realCostUSD = productAmount + shippingAmount + taxAmount
-          costBreakdown = `product: $${productAmount.toFixed(2)} + shipping: $${shippingAmount.toFixed(2)} + tax: $${taxAmount.toFixed(2)}`
+          costBreakdown = `summed children: product: $${productAmount.toFixed(2)} + shipping: $${shippingAmount.toFixed(2)} + tax: $${taxAmount.toFixed(2)}`
         }
 
         if (realCostUSD && realCostUSD > 0) {
