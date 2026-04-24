@@ -35,6 +35,10 @@ const statusConfig = {
   refunded: { color: 'bg-zinc-500/10 text-zinc-400', icon: XCircle },
 };
 
+// Statuses hidden when the "Active" filter is selected — pending carts,
+// abandoned payments, cancelled/refunded are audit-only clutter for day-to-day use.
+const HIDDEN_STATUSES_ON_ACTIVE = ['pending', 'pending_payment', 'cancelled', 'refunded'];
+
 const disputeStatusColors = {
   open: 'bg-red-500/10 text-red-400',
   under_review: 'bg-[#FFD23F]/10 text-[#FFD23F]',
@@ -49,7 +53,7 @@ export default function OrdersPage() {
   const [financials, setFinancials] = useState({ total_fees: 0, total_payouts: 0, platform_balance: 0 });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active'); // hides abandoned + cancelled by default
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
@@ -101,7 +105,11 @@ export default function OrdersPage() {
         !(o.product_title || '').toLowerCase().includes(q)
       ) return false;
     }
-    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+    if (statusFilter === 'active') {
+      if (HIDDEN_STATUSES_ON_ACTIVE.includes(o.status)) return false;
+    } else if (statusFilter !== 'all' && o.status !== statusFilter) {
+      return false;
+    }
     return true;
   });
 
@@ -203,8 +211,10 @@ export default function OrdersPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white capitalize focus:border-[#FF6B35] focus:outline-none"
           >
+            <option value="active">Active (default)</option>
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
+            <option value="pending_payment">Pending Payment</option>
             <option value="processing">Processing</option>
             <option value="shipped">Shipped</option>
             <option value="delivered">Delivered</option>
@@ -381,7 +391,7 @@ export default function OrdersPage() {
               {selectedOrder.notes && (
                 <div className="rounded-xl border border-white/[0.06] p-3">
                   <p className="text-xs text-zinc-500">Notes</p>
-                  <p className="text-sm text-white">{selectedOrder.notes}</p>
+                  <p className="text-sm text-white break-all">{selectedOrder.notes}</p>
                 </div>
               )}
             </div>
