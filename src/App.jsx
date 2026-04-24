@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
+import ClientDashboardLayout from './components/layout/ClientDashboardLayout'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/admin/AdminRoute'
 import AdminLayout from './components/admin/AdminLayout'
@@ -117,7 +118,9 @@ export default function App() {
           <Route path="/guide/:platform" element={<PlatformGuidePage />} />
           <Route path="/launch-store" element={<ProtectedRoute><LaunchStorePage /></ProtectedRoute>} />
           <Route path="/create-store" element={<ProtectedRoute><OneClickStorePage /></ProtectedRoute>} />
-          <Route path="/my-shop" element={<ProtectedRoute><MyShopPage /></ProtectedRoute>} />
+          {/* /my-shop moved out of AppLayout and into ClientDashboardLayout
+              (see route block below). The client dashboard has its own
+              sidebar-based chrome, distinct from the marketplace top-nav. */}
           <Route path="/promotions" element={<PromotionsPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
@@ -146,6 +149,12 @@ export default function App() {
         <Route path="/admin/search" element={<AdminRoute><AdminLayout><AdminSearchAliExpress /></AdminLayout></AdminRoute>} />
         <Route path="/admin/api-tester" element={<AdminRoute><AdminLayout><AdminApiTester /></AdminLayout></AdminRoute>} />
         <Route path="/admin/store-builder" element={<AdminRoute><AdminLayout><AdminStoreBuilder /></AdminLayout></AdminRoute>} />
+
+        {/* Client dashboard — store owner routes. Uses its own layout
+            (sidebar + top bar) rather than the marketplace AppLayout. */}
+        <Route element={<ClientDashboardLayout />}>
+          <Route path="/my-shop" element={<ProtectedRoute><MyShopPage /></ProtectedRoute>} />
+        </Route>
 
         <Route element={<AppLayout />}>
           <Route path="*" element={<NotFoundPage />} />
