@@ -48,7 +48,6 @@ async function refetchOne(row) {
       UPDATE user_products
       SET is_active = false,
           variants_updated_at = NOW(),
-          notes = COALESCE(notes, '') || ${' | AE: ' + details.reason},
           updated_at = NOW()
       WHERE id = ${row.id}
     `
@@ -130,6 +129,11 @@ export default async function handler(req, res) {
 
   const startedAt = Date.now()
   const limit = Math.min(parseInt(req.query.limit) || 200, 500)
+  // ?onlyNeverPriced=1 prioritises the ~288 products that never got a
+  // successful rebuild (min_variant_price_usd = 0 or NULL). Storefront
+  // hides these via the price-integrity gate, so healing them first
+  // brings the most products back online per API call.
+  const onlyNeverPriced = req.query.onlyNeverPriced === '1'
 
   let rebuilt = 0
   let deactivated = 0
@@ -149,19 +153,32 @@ export default async function handler(req, res) {
 
       // Refetch endpoint previously set variants_updated_at = NOW() - 23h
       // on every skip during the 20-parallel rate-limit cascade, so all
-      // ~8264 products look "recently touched" now. We can't filter by
-      // cooldown — sort oldest-first and let the SQL pick whatever needs
-      // real rebuild data (anything not actually healed will come out of
-      // the UPDATE with fresh variants).
-      const { rows: batch } = await sql`
-        SELECT id, supplier_product_id, product_rating, orders_count
-        FROM user_products
-        WHERE is_active = true
-          AND supplier_product_id IS NOT NULL
-          AND supplier_product_id NOT LIKE '%-%'
-        ORDER BY variants_updated_at ASC NULLS FIRST
-        LIMIT ${batchSize}
-      `
+      // ~8264 products look "recently touched" now. Sort oldest-first
+      // and let the SQL pick whatever needs real rebuild data.
+      //
+      // With onlyNeverPriced=1, target only the products that have never
+      // been successfully priced — highest-value rebuilds since the
+      // storefront's price-integrity gate is hiding them.
+      const { rows: batch } = onlyNeverPriced
+        ? await sql`
+            SELECT id, supplier_product_id, product_rating, orders_count
+            FROM user_products
+            WHERE is_active = true
+              AND supplier_product_id IS NOT NULL
+              AND supplier_product_id NOT LIKE '%-%'
+              AND (min_variant_price_usd IS NULL OR min_variant_price_usd = 0)
+            ORDER BY variants_updated_at ASC NULLS FIRST
+            LIMIT ${batchSize}
+          `
+        : await sql`
+            SELECT id, supplier_product_id, product_rating, orders_count
+            FROM user_products
+            WHERE is_active = true
+              AND supplier_product_id IS NOT NULL
+              AND supplier_product_id NOT LIKE '%-%'
+            ORDER BY variants_updated_at ASC NULLS FIRST
+            LIMIT ${batchSize}
+          `
 
       if (batch.length === 0) break
 
