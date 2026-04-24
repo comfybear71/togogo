@@ -87,6 +87,20 @@ export async function requireAdmin(req) {
   return user
 }
 
+// Accept any signed-in user OR an admin via setup-secret. Used by flows
+// that were admin-only but are being opened up to store owners (e.g.
+// AI Builder in Phase 3). Returns the user row so the caller can run
+// ownership checks (e.g. `WHERE user_id = user.id`).
+export async function requireUserOrAdmin(req) {
+  // Let admin-via-setup-secret through without a bearer — matches the
+  // pattern used by /api/store-provision/* before Phase 3.
+  const setupSecret = req.headers['x-setup-secret'] || req.query.secret
+  if (setupSecret && setupSecret === process.env.JWT_SECRET) {
+    return { id: 'setup', role: 'admin', email: null }
+  }
+  return requireAuth(req)
+}
+
 // Admin check that also allows setup secret for initial configuration
 export async function requireAdminOrSetup(req) {
   const setupSecret = req.headers['x-setup-secret']
