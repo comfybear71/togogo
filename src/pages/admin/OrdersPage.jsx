@@ -283,10 +283,11 @@ export default function OrdersPage() {
                     : realMargin > 0 ? 'text-emerald-400'
                     : realMargin < 0 ? 'text-red-400'
                     : 'text-zinc-400'
-                  // commission (ToGoGo's 70% cut) and profit (owner's 30%)
-                  // come straight from the order row — populated by checkout
-                  // at order-creation time using the store's commission_rate,
-                  // and topped up with the AE discount delta at reconciliation.
+                  // commission (ToGoGo's 30% cut + any AE discount) and profit
+                  // (owner's 70%) come straight from the order row — populated
+                  // by checkout at order-creation time using the store's
+                  // commission_rate, then topped up with the AE discount delta
+                  // at reconciliation.
                   const togogoCommission = parseFloat(o.commission || 0)
                   const ownerProfit = parseFloat(o.profit || 0)
                   const profitColor = ownerProfit > 0 ? 'text-emerald-400'
