@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
 import ClientDashboardLayout from './components/layout/ClientDashboardLayout'
+import AccountPage from './pages/client/AccountPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/admin/AdminRoute'
 import AdminLayout from './components/admin/AdminLayout'
@@ -154,6 +155,7 @@ export default function App() {
             (sidebar + top bar) rather than the marketplace AppLayout. */}
         <Route element={<ClientDashboardLayout />}>
           <Route path="/my-shop" element={<ProtectedRoute><MyShopPage /></ProtectedRoute>} />
+          <Route path="/my-shop/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
         </Route>
 
         <Route element={<AppLayout />}>
