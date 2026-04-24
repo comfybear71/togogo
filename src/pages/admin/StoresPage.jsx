@@ -90,6 +90,36 @@ export default function StoresPage() {
     fetchData();
   }
 
+  // Per-store markup %. Saves to user_stores.markup_percent via PATCH.
+  // Debounce-free: save on blur / Enter. Shows a short "Saved" indicator.
+  const [markupSaving, setMarkupSaving] = useState(null); // store.id currently saving
+  const [markupSaved, setMarkupSaved] = useState(null);   // store.id recently saved
+
+  async function saveMarkup(store, rawValue) {
+    const next = parseFloat(rawValue);
+    if (!Number.isFinite(next) || next < 0 || next > 500) return;
+    // No-op if the displayed value already equals what's stored.
+    const current = parseFloat(store.markup_percent ?? 40);
+    if (Math.abs(next - current) < 0.001) return;
+    setMarkupSaving(store.id);
+    try {
+      const res = await fetch(`${apiBase}/api/admin/stores`, {
+        method: 'PATCH',
+        headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: store.id, markup_percent: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // Update the local list so the input reflects the saved value.
+      setStores(prev => prev.map(s => s.id === store.id ? { ...s, markup_percent: next } : s));
+      setMarkupSaved(store.id);
+      setTimeout(() => setMarkupSaved(prev => (prev === store.id ? null : prev)), 1500);
+    } catch (err) {
+      console.error('Save markup error:', err);
+    } finally {
+      setMarkupSaving(prev => (prev === store.id ? null : prev));
+    }
+  }
+
   async function handleDelete(store) {
     setDeleting(true);
     try {
@@ -298,6 +328,7 @@ export default function StoresPage() {
                   <tr className="border-b border-white/[0.06] text-xs uppercase text-zinc-500">
                     <th className="pb-3 pr-4">Store / Subdomain</th>
                     <th className="pb-3 pr-4">Owner</th>
+                    <th className="pb-3 pr-4">Markup %</th>
                     <th className="pb-3 pr-4">Status</th>
                     <th className="pb-3 pr-4">Created</th>
                     <th className="pb-3 text-right">Actions</th>
@@ -323,6 +354,29 @@ export default function StoresPage() {
                         <td className="py-3 pr-4">
                           <p className="text-sm text-white">{store.owner_name || 'Unknown'}</p>
                           <p className="text-xs text-zinc-500">{store.owner_email}</p>
+                        </td>
+                        <td className="py-3 pr-4">
+                          {/* Inline markup editor — saves on blur / Enter */}
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="500"
+                              defaultValue={parseFloat(store.markup_percent ?? 40).toFixed(2)}
+                              onBlur={(e) => saveMarkup(store, e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+                              className="w-16 rounded-md border border-white/[0.08] bg-[#0a0a0a] px-2 py-1 text-xs text-white focus:border-[#FF6B35] focus:outline-none"
+                              title="Markup % applied to break-even. 40 = +40%"
+                            />
+                            <span className="text-xs text-zinc-500">%</span>
+                            {markupSaving === store.id && (
+                              <span className="text-[10px] text-zinc-500">…</span>
+                            )}
+                            {markupSaved === store.id && (
+                              <span className="text-[10px] text-emerald-400">✓</span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3 pr-4">
                           <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${sc.color}`}>

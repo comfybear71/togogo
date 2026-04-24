@@ -79,6 +79,37 @@ export default async function handler(req, res) {
       })
     }
 
+    if (req.method === 'PATCH') {
+      // Admin-only partial update of a store. Currently used for markup_percent
+      // so admins can tune per-store pricing during testing. Safely ignores any
+      // field not on the allowlist.
+      const { storeId, markup_percent } = req.body || {}
+      if (!storeId) return res.status(400).json({ error: 'storeId required' })
+
+      const updates = []
+      if (markup_percent !== undefined) {
+        const mp = parseFloat(markup_percent)
+        if (!Number.isFinite(mp) || mp < 0 || mp > 500) {
+          return res.status(400).json({ error: 'markup_percent must be between 0 and 500' })
+        }
+        // Run the update explicitly — tagged template arrays don't let us
+        // compose a dynamic SET list cleanly, so one statement per allowed
+        // field keeps behaviour predictable.
+        await sql`UPDATE user_stores SET markup_percent = ${mp}, updated_at = NOW() WHERE id = ${storeId}`
+        updates.push({ field: 'markup_percent', value: mp })
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No updatable fields provided' })
+      }
+
+      const { rows } = await sql`
+        SELECT id, subdomain, store_name, markup_percent
+        FROM user_stores WHERE id = ${storeId} LIMIT 1
+      `
+      return res.json({ success: true, updates, store: rows[0] || null })
+    }
+
     return res.status(405).json({ error: 'Method not allowed' })
   } catch (err) {
     if (err.status === 401) return res.status(401).json({ error: err.message })
