@@ -69,28 +69,12 @@ export default function MyOrdersPage() {
     return () => { cancelled = true }
   }, [user, token, authLoading])
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-5xl p-8 flex items-center gap-3 text-zinc-400 text-[16px]">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading your orders…
-      </div>
-    )
-  }
-
-  if (err) {
-    return (
-      <div className="mx-auto max-w-5xl p-4 md:p-8 text-[16px]">
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 flex items-start gap-3">
-          <AlertCircle className="h-6 w-6 text-red-400 flex-shrink-0" />
-          <div>
-            <div className="text-[17px] font-semibold text-red-300 mb-1">Something went wrong</div>
-            <div className="text-[15px] text-red-200/80">{err}</div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+  // Memos MUST live above the early-return branches below — React's
+  // hooks rule requires the same number of hook calls every render.
+  // Previously these were placed after the `if (loading)` return,
+  // which caused a hooks-order mismatch the moment loading flipped
+  // false (React would crash the component to a blank screen).
+  //
   // Apply client-side status filter. "Active" hides the abandoned /
   // cancelled clutter by default — same model as /admin/orders.
   const filteredOrders = useMemo(() => {
@@ -114,6 +98,28 @@ export default function MyOrdersPage() {
       { count: 0, sales: 0, profit: 0 }
     )
   }, [filteredOrders])
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-5xl p-8 flex items-center gap-3 text-zinc-400 text-[16px]">
+        <Loader2 className="h-5 w-5 animate-spin" /> Loading your orders…
+      </div>
+    )
+  }
+
+  if (err) {
+    return (
+      <div className="mx-auto max-w-5xl p-4 md:p-8 text-[16px]">
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 flex items-start gap-3">
+          <AlertCircle className="h-6 w-6 text-red-400 flex-shrink-0" />
+          <div>
+            <div className="text-[17px] font-semibold text-red-300 mb-1">Something went wrong</div>
+            <div className="text-[15px] text-red-200/80">{err}</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto max-w-5xl p-4 md:p-8 text-[16px]">
