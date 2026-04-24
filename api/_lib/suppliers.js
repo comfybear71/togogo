@@ -80,8 +80,14 @@ export async function callAPI(method, params = {}) {
 
   const data = await response.json()
   if (data.error_response) {
-    console.error(`[AliExpress] API Error (${method}):`, JSON.stringify(data.error_response).slice(0, 300))
-    throw new Error(`AliExpress: ${data.error_response.msg || 'API error'}`)
+    const er = data.error_response
+    console.error(`[AliExpress] API Error (${method}):`, JSON.stringify(er).slice(0, 300))
+    // Include sub_code or code in thrown message so callers can distinguish
+    // between rate limits (AppApiCallLimit), dead products (ITEM_ID_NOT_FOUND,
+    // All SKU Unsaleable), and other errors.
+    const marker = er.sub_code || er.code || ''
+    const detail = marker ? ` [${marker}]` : ''
+    throw new Error(`AliExpress: ${er.msg || 'API error'}${detail}`)
   }
   return data
 }
@@ -359,6 +365,22 @@ export async function getProductDetails(productId) {
       })(),
     }
   } catch (err) {
+    const msg = err.message || ''
+    // Rate limits bubble up so the caller can throttle / wait through the ban.
+    // callAPI now includes [AppApiCallLimit] in the error message (see above).
+    if (msg.includes('AppApiCallLimit') || msg.includes('frequency of app access')) {
+      throw err
+    }
+    // Product is permanently unavailable on AE — caller should deactivate the
+    // catalog row rather than keep retrying. callAPI appends [ITEM_ID_NOT_FOUND]
+    // or [All SKU Unsaleable] in the error message for these ISP errors.
+    if (msg.includes('ITEM_ID_NOT_FOUND') || msg.includes('Unsaleable')) {
+      const reason = msg.includes('NOT_FOUND') ? 'item_not_found' : 'all_sku_unsaleable'
+      console.warn(`[AliExpress] Product ${productId} unavailable (${reason}): ${msg}`)
+      return { _productRemoved: true, reason, productId: String(productId) }
+    }
+    // Everything else (timeout, network glitch, unknown error) — null so
+    // caller can back off and retry later.
     console.error(`[AliExpress] ds.product.wholesale.get failed for ${productId}:`, err.message)
     return null
   }

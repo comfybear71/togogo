@@ -22,11 +22,10 @@ import { sql } from '../_lib/db.js'
 import { getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
 import { summarisePricing } from '../_lib/pricing.js'
 
-const PARALLEL_BATCH = 2             // was 20 — AE DS AppApiCallLimit hits hard above ~1-2 req/s
+const PARALLEL_BATCH = 2             // AE DS AppApiCallLimit hits hard above ~1-2 req/s
 const PER_PRODUCT_TIMEOUT_MS = 6000
 const SOFT_DEADLINE_MS = 50000        // leave 10s of Vercel's 60s cap for response
 const INTER_BATCH_SLEEP_MS = 1500     // ~60 req/min sustained — below empirical ban threshold
-const MAX_CONSECUTIVE_SKIPS = 6       // 3 batches worth; if all failing, we're banned — bail and tell user to retry later
 
 async function refetchOne(row) {
   const aeId = (row.supplier_product_id || '').replace('ae_', '')
@@ -34,13 +33,30 @@ async function refetchOne(row) {
     return { id: row.id, skipped: true, reason: 'invalid_ae_id' }
   }
 
+  // getProductDetails throws on AppApiCallLimit — let it propagate up so
+  // the caller can bail the whole run. On other errors it returns null or
+  // a { _productRemoved: true } marker.
   const details = await Promise.race([
     getProductDetails(aeId),
     new Promise(r => setTimeout(() => r(null), PER_PRODUCT_TIMEOUT_MS)),
   ])
 
+  // AE told us this product no longer exists or has no sellable SKUs.
+  // Deactivate rather than back off — retrying won't help.
+  if (details?._productRemoved) {
+    await sql`
+      UPDATE user_products
+      SET is_active = false,
+          variants_updated_at = NOW(),
+          notes = COALESCE(notes, '') || ${' | AE: ' + details.reason},
+          updated_at = NOW()
+      WHERE id = ${row.id}
+    `
+    return { id: row.id, deactivated: true, reason: details.reason }
+  }
+
   if (!details) {
-    // Back off 1h like the cron does so we don't spin on rate-limited rows.
+    // Transient failure (timeout / network / unknown). Back off 1h.
     await sql`
       UPDATE user_products
       SET variants_updated_at = NOW() - INTERVAL '23 hours'
@@ -119,7 +135,6 @@ export default async function handler(req, res) {
   let deactivated = 0
   let skipped = 0
   let processed = 0
-  let consecutiveSkips = 0
   let rateLimitHit = false
 
   try {
@@ -150,32 +165,26 @@ export default async function handler(req, res) {
 
       if (batch.length === 0) break
 
-      const settled = await Promise.all(batch.map(row => refetchOne(row).catch(err => ({
-        id: row.id,
-        skipped: true,
-        error: err.message,
-      }))))
+      const settled = await Promise.all(batch.map(row => refetchOne(row).catch(err => {
+        // Distinguish rate limits from other errors — rate limits pause the
+        // whole run, other errors just skip the single product.
+        const msg = err.message || ''
+        if (msg.includes('AppApiCallLimit') || msg.includes('frequency of app access')) {
+          return { id: row.id, rateLimit: true, error: err.message }
+        }
+        return { id: row.id, skipped: true, error: err.message }
+      })))
 
       for (const r of settled) {
-        if (r.rebuilt) {
-          rebuilt++
-          consecutiveSkips = 0
-        } else if (r.deactivated) {
-          deactivated++
-          consecutiveSkips = 0
-        } else {
-          skipped++
-          consecutiveSkips++
-        }
+        if (r.rebuilt) rebuilt++
+        else if (r.deactivated) deactivated++
+        else if (r.rateLimit) rateLimitHit = true
+        else skipped++
         processed++
       }
 
-      // Rate-limit cascade detector — when everything's skipping, more
-      // requests just deepen the ban. Bail out and surface a clear message.
-      if (consecutiveSkips >= MAX_CONSECUTIVE_SKIPS) {
-        rateLimitHit = true
-        break
-      }
+      // Real rate-limit detected — bail out, don't deepen the ban.
+      if (rateLimitHit) break
 
       // Pace next wave. Match AE's observed steady-state tolerance
       // (background cron runs 10 products/minute without bans).
