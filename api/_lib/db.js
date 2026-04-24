@@ -382,6 +382,10 @@ export async function initializeSchema() {
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_status ON store_build_queue(status, created_at)`
   await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_store ON store_build_queue(store_id)`
+  // Retry columns for rate-limited keywords (process-build-queue cron)
+  try { await sql`ALTER TABLE store_build_queue ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE store_build_queue ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ` } catch { /* */ }
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_retry ON store_build_queue(status, next_retry_at)`
 
   // Indexes
   await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`

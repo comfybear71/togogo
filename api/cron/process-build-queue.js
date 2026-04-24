@@ -17,11 +17,29 @@ import { searchAliExpressDirect, getProductDetails, queryDSFreight } from '../_l
 import { summarisePricing } from '../_lib/pricing.js'
 
 // Reduced from 5/30 when we switched to real-variant imports.
-// Each new product now costs 2 API calls (ds.product.get + ds.freight.query)
+// Each new product now costs 2 API calls (ds.product.wholesale.get + ds.freight.query)
 // so the batch must be smaller to stay within Vercel's 60s cap.
+// (wholesale.get returns the real dropshipper rate — see api/_lib/suppliers.js)
 const BATCH_SIZE = 2
 const PRODUCTS_PER_KEYWORD = 10
 const PER_KEYWORD_TIMEOUT_MS = 8000
+
+// Retry control for rate-limited (AppApiCallLimit) keywords
+const MAX_RETRIES = 3
+// Backoff schedule in minutes: after 0 retries → retry in 5m,
+// after 1 → 15m, after 2 → 60m. Caps the total retry span to ~80 min.
+const BACKOFF_MINUTES = [5, 15, 60]
+
+function nextRetryAt(retryCount) {
+  const idx = Math.min(retryCount, BACKOFF_MINUTES.length - 1)
+  const ms = BACKOFF_MINUTES[idx] * 60 * 1000
+  return new Date(Date.now() + ms)
+}
+
+function isRateLimitError(msg) {
+  if (!msg) return false
+  return msg.includes('AppApiCallLimit') || msg.includes('frequency of app access')
+}
 
 async function processOne(row) {
   const keyword = row.keyword
@@ -35,7 +53,11 @@ async function processOne(row) {
     ])
     products = Array.isArray(searchResult?.products) ? searchResult.products : []
   } catch (err) {
-    return { error: `search failed: ${err.message}` }
+    const msg = err.message || String(err)
+    if (isRateLimitError(msg)) {
+      return { rateLimited: true, error: `search rate-limited: ${msg}` }
+    }
+    return { error: `search failed: ${msg}` }
   }
 
   if (products.length === 0) {
@@ -74,18 +96,32 @@ async function processOne(row) {
       }
     } catch { continue }
 
-    // NEW PRICING MODEL: fetch real variants via ds.product.get, then use
-    // the cheapest variant's break-even USD as the headline. No guessing
-    // from the search-feed price (which is often a teaser). If we can't
-    // get variants, we DON'T import the product — better to miss a row
-    // than store wrong pricing.
+    // NEW PRICING MODEL: fetch real variants via ds.product.wholesale.get,
+    // then use the cheapest variant's break-even USD as the headline. No
+    // guessing from the search-feed price (which is often a teaser). If we
+    // can't get variants, we DON'T import the product — better to miss a
+    // row than store wrong pricing.
     let details = null
+    let rateLimitHit = false
     try {
       details = await Promise.race([
         getProductDetails(aeId),
         new Promise(r => setTimeout(() => r(null), 6000)),
       ])
-    } catch { /* timeout / network */ }
+    } catch (err) {
+      // getProductDetails re-throws AppApiCallLimit so caller can back off.
+      // Surface it up so the whole keyword goes to retry instead of just
+      // silently skipping products.
+      if (isRateLimitError(err?.message)) {
+        rateLimitHit = true
+      }
+    }
+
+    if (rateLimitHit) {
+      // Bail the keyword — don't burn more products during the ban.
+      // Return whatever has been committed so far plus the rate-limit flag.
+      return { productsFound: inserted, tagged, rateLimited: true, error: 'product fetch rate-limited' }
+    }
 
     if (!details || !Array.isArray(details.variants) || details.variants.length === 0) {
       // Skip — can't price accurately without real variant data
@@ -167,17 +203,21 @@ export default async function handler(req, res) {
 
   await ensureSchema()
 
-  // Lock + grab the next batch (oldest pending first)
+  // Lock + grab the next batch (oldest pending first).
+  // Rows that recently rate-limited carry a next_retry_at; skip them until
+  // the backoff has elapsed. Rows never retried have next_retry_at IS NULL.
   const { rows: batch } = await sql`
-    SELECT id, store_id, user_id, niche, category, keyword
+    SELECT id, store_id, user_id, niche, category, keyword,
+           COALESCE(retry_count, 0) AS retry_count
     FROM store_build_queue
     WHERE status = 'pending'
+      AND (next_retry_at IS NULL OR next_retry_at <= NOW())
     ORDER BY created_at ASC
     LIMIT ${BATCH_SIZE}
   `
 
   if (batch.length === 0) {
-    return res.json({ status: 'idle', message: 'Queue empty' })
+    return res.json({ status: 'idle', message: 'Queue empty (or all pending rows still in retry backoff)' })
   }
 
   // Mark them processing so a parallel cron run doesn't double-fetch
@@ -188,40 +228,86 @@ export default async function handler(req, res) {
   )
 
   let totalProductsFound = 0
+  let retriesScheduled = 0
+  let permanentlyFailed = 0
   const results = []
   for (const row of batch) {
     const result = await processOne(row)
+
+    // RATE-LIMIT BRANCH — put the keyword back to 'pending' with a
+    // backoff window. After MAX_RETRIES, mark permanently failed so we
+    // don't cycle forever.
+    if (result.rateLimited) {
+      const currentRetries = Number(row.retry_count) || 0
+      if (currentRetries >= MAX_RETRIES) {
+        await sql`
+          UPDATE store_build_queue
+          SET status = 'failed',
+              error = ${'rate limit: exhausted retries — ' + (result.error || '')},
+              processed_at = NOW()
+          WHERE id = ${row.id}
+        `
+        permanentlyFailed++
+        results.push({ keyword: row.keyword, rateLimited: true, giveUp: true })
+      } else {
+        const retryAt = nextRetryAt(currentRetries)
+        await sql`
+          UPDATE store_build_queue
+          SET status = 'pending',
+              retry_count = ${currentRetries + 1},
+              next_retry_at = ${retryAt.toISOString()},
+              error = ${result.error || 'rate-limited'}
+          WHERE id = ${row.id}
+        `
+        retriesScheduled++
+        results.push({
+          keyword: row.keyword,
+          rateLimited: true,
+          retryCount: currentRetries + 1,
+          nextRetryAt: retryAt.toISOString(),
+          partialInserts: result.productsFound || 0,
+        })
+      }
+      continue
+    }
+
+    // PERMANENT FAIL BRANCH — non-rate-limit error
     if (result.error) {
       await sql`
         UPDATE store_build_queue
         SET status = 'failed', error = ${result.error}, processed_at = NOW()
         WHERE id = ${row.id}
       `
+      permanentlyFailed++
       results.push({ keyword: row.keyword, error: result.error })
-    } else {
-      // Count BOTH fresh inserts and existing products newly-tagged with
-      // this niche — both represent products that just became visible on
-      // this niched store
-      const combined = (result.productsFound || 0) + (result.tagged || 0)
-      await sql`
-        UPDATE store_build_queue
-        SET status = 'done', products_found = ${combined}, processed_at = NOW()
-        WHERE id = ${row.id}
-      `
-      totalProductsFound += combined
-      results.push({
-        keyword: row.keyword,
-        productsFound: combined,
-        newInserts: result.productsFound || 0,
-        tagged: result.tagged || 0,
-      })
+      continue
     }
+
+    // SUCCESS BRANCH
+    // Count BOTH fresh inserts and existing products newly-tagged with
+    // this niche — both represent products that just became visible on
+    // this niched store
+    const combined = (result.productsFound || 0) + (result.tagged || 0)
+    await sql`
+      UPDATE store_build_queue
+      SET status = 'done', products_found = ${combined}, processed_at = NOW()
+      WHERE id = ${row.id}
+    `
+    totalProductsFound += combined
+    results.push({
+      keyword: row.keyword,
+      productsFound: combined,
+      newInserts: result.productsFound || 0,
+      tagged: result.tagged || 0,
+    })
   }
 
   return res.json({
     status: 'ok',
     processed: batch.length,
     totalProductsFound,
+    retriesScheduled,
+    permanentlyFailed,
     results,
   })
 }
