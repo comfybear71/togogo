@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Package, Loader2, CheckCircle2, Clock, Truck, XCircle, AlertCircle,
@@ -21,6 +21,11 @@ const STATUS_META = {
   refunded:         { label: 'Refunded',   icon: XCircle,      color: 'bg-red-500/15 text-red-300' },
 }
 
+// Statuses hidden when the "Active" filter is selected — matches
+// /admin/orders. Abandoned carts, cancelled, refunded are audit-only
+// clutter for day-to-day shop owners.
+const HIDDEN_STATUSES_ON_ACTIVE = ['pending', 'pending_payment', 'cancelled', 'refunded']
+
 export default function MyOrdersPage() {
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
@@ -32,6 +37,7 @@ export default function MyOrdersPage() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
+  const [statusFilter, setStatusFilter] = useState('active')
 
   // Kick auth init on cold start
   useEffect(() => {
@@ -85,6 +91,30 @@ export default function MyOrdersPage() {
     )
   }
 
+  // Apply client-side status filter. "Active" hides the abandoned /
+  // cancelled clutter by default — same model as /admin/orders.
+  const filteredOrders = useMemo(() => {
+    if (statusFilter === 'active') {
+      return orders.filter(o => !HIDDEN_STATUSES_ON_ACTIVE.includes(o.status))
+    }
+    if (statusFilter === 'all') return orders
+    return orders.filter(o => o.status === statusFilter)
+  }, [orders, statusFilter])
+
+  // Totals reflect the CURRENTLY VISIBLE orders so the strip matches
+  // what the user sees below. If they switch to "All" it includes
+  // cancelled; "Active" excludes them. No silent surprises.
+  const totals = useMemo(() => {
+    return filteredOrders.reduce(
+      (acc, o) => ({
+        count: acc.count + 1,
+        sales: acc.sales + (o.customerPaid || 0),
+        profit: acc.profit + (o.profit || 0),
+      }),
+      { count: 0, sales: 0, profit: 0 }
+    )
+  }, [filteredOrders])
+
   return (
     <div className="mx-auto max-w-5xl p-4 md:p-8 text-[16px]">
       <header className="mb-6">
@@ -92,15 +122,75 @@ export default function MyOrdersPage() {
         <p className="text-[16px] text-zinc-400">
           {orders.length === 0
             ? "You haven't had any sales yet."
-            : `Showing your most recent ${orders.length} order${orders.length === 1 ? '' : 's'}.`}
+            : 'Recent sales through your shop.'}
         </p>
       </header>
 
+      {orders.length > 0 && (
+        <>
+          {/* Totals strip — count, revenue, profit — reflects the
+              current filter selection so users always see matching
+              totals. */}
+          <section aria-label="Totals" className="mb-4 rounded-2xl border border-white/[0.06] bg-[#111] p-4 md:p-5">
+            <div className="grid grid-cols-3 gap-3">
+              <StripMetric label="Orders"   value={totals.count.toString()}           color="text-white" />
+              <StripMetric label="Sales"    value={`$${totals.sales.toFixed(2)}`}     color="text-white" />
+              <StripMetric
+                label="Your profit"
+                value={`${totals.profit >= 0 ? '+' : '−'}$${Math.abs(totals.profit).toFixed(2)}`}
+                color={totals.profit > 0 ? 'text-emerald-400' : totals.profit < 0 ? 'text-red-400' : 'text-zinc-400'}
+              />
+            </div>
+          </section>
+
+          {/* Status filter — matches the admin Orders dropdown for
+              consistency. "Active (default)" hides the noise. */}
+          <div className="mb-5 flex items-center gap-2">
+            <label htmlFor="status-filter" className="text-[15px] text-zinc-400">Show</label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-[15px] text-white capitalize focus:border-[#FF6B35] focus:outline-none min-h-[44px]"
+            >
+              <option value="active">Active (default)</option>
+              <option value="all">All orders</option>
+              <option value="processing">Preparing</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+              <option value="pending">Waiting</option>
+              <option value="pending_payment">Not paid</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="refunded">Refunded</option>
+            </select>
+          </div>
+        </>
+      )}
+
       {orders.length === 0 ? (
         <EmptyState />
+      ) : filteredOrders.length === 0 ? (
+        <section className="rounded-2xl border border-white/[0.06] bg-[#111] p-8 text-center">
+          <div className="text-[17px] text-zinc-300 mb-2">No orders match this filter.</div>
+          <button
+            onClick={() => setStatusFilter('all')}
+            className="text-[15px] text-[#FF6B35] hover:underline"
+          >
+            Show all orders
+          </button>
+        </section>
       ) : (
-        <OrdersList orders={orders} />
+        <OrdersList orders={filteredOrders} />
       )}
+    </div>
+  )
+}
+
+function StripMetric({ label, value, color }) {
+  return (
+    <div>
+      <div className="text-[12px] uppercase tracking-wider text-zinc-500">{label}</div>
+      <div className={`text-[20px] md:text-[24px] font-semibold tabular-nums ${color}`}>{value}</div>
     </div>
   )
 }
