@@ -133,8 +133,8 @@ export default function MyShopPage() {
           <QuickAction
             icon={Plus}
             label="Add products"
-            desc="Browse and list new products"
-            to="/browse"
+            desc="Let AI fill your shop, or browse manually"
+            to="/my-shop/add-products"
           />
           <QuickAction
             icon={Store}
