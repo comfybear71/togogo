@@ -31,15 +31,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'subdomain, items, and customer (name, email) required' })
     }
 
-    // Get store + connect account
+    // Get store + connect account + markup
     const { rows: stores } = await sql`
-      SELECT s.id, s.user_id, s.store_name, s.subdomain, s.stripe_connect_id, s.stripe_connect_status
+      SELECT s.id, s.user_id, s.store_name, s.subdomain, s.stripe_connect_id, s.stripe_connect_status, s.markup_percent
       FROM user_stores s
       WHERE s.subdomain = ${subdomain} AND s.status = 'active'
     `
     if (!stores[0]) return res.status(404).json({ error: 'Store not found' })
 
     const store = stores[0]
+    // Per-store markup applied on top of break-even. Stripe charges the
+    // marked-up amount; the delta (profit) funds both the store owner's
+    // margin and ToGoGo's commission via Stripe Connect application_fee.
+    const markupPercent = parseFloat(store.markup_percent ?? 40) || 0
+    const markupMultiplier = 1 + markupPercent / 100
 
     // Build line items from cart
     const lineItems = []
@@ -156,14 +161,20 @@ export default async function handler(req, res) {
       const shippingUsd = liveShippingUsd != null ? liveShippingUsd
         : (parseFloat(product.shipping_cost) || 0)
 
-      // Three transparent line items: Product + Shipping + Est. tax.
-      // Matches the storefront product-page breakdown so customer sees
-      // the same numbers at cart, storefront and Stripe checkout.
-      const TAX_RATE = 0.10  // flat estimate (see api/_lib/pricing.js)
-      const taxUsd = Math.round(variantPriceUsd * TAX_RATE * 100) / 100
-      const productCents = Math.round(variantPriceUsd * 100)
-      const shippingCents = Math.round(shippingUsd * 100)
-      const taxCents = Math.round(taxUsd * 100)
+      // Break-even per item (what AE bills us) — product + shipping + 10%
+      // tax on (product + shipping) per AE's real AU GST behaviour. This is
+      // supplierCost; the store owner never charges less than this.
+      const TAX_RATE = 0.10
+      const taxUsd = Math.round((variantPriceUsd + shippingUsd) * TAX_RATE * 100) / 100
+      const breakEvenUsd = variantPriceUsd + shippingUsd + taxUsd
+
+      // Charge the customer break-even × markupMultiplier. One clean line
+      // item per cart entry — showing the 3-line breakdown (product /
+      // shipping / tax) after markup inflates the "shipping" and "tax"
+      // line artificially, which looks like price-gouging to customers.
+      // Internal breakdown is preserved in orderItems for reporting.
+      const chargePriceUsd = Math.round(breakEvenUsd * markupMultiplier * 100) / 100
+      const chargePriceCents = Math.round(chargePriceUsd * 100)
 
       const variantTitle = chosenVariant?.label
         ? `${product.title.slice(0, 160)} — ${chosenVariant.label.slice(0, 40)}`
@@ -177,32 +188,11 @@ export default async function handler(req, res) {
             name: variantTitle,
             ...(variantImage ? { images: [variantImage] } : {}),
           },
-          unit_amount: productCents,
+          unit_amount: chargePriceCents,
         },
         quantity: qty,
       })
-      if (shippingCents > 0) {
-        lineItems.push({
-          price_data: {
-            currency: 'usd',
-            product_data: { name: `Shipping — ${product.title.slice(0, 80)}` },
-            unit_amount: shippingCents,
-          },
-          quantity: qty,
-        })
-      }
-      if (taxCents > 0) {
-        lineItems.push({
-          price_data: {
-            currency: 'usd',
-            product_data: { name: `Est. tax — ${product.title.slice(0, 80)}` },
-            unit_amount: taxCents,
-          },
-          quantity: qty,
-        })
-      }
-      const chargePriceUsd = variantPriceUsd + shippingUsd + taxUsd
-      const unitPrice = Math.round(chargePriceUsd * 100)
+      const unitPrice = chargePriceCents
 
       orderItems.push({
         productId: product.id,
@@ -215,13 +205,20 @@ export default async function handler(req, res) {
         skuAttr: chosenVariant?.skuAttr || null,
         variantLabel: chosenVariant?.label || '',
         variantPriceUsd: variantPriceUsd,
-        supplierCost: chargePriceUsd,   // break-even for the chosen variant
-        salePrice: chargePriceUsd,       // we charge exactly break-even (no markup yet)
+        // supplierCost is what AE bills us (break-even). salePrice is what
+        // the customer pays (break-even × markupMultiplier). The gap is
+        // the margin that splits between store owner and ToGoGo via the
+        // Stripe Connect application_fee computed below.
+        supplierCost: breakEvenUsd,
+        salePrice: chargePriceUsd,
         shippingCost: shippingUsd,
         quantity: qty,
       })
 
-      totalSupplierCost += parseFloat(product.supplier_cost) * qty
+      // Use the real per-item break-even (not the stored product.supplier_cost
+      // which may be stale / pre-markup-aware). This powers the Stripe
+      // Connect application_fee split below.
+      totalSupplierCost += breakEvenUsd * qty
     }
 
     if (lineItems.length === 0) {
@@ -252,34 +249,58 @@ export default async function handler(req, res) {
     }
     const totalWithShipping = totalAmount + shippingFeeCents
 
-    // PRICE DRIFT CHECK — if the fresh AE total is HIGHER than what the
-    // customer saw in their cart, pause before creating the Stripe session
-    // and return the new figure so the frontend can show a "Price updated"
-    // banner and ask them to confirm. Drift in our favour (cheaper) passes
-    // silently — per user spec, they keep that margin.
+    // PRICE DRIFT CHECK — if the fresh AE total differs from what the customer
+    // saw in their cart (in EITHER direction) by more than 1 cent, pause before
+    // creating the Stripe session and return the new figure so the frontend
+    // can show a "Price updated" banner. We bounce in both directions to keep
+    // pricing honest — previously we silently charged cart-total when AE was
+    // cheaper (over-charging during a catalog staleness window). That's bad
+    // for the "keep prices tight to AE's real bill" goal; customers now see
+    // the corrected total either way.
     const cartTotalCents = items.reduce(
       (s, i) => s + Math.round((parseFloat(i.cartTotalUsd) || 0) * 100) * (i.quantity || 1),
       0
     )
-    if (cartTotalCents > 0 && totalWithShipping > cartTotalCents) {
+    const driftCents = Math.abs(totalWithShipping - cartTotalCents)
+    if (cartTotalCents > 0 && driftCents > 1) {
       const acknowledgedCents = Math.round((parseFloat(acknowledgedDriftTotal) || 0) * 100)
       // Only bounce back if customer hasn't already acknowledged this specific
       // total — otherwise an "accept new price" retry would re-bounce forever.
       if (acknowledgedCents !== totalWithShipping) {
+        const priceDropped = totalWithShipping < cartTotalCents
+        const message = priceDropped
+          ? `Price dropped at AliExpress since you added to cart. Was US $${(cartTotalCents / 100).toFixed(2)} — now US $${(totalWithShipping / 100).toFixed(2)}.`
+          : `AliExpress price updated. Previous total US $${(cartTotalCents / 100).toFixed(2)} — current US $${(totalWithShipping / 100).toFixed(2)}.`
         return res.json({
           priceUpdated: true,
+          priceDropped,
           oldTotalUsd: cartTotalCents / 100,
           newTotalUsd: totalWithShipping / 100,
-          message: `AliExpress price updated. Previous total US $${(cartTotalCents / 100).toFixed(2)} — current US $${(totalWithShipping / 100).toFixed(2)}.`,
+          message,
         })
       }
     }
 
     const totalSupplierCostCents = Math.round(totalSupplierCost * 100)
-    // Commission on PROFIT (sale minus cost), not on total sale
+    // Commission on PROFIT (sale minus cost), not on total sale.
     const profitCents = totalAmount - totalSupplierCostCents
-    // Platform gets: 30% of profit + ALL of the shipping fee
-    const applicationFee = Math.round(Math.max(profitCents, 0) * commissionRate) + shippingFeeCents
+    // APPLICATION FEE = what Stripe holds back for the PLATFORM (ToGoGo),
+    // while the remainder transfers to the store owner's Connect account.
+    //
+    // ToGoGo must keep enough to BOTH reimburse itself for the AE bill
+    // (supplier cost — paid by our master PayPal auto-pay via DS Center)
+    // AND its commission on profit. If we only held back commission,
+    // ToGoGo would bleed $supplierCost on every order.
+    //
+    //   applicationFee = supplierCost + (profit × commissionRate) + shippingFee
+    //
+    // Then the destination (store owner) receives:
+    //   destination = totalAmount − applicationFee
+    //                = profit × (1 − commissionRate)
+    //                = store owner's 70% of profit (with 30% commissionRate)
+    const applicationFee = totalSupplierCostCents
+      + Math.round(Math.max(profitCents, 0) * commissionRate)
+      + shippingFeeCents
 
     const orderRef = `TG-${Date.now().toString(36).toUpperCase()}`
 

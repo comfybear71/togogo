@@ -4,9 +4,11 @@
 //   Body: { niche: 'fishing equipment' }
 //   Returns: { success, niche, markdown, categories: {Cat: [...]}, allKeywords: [...] }
 //
-// Admin-gated via requireAdminOrSetup. Customer-facing version (auth via
-// signed-in user JWT) will be added when we wire this into the signup flow.
-import { requireAdminOrSetup } from '../_lib/auth.js'
+// Any signed-in user can generate a plan (admin via setup-secret, or
+// store owner via their bearer JWT). Planning doesn't touch the store,
+// so no ownership check is needed here — that's enforced in
+// build-catalog.js where the queue is actually written.
+import { requireUserOrAdmin } from '../_lib/auth.js'
 import { generateNichePlan } from '../_lib/claude.js'
 
 export default async function handler(req, res) {
@@ -15,7 +17,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    await requireAdminOrSetup(req)
+    await requireUserOrAdmin(req)
   } catch (err) {
     return res.status(err?.status || 500).json({ error: err?.message || 'Auth error' })
   }

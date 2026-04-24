@@ -80,8 +80,14 @@ export async function callAPI(method, params = {}) {
 
   const data = await response.json()
   if (data.error_response) {
-    console.error(`[AliExpress] API Error (${method}):`, JSON.stringify(data.error_response).slice(0, 300))
-    throw new Error(`AliExpress: ${data.error_response.msg || 'API error'}`)
+    const er = data.error_response
+    console.error(`[AliExpress] API Error (${method}):`, JSON.stringify(er).slice(0, 300))
+    // Include sub_code or code in thrown message so callers can distinguish
+    // between rate limits (AppApiCallLimit), dead products (ITEM_ID_NOT_FOUND,
+    // All SKU Unsaleable), and other errors.
+    const marker = er.sub_code || er.code || ''
+    const detail = marker ? ` [${marker}]` : ''
+    throw new Error(`AliExpress: ${er.msg || 'API error'}${detail}`)
   }
   return data
 }
@@ -107,7 +113,7 @@ async function getAccessToken() {
 }
 
 // Call DS API with OAuth access_token
-async function callAuthenticatedAPI(method, params = {}) {
+export async function callAuthenticatedAPI(method, params = {}) {
   const accessToken = await getAccessToken()
   if (!accessToken) {
     throw new Error('No AliExpress OAuth token. Authorize at /api/platforms/callback/aliexpress')
@@ -253,18 +259,28 @@ export async function refreshAliExpressToken() {
 
 // ============================================
 // DS PRODUCT DETAILS — full info with all images, description, specs
+//
+// Uses aliexpress.ds.product.wholesale.get (NOT ds.product.get) because
+// wholesale returns the REAL dropshipper rate in offer_sale_price — the
+// exact number AE bills us at checkout. ds.product.get returns a higher
+// retail-ish price that doesn't match actual billing. Verified empirically
+// 2026-04-24:
+//   - Airtight Container Blue 2000ML: wholesale offer_sale_price=$12.50,
+//     matches AE real checkout billing exactly
+//   - Garlic Chopper 1005009939321631: wholesale offer_sale_price=$1.10,
+//     matches trade.ds.order.get pay_amount exactly
 // ============================================
 
 export async function getProductDetails(productId) {
   try {
-    const data = await callAuthenticatedAPI('aliexpress.ds.product.get', {
+    const data = await callAuthenticatedAPI('aliexpress.ds.product.wholesale.get', {
       product_id: String(productId),
-      target_currency: 'AUD',
+      target_currency: 'USD',
       target_language: 'EN',
       ship_to_country: 'AU',
     })
 
-    const result = data?.aliexpress_ds_product_get_response?.result
+    const result = data?.aliexpress_ds_product_wholesale_get_response?.result
     if (!result) return null
 
     const baseInfo = result.ae_item_base_info_dto || {}
@@ -283,6 +299,20 @@ export async function getProductDetails(productId) {
     // All images
     const imageUrls = multimedia.image_urls ? multimedia.image_urls.split(';').filter(Boolean) : []
 
+    // Parse variants first — we derive cost/originalPrice/currency from them
+    // because ds.product.wholesale.get doesn't return base-level sale_price
+    // / price the way ds.product.get does.
+    const variants = skuInfo.map(parseVariant).filter(v => v.priceUsd > 0)
+    const variantPrices = variants.map(v => v.priceUsd)
+    const variantRegularPrices = skuInfo
+      .map(s => parseFloat(s.sku_price || '0'))
+      .filter(p => p > 0)
+    const derivedCost = variantPrices.length > 0 ? Math.min(...variantPrices) : 0
+    const derivedOriginalPrice = variantRegularPrices.length > 0
+      ? Math.max(...variantRegularPrices)
+      : derivedCost
+    const derivedCurrency = skuInfo[0]?.currency_code || baseInfo.currency_code || 'USD'
+
     return {
       productId: String(productId),
       title: baseInfo.subject || '',
@@ -290,15 +320,15 @@ export async function getProductDetails(productId) {
       images: imageUrls,
       image: imageUrls[0] || '',
       videoUrl: multimedia.ae_video_dtos?.ae_video_d_t_o?.[0]?.media_url || '',
-      cost: parseFloat(baseInfo.sale_price?.amount || baseInfo.price?.amount || '0'),
-      originalPrice: parseFloat(baseInfo.price?.amount || '0'),
-      currency: baseInfo.sale_price?.currency_code || 'AUD',
+      cost: derivedCost,
+      originalPrice: derivedOriginalPrice,
+      currency: derivedCurrency,
       category: baseInfo.category_id || '',
       categoryName: baseInfo.product_category_name || '',
-      // Canonical variants — every SKU with its real USD price, stock, and
-      // colour-swatch image. One source of truth for storefront variant UI
-      // and for rebuild-time price calculation. See api/_lib/pricing.js.
-      variants: skuInfo.map(parseVariant).filter(v => v.priceUsd > 0),
+      // Canonical variants — every SKU with its real USD dropshipper price,
+      // stock, and colour-swatch image. One source of truth for storefront
+      // variant UI and for rebuild-time price calculation. See api/_lib/pricing.js.
+      variants,
       // Shipping options (old-schema only — new DS API returns empty list)
       shipping: shippingInfo.map(s => ({
         company: s.logistics_company || '',
@@ -316,8 +346,8 @@ export async function getProductDetails(productId) {
         name: storeInfo.store_name || '',
         rating: storeInfo.evaluation_positive_rate || '',
       },
-      // Real product metrics from ds.product.get — parsed from raw strings
-      // (AE returns "10000+" for sales, "4.6" for rating, etc.)
+      // Real product metrics — parsed from raw strings (AE returns "10000+" for
+      // sales, "4.6" for rating, etc.)
       orders: (() => {
         const s = baseInfo.sales_count
         if (!s) return 0
@@ -328,16 +358,30 @@ export async function getProductDetails(productId) {
         ? Math.min(5, parseFloat(baseInfo.avg_evaluation_rating) || 0)
         : 0,
       evaluationCount: parseInt(baseInfo.evaluation_count || '0', 10) || 0,
-      // Computed discount % from original vs sale price
+      // Discount % from max(sku_price) vs min(offer_sale_price) across variants
       discountPercent: (() => {
-        const orig = parseFloat(baseInfo.price?.amount || '0')
-        const sale = parseFloat(baseInfo.sale_price?.amount || '0')
-        if (!orig || !sale || sale >= orig) return 0
-        return Math.round((1 - sale / orig) * 100)
+        if (!derivedOriginalPrice || !derivedCost || derivedCost >= derivedOriginalPrice) return 0
+        return Math.round((1 - derivedCost / derivedOriginalPrice) * 100)
       })(),
     }
   } catch (err) {
-    console.error(`[AliExpress] ds.product.get failed for ${productId}:`, err.message)
+    const msg = err.message || ''
+    // Rate limits bubble up so the caller can throttle / wait through the ban.
+    // callAPI now includes [AppApiCallLimit] in the error message (see above).
+    if (msg.includes('AppApiCallLimit') || msg.includes('frequency of app access')) {
+      throw err
+    }
+    // Product is permanently unavailable on AE — caller should deactivate the
+    // catalog row rather than keep retrying. callAPI appends [ITEM_ID_NOT_FOUND]
+    // or [All SKU Unsaleable] in the error message for these ISP errors.
+    if (msg.includes('ITEM_ID_NOT_FOUND') || msg.includes('Unsaleable')) {
+      const reason = msg.includes('NOT_FOUND') ? 'item_not_found' : 'all_sku_unsaleable'
+      console.warn(`[AliExpress] Product ${productId} unavailable (${reason}): ${msg}`)
+      return { _productRemoved: true, reason, productId: String(productId) }
+    }
+    // Everything else (timeout, network glitch, unknown error) — null so
+    // caller can back off and retry later.
+    console.error(`[AliExpress] ds.product.wholesale.get failed for ${productId}:`, err.message)
     return null
   }
 }
@@ -349,9 +393,16 @@ export async function getProductDetails(productId) {
 // ============================================
 
 export async function verifyProduct(productId, skuAttr = '', quantity = 1, storedSupplierCost = 0) {
-  const USD_TO_AUD = 1.45
-  const MAX_SHIPPING_AUD = 3.00
-  const MAX_PRICE_INCREASE = 0.10 // 10%
+  // Pre-checkout sanity check. Both stored supplier_cost (in user_products)
+  // and details.cost (from getProductDetails → ds.product.wholesale.get)
+  // are USD now after the v1.3.0 migration, so we compare in USD directly.
+  // Pre-v1.3.0 this function multiplied details.cost × 1.45 to convert
+  // USD→AUD against legacy AUD-stored values, which after migration
+  // looked like a 45% price spike on every product and tripped the
+  // MAX_PRICE_INCREASE check below for almost every checkout.
+  const MAX_SHIPPING_USD = 5.00       // ≈ A$7.50 — AE shipping is volatile, give headroom
+  const MAX_PRICE_INCREASE = 0.20     // 20%; was 10% — AE Choice prices fluctuate enough that
+                                       // 10% triggered too often, blocking otherwise good orders
 
   try {
     const details = await getProductDetails(productId)
@@ -388,23 +439,24 @@ export async function verifyProduct(productId, skuAttr = '', quantity = 1, store
       }
     }
 
-    // Check 4: Price hasn't increased more than 10%
+    // Check 4: Price hasn't increased more than MAX_PRICE_INCREASE.
+    // Both sides USD (post-v1.3.0). Apples to apples.
     if (storedSupplierCost > 0) {
-      const currentCostAUD = details.cost * USD_TO_AUD
-      const priceIncrease = (currentCostAUD - storedSupplierCost) / storedSupplierCost
+      const currentCostUSD = details.cost
+      const priceIncrease = (currentCostUSD - storedSupplierCost) / storedSupplierCost
       if (priceIncrease > MAX_PRICE_INCREASE) {
         return {
           available: false,
           reason: 'price_increased',
           message: 'This product is temporarily unavailable due to a price change',
           oldCost: storedSupplierCost,
-          newCost: Math.round(currentCostAUD * 100) / 100,
+          newCost: Math.round(currentCostUSD * 100) / 100,
         }
       }
     }
 
     // Check 5: Shipping — accept EITHER schema from AliExpress DS API
-    //   Old schema: non-empty details.shipping array → verify cheapest under A$3
+    //   Old schema: non-empty details.shipping array → verify cheapest under threshold
     //   New schema (2026-04-22+): details.shipsToCountry confirms shipping country
     //     (AE now returns only { ship_to_country, delivery_time }, no carrier list)
     //   Neither present → genuine no_shipping
@@ -413,8 +465,8 @@ export async function verifyProduct(productId, skuAttr = '', quantity = 1, store
 
     if (hasShippingList) {
       const cheapest = details.shipping.reduce((min, s) => s.shippingFee < min.shippingFee ? s : min, details.shipping[0])
-      const shippingAUD = cheapest.shippingFee * USD_TO_AUD
-      if (shippingAUD > MAX_SHIPPING_AUD) {
+      // shippingFee is USD post-v1.3.0; compare in USD directly.
+      if (cheapest.shippingFee > MAX_SHIPPING_USD) {
         return {
           available: false,
           reason: 'shipping_too_expensive',
@@ -595,70 +647,63 @@ export async function submitOrder({ productId, skuId, skuAttr, quantity, shippin
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
     const aeOrderId = result.order_list?.number?.[0] || result.order_id || result.ae_order_id
 
-    // Step 2: Trigger auto-pay — call payment API to charge the authorized PayPal/card
-    // Without this, orders sit in "Awaiting Payment" even with auto-pay activated
-    if (aeOrderId) {
-      try {
-        // Try multiple payment API endpoints
-        const payApis = [
-          'aliexpress.trade.order.pay',
-          'aliexpress.ds.order.pay',
-          'aliexpress.trade.pay.order',
-        ]
-        let paySuccess = false
-        for (const payApi of payApis) {
-          try {
-            const payResult = await callAuthenticatedAPI(payApi, {
-              order_id: String(aeOrderId),
-              pay_type: 'autopay',
-            })
-            console.log(`[AliExpress] Auto-pay (${payApi}): ${JSON.stringify(payResult).slice(0, 300)}`)
-            if (payResult && !payResult.error_response) {
-              paySuccess = true
-              break
-            }
-          } catch (payErr) {
-            console.log(`[AliExpress] Auto-pay ${payApi} failed: ${payErr.message}`)
-          }
-        }
-        if (!paySuccess) {
-          console.log(`[AliExpress] Auto-pay APIs not available — order ${aeOrderId} may need manual payment`)
-        }
-      } catch (autoPayErr) {
-        console.error(`[AliExpress] Auto-pay error for ${aeOrderId}:`, autoPayErr.message)
-      }
-    }
+    // Auto-pay is driven by ds_extend_request.payment.try_to_pay = "true"
+    // in the ds.order.create call above. AE handles the PayPal / card
+    // charge internally; we don't need a separate "pay this order" API
+    // call. A previous version of this code tried three follow-up
+    // methods (trade.order.pay, ds.order.pay, trade.pay.order) but
+    // none of those paths exist on AE's DS API — every attempt returned
+    // InvalidApiPath and spammed the log. Removed.
 
-    // Step 3: Query the order to get the REAL AliExpress cost (product + shipping + tax in USD)
+    // Step 2: Query the order to get the REAL AliExpress cost (pay_amount
+    // in USD — what was actually charged). Uses callAuthenticatedAPI
+    // because trade.ds.order.get requires OAuth (verified 2026-04-24
+    // via admin/api-tester). Earlier we fixed ONE call site for this
+    // method; this is the second one in submitOrder which was missed.
+    //
+    // Response shape is the same as /api/admin/fetch-real-order-costs
+    // uses: `order_amount.amount` for the total, `child_order_list` for
+    // per-SKU breakdown. Old field names (pay_amount, total_product_amount,
+    // logistics_amount) don't exist — removed.
     let realCostUSD = null
     if (aeOrderId) {
       try {
-        const orderData = await callAPI('aliexpress.trade.ds.order.get', {
+        const orderData = await callAuthenticatedAPI('aliexpress.trade.ds.order.get', {
           single_order_query: JSON.stringify({ order_id: Number(aeOrderId) }),
         })
         const orderResult = orderData?.aliexpress_trade_ds_order_get_response?.result
           || orderData?.result
         if (orderResult) {
-          // Extract the actual cost — can be in different fields
-          // pay_amount = total charged to card/PayPal (includes product + shipping + tax)
-          // If pay_amount not available, sum up the parts
-          const payAmount = parseFloat(orderResult.pay_amount || '0')
-          const productAmount = parseFloat(orderResult.total_product_amount || orderResult.product_amount || '0')
-          const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
-          const taxAmount = parseFloat(orderResult.tax_amount || '0')
+          const orderAmountTotal = parseFloat(orderResult.order_amount?.amount || '0')
 
-          if (payAmount > 0) {
-            // Best: use the actual total charged (includes everything)
-            realCostUSD = payAmount
-            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (pay_amount — total charged inc. tax)`)
+          if (orderAmountTotal > 0) {
+            realCostUSD = orderAmountTotal
+            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (order_amount.amount — total AE billed)`)
           } else {
-            // Fallback: sum the parts
-            realCostUSD = productAmount + shippingAmount + taxAmount
-            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (product: $${productAmount}, shipping: $${shippingAmount}, tax: $${taxAmount})`)
+            // Fallback: sum child order lines if top-level total is empty
+            const childOrders = orderResult.child_order_list?.aeop_child_order_info || []
+            let productAmount = 0
+            let shippingAmount = 0
+            let taxAmount = 0
+            for (const child of childOrders) {
+              const unitPrice = parseFloat(child.product_price?.amount || '0')
+              const count = parseInt(child.product_count) || 1
+              productAmount += unitPrice * count
+              shippingAmount += parseFloat(child.shipping_fee?.amount || '0')
+              taxAmount += parseFloat(child.actual_tax_fee?.amount || '0')
+            }
+            const summed = productAmount + shippingAmount + taxAmount
+            if (summed > 0) {
+              realCostUSD = summed
+              console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (summed children: product $${productAmount.toFixed(2)} + shipping $${shippingAmount.toFixed(2)} + tax $${taxAmount.toFixed(2)})`)
+            }
           }
         }
       } catch (costErr) {
-        console.log(`[AliExpress] Could not query order cost for ${aeOrderId}: ${costErr.message}`)
+        // AE often doesn't populate pay_amount immediately after order
+        // creation — takes a few minutes. Not an error worth escalating;
+        // the admin fetch-real-order-costs endpoint backfills later.
+        console.log(`[AliExpress] Cost query deferred for ${aeOrderId}: ${costErr.message}`)
       }
     }
 
@@ -995,7 +1040,12 @@ export async function reportOrderForDSLevel({ productId, orderId, orderAmount, s
       console.log(`[AliExpress] DS Level: reported order ${orderId} for product ${productId}`)
       return { success: true }
     } else {
-      console.error('[AliExpress] DS Level report failed:', JSON.stringify(data).slice(0, 300))
+      // This endpoint is an AE affiliate/publisher reporting hook that
+      // returns "This publisher is not registered" for our account. It's
+      // optional and unrelated to the actual order flow. Logging at
+      // info instead of error so it doesn't clutter the Vercel error
+      // feed on every order.
+      console.log('[AliExpress] DS Level report not registered (optional affiliate hook):', JSON.stringify(data).slice(0, 200))
       return { success: false, error: result?.error_msg || 'Report failed' }
     }
   } catch (err) {

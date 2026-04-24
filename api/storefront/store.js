@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     // storefront sees (NULL niche = general store, sees everything)
     const { rows: stores } = await sql`
       SELECT s.id, s.subdomain, s.full_domain, s.store_name, s.status, s.created_at,
-             s.theme_id, s.niche,
+             s.theme_id, s.niche, s.markup_percent,
              u.id AS owner_id, u.name AS owner_name, u.avatar_url AS owner_avatar, u.email AS owner_email
       FROM user_stores s
       JOIN users u ON u.id = s.user_id
@@ -55,6 +55,14 @@ export default async function handler(req, res) {
 
     const store = stores[0]
 
+    // Per-store markup applied to every customer-facing price.
+    // Stored sale_price in user_products is break-even (our AE wholesale
+    // cost); the customer sees break_even × (1 + markup/100). All price
+    // thresholds in this endpoint convert the customer-facing value back
+    // to break-even space before querying.
+    const markupPercent = parseFloat(store.markup_percent ?? 40) || 0
+    const markupMultiplier = 1 + markupPercent / 100
+
     // Pagination params
     const page = Math.max(1, parseInt(req.query.page) || 1)
     const limit = Math.min(60, Math.max(1, parseInt(req.query.limit) || 30))
@@ -64,13 +72,18 @@ export default async function handler(req, res) {
     const sortBy = req.query.sort || 'newest'
     const search = req.query.search || ''
 
-    // Build WHERE conditions
+    // Build WHERE conditions — price thresholds are filter buckets the
+    // customer sees ("Under $10", "$10-$20" etc). Convert to break-even
+    // space because sale_price in the DB is pre-markup.
+    const t10s = (10 / markupMultiplier).toFixed(4)
+    const t20s = (20 / markupMultiplier).toFixed(4)
+    const t50s = (50 / markupMultiplier).toFixed(4)
     let whereExtra = ''
     if (category) whereExtra += ` AND category = '${category.replace(/'/g, "''")}'`
-    if (priceRange === 'under10') whereExtra += ' AND sale_price < 10'
-    else if (priceRange === '10to20') whereExtra += ' AND sale_price >= 10 AND sale_price < 20'
-    else if (priceRange === '20to50') whereExtra += ' AND sale_price >= 20 AND sale_price < 50'
-    else if (priceRange === 'over50') whereExtra += ' AND sale_price >= 50'
+    if (priceRange === 'under10') whereExtra += ` AND sale_price < ${t10s}`
+    else if (priceRange === '10to20') whereExtra += ` AND sale_price >= ${t10s} AND sale_price < ${t20s}`
+    else if (priceRange === '20to50') whereExtra += ` AND sale_price >= ${t20s} AND sale_price < ${t50s}`
+    else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
     if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
 
     // Build ORDER BY
@@ -149,6 +162,16 @@ export default async function handler(req, res) {
         try { images = JSON.parse(images) } catch { images = images.replace(/[{}]/g, '').split(',').filter(Boolean) }
       }
       if (!Array.isArray(images)) images = []
+      // Stored sale_price is break-even (our AE cost). Apply the store's
+      // markup here so every field the frontend reads (product.price,
+      // product.originalPrice) is customer-facing. break_even_usd is
+      // preserved for debugging / commission math on the server side.
+      const breakEvenUsd = parseFloat(p.sale_price) || 0
+      const markedPrice = Math.round(breakEvenUsd * markupMultiplier * 100) / 100
+      const breakEvenOriginal = parseFloat(p.original_price) || 0
+      const markedOriginal = breakEvenOriginal > 0
+        ? Math.round(breakEvenOriginal * markupMultiplier * 100) / 100
+        : 0
       return {
       id: p.id,
       supplierProductId: p.supplier_product_id || '',
@@ -156,7 +179,8 @@ export default async function handler(req, res) {
       description: p.description,
       image: p.image || (images[0] || ''),
       images,
-      price: parseFloat(p.sale_price) || 0,
+      price: markedPrice,
+      breakEvenUsd,
       currency: p.price_currency || 'USD',
       shipping: parseFloat(p.shipping_usd ?? p.shipping_cost) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
@@ -171,7 +195,7 @@ export default async function handler(req, res) {
       totalSold: p.total_sold || 0,
       rating: parseFloat(p.product_rating) || 0,
       ordersCount: p.orders_count || 0,
-      originalPrice: parseFloat(p.original_price) || 0,
+      originalPrice: markedOriginal,
       discountPercent: p.discount_percent || 0,
       inStock: p.in_stock !== false,
       createdAt: p.created_at,
@@ -220,13 +244,13 @@ export default async function handler(req, res) {
     )
     const categories = catRows.map(r => ({ name: r.category || 'General', count: parseInt(r.count) }))
 
-    // Get price range counts (niche-gated)
+    // Get price range counts (niche-gated). Reuses t10s/t20s/t50s from above.
     const { rows: priceRows } = await sql.query(
       `SELECT
-        COUNT(*) FILTER (WHERE sale_price < 10) as under10,
-        COUNT(*) FILTER (WHERE sale_price >= 10 AND sale_price < 20) as range10to20,
-        COUNT(*) FILTER (WHERE sale_price >= 20 AND sale_price < 50) as range20to50,
-        COUNT(*) FILTER (WHERE sale_price >= 50) as over50
+        COUNT(*) FILTER (WHERE sale_price < ${t10s}) as under10,
+        COUNT(*) FILTER (WHERE sale_price >= ${t10s} AND sale_price < ${t20s}) as range10to20,
+        COUNT(*) FILTER (WHERE sale_price >= ${t20s} AND sale_price < ${t50s}) as range20to50,
+        COUNT(*) FILTER (WHERE sale_price >= ${t50s}) as over50
       FROM (
         SELECT DISTINCT ON (supplier_product_id) sale_price, supplier_product_id
         FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
@@ -248,6 +272,9 @@ export default async function handler(req, res) {
       if (feeRows[0]) shippingFee = parseFloat(feeRows[0].value) || 0
     } catch { /* default 0 */ }
 
+    // Markup was already applied inside the product map above (on the
+    // `price` field the frontend reads). No second pass needed.
+
     const response = {
       store: {
         id: store.id,
@@ -258,6 +285,7 @@ export default async function handler(req, res) {
         ownerAvatar: store.owner_avatar,
         themeId: store.theme_id || 'midnight',
         createdAt: store.created_at,
+        markupPercent,
       },
       products,
       categories,

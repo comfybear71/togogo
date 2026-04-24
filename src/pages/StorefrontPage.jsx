@@ -337,8 +337,6 @@ export default function StorefrontPage({ subdomain }) {
                 <span>{storeData.pagination?.totalProducts || allProducts.length} products</span>
                 <span>•</span>
                 <span>{storeData.categories?.length || 0} categories</span>
-                <span>•</span>
-                <span className="text-emerald-400">Free shipping</span>
               </div>
             </div>
             <div className="relative group">
@@ -581,19 +579,18 @@ export default function StorefrontPage({ subdomain }) {
                     )}
                   </div>
 
-                  {/* Shipping badge — shows the real AE shipping cost bundled
-                      in the price. Helps customers see we're not hiding fees. */}
-                  <div className="mt-1.5">
-                    {shippingCost > 0 ? (
+                  {/* Shipping badge on product card — shows real AE shipping
+                      so customer sees we're not hiding fees. Only rendered
+                      when we have a shipping cost on file; "Free shipping"
+                      fallback was removed because shipping is bundled into
+                      the displayed price post-markup (see header change). */}
+                  {shippingCost > 0 && (
+                    <div className="mt-1.5">
                       <span className={`inline-flex items-center gap-0.5 text-xs ${theme.textMuted}`}>
                         <Truck className="h-3 w-3" /> Incl. US ${shippingCost.toFixed(2)} shipping
                       </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-0.5 text-xs text-emerald-500">
-                        <Truck className="h-3 w-3" /> Free shipping
-                      </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )})}
@@ -798,17 +795,8 @@ function CartView({ store, cart, theme, subdomain, onBack, onCheckout }) {
                 <span>Total</span>
                 <span>US ${cart.total.toFixed(2)}</span>
               </div>
-              {cart.shippingTotal > 0 && (
-                <div className="flex justify-between text-xs text-slate-400 mb-4">
-                  <span>Includes shipping</span>
-                  <span>US ${cart.shippingTotal.toFixed(2)}</span>
-                </div>
-              )}
-              {cart.shippingTotal === 0 && (
-                <div className="flex justify-between text-xs text-emerald-400 mb-4">
-                  <span>Free shipping</span>
-                </div>
-              )}
+              {/* Shipping is bundled into total post-markup, so the
+                  separate shipping line here was removed. */}
               <button
                 onClick={onCheckout}
                 disabled={verifying || hasIssues}
@@ -862,24 +850,46 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
     title: details.title || product.title,
   } : product
 
-  // Variant-aware pricing — three transparent components:
-  //   Product:   from variant.priceUsd (live AE API)
-  //   Shipping:  from ds.freight.query (live AE API)
-  //   Est. tax:  10% of product (flat estimate — AE doesn't expose tax
-  //              via API; labelled "Est. tax" so customer knows it's an
-  //              estimate, not a guarantee)
-  // Matches api/_lib/pricing.js → breakEvenUsd
+  // Variant-aware pricing — customer sees a single price that already
+  // includes everything (product cost + shipping + 10% tax estimate + the
+  // store's markup). Break-even is what AE bills us; markup is the
+  // store-owner's margin on top of break-even.
+  //
+  // Shown price  = break_even_total × (1 + store.markup / 100)
+  // where break_even_total = product + shipping + 10% tax.
+  //
+  // The list page applied this markup server-side to product.price
+  // (sale_price comes back pre-marked-up from /api/storefront/store).
+  // Here on the detail page we also need the live variant price, so we
+  // re-derive break-even and apply markup once.
+  //
+  // Matches api/_lib/pricing.js → breakEvenUsd on the break-even side,
+  // and user_stores.markup_percent on the markup side.
   const TAX_RATE = 0.10
+  const markupPercent = parseFloat(store?.markupPercent ?? 40) || 0
+  const markupMultiplier = 1 + markupPercent / 100
   const productShippingUsd = Number(product.shipping) || 0
   const basePrice = Number(product.price) || 0
   const selectedProductUsd = selectedVariant?.priceUsd > 0 ? selectedVariant.priceUsd : null
-  // For products without a selected variant, derive product-only subtotal
-  // by stripping shipping and reversing the 10% tax from stored sale_price.
-  const baseProductDerived = Math.max(0, (basePrice - productShippingUsd) / (1 + TAX_RATE))
-  const displayProductUsd = selectedProductUsd != null ? selectedProductUsd : baseProductDerived
-  const displayShippingUsd = productShippingUsd
-  const displayTaxUsd = Math.round(displayProductUsd * TAX_RATE * 100) / 100
-  const displayPrice = Math.round((displayProductUsd + displayShippingUsd + displayTaxUsd) * 100) / 100
+  // Derive break-even product cost when no variant is selected.
+  // product.price from the API is ALREADY marked up, so strip markup
+  // first, then strip shipping, then reverse the 10% tax:
+  //   basePrice      = (breakEvenProduct + shipping) × (1 + TAX_RATE) × markupMultiplier
+  //   breakEvenTotal = basePrice / markupMultiplier
+  //   breakEvenProduct = breakEvenTotal / (1 + TAX_RATE) − shipping
+  const breakEvenTotalFromBase = markupMultiplier > 0 ? basePrice / markupMultiplier : basePrice
+  const baseProductDerived = Math.max(0, (breakEvenTotalFromBase / (1 + TAX_RATE)) - productShippingUsd)
+  const breakEvenProductUsd = selectedProductUsd != null ? selectedProductUsd : baseProductDerived
+  const breakEvenShippingUsd = productShippingUsd
+  const breakEvenTaxUsd = Math.round((breakEvenProductUsd + breakEvenShippingUsd) * TAX_RATE * 100) / 100
+  const breakEvenTotal = breakEvenProductUsd + breakEvenShippingUsd + breakEvenTaxUsd
+  // Customer-facing figures — break-even × markup, rounded cleanly.
+  const displayPrice = Math.round(breakEvenTotal * markupMultiplier * 100) / 100
+  const displayProductUsd = Math.round(breakEvenProductUsd * markupMultiplier * 100) / 100
+  const displayShippingUsd = Math.round(breakEvenShippingUsd * markupMultiplier * 100) / 100
+  // Derive displayed tax so the three lines sum to displayPrice cleanly
+  // regardless of rounding artefacts.
+  const displayTaxUsd = Math.round((displayPrice - displayProductUsd - displayShippingUsd) * 100) / 100
   const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
   const needsVariantChoice = hasVariants && !selectedVariant
   const availableStock = selectedVariant?.stock ?? null
@@ -1044,11 +1054,9 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
               )
             })()}
 
-            {/* Shipping */}
+            {/* Trust badges — "Free shipping" removed because shipping is
+                bundled into the product price post-markup. */}
             <div className="flex flex-wrap gap-2 mb-6">
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
-                <Truck className="h-4 w-4" /> Free shipping
-              </div>
               <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 bg-white/[0.05]">
                 <Shield className="h-4 w-4" /> Buyer Protection
               </div>
@@ -1080,11 +1088,13 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
               <p className="text-xs text-slate-500 mb-4">Sold by: {details.store.name}</p>
             )}
 
-            {/* Shipping estimate */}
+            {/* Delivery estimate — previously labelled "Free shipping" but
+                shipping is bundled into the price post-markup, so we just
+                show the ETA now. */}
             <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-[#1e293b] border border-white/[0.06]">
               <Truck className="h-5 w-5 text-emerald-400 flex-shrink-0" />
               <div>
-                <p className="text-sm text-white font-medium">Free shipping to Australia</p>
+                <p className="text-sm text-white font-medium">Ships to Australia</p>
                 <p className="text-xs text-slate-400">Estimated delivery: 15–25 business days</p>
               </div>
             </div>
@@ -1332,6 +1342,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
           oldTotalUsd: data.oldTotalUsd,
           newTotalUsd: data.newTotalUsd,
           message: data.message,
+          priceDropped: !!data.priceDropped,  // true when AE is now cheaper
         })
         setSubmitting(false)
         return

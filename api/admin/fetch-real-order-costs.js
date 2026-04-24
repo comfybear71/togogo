@@ -1,6 +1,7 @@
 // Fetch real AliExpress costs for orders with ae_actual_cost_usd = NULL
 // Queries trade.ds.order.get using the supplier_order_id (AE order number)
 // GET /api/admin/fetch-real-order-costs?secret=JWT&limit=50
+// Add &apply=1 to also write ae_actual_cost_usd back to the DB in the same call
 import { sql, ensureSchema } from '../_lib/db.js'
 import { callAuthenticatedAPI } from '../_lib/suppliers.js'
 
@@ -13,6 +14,9 @@ export default async function handler(req, res) {
   await ensureSchema()
 
   const limit = parseInt(req.query.limit) || 50
+  const apply = req.query.apply === '1'
+  const usdToAud = 1.45  // matches batch-update-order-costs for consistency
+  let applied = 0
 
   try {
     // Get orders with missing ae_actual_cost_usd that have supplier_order_id
@@ -44,6 +48,10 @@ export default async function handler(req, res) {
     const errors = []
 
     for (const order of orders) {
+      // sale_price comes back from PostgreSQL NUMERIC as a string via @vercel/postgres;
+      // parseFloat once here so `.toFixed()` and arithmetic work everywhere below.
+      const salePrice = parseFloat(order.sale_price) || 0
+
       try {
         // Query AliExpress for the real order cost
         const orderData = await callAuthenticatedAPI('aliexpress.trade.ds.order.get', {
@@ -62,36 +70,66 @@ export default async function handler(req, res) {
           continue
         }
 
-        // Extract the actual cost
-        const payAmount = parseFloat(orderResult.pay_amount || '0')
-        const productAmount = parseFloat(orderResult.total_product_amount || orderResult.product_amount || '0')
-        const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
-        const taxAmount = parseFloat(orderResult.tax_amount || '0')
+        // Extract the actual cost from AE's trade.ds.order.get response shape:
+        //   order_amount.amount = total AE billed (primary source — what we pay)
+        //   child_order_list.aeop_child_order_info[] = per-line breakdown
+        //     (product_price × product_count + shipping_fee + actual_tax_fee)
+        const orderAmountTotal = parseFloat(orderResult.order_amount?.amount || '0')
+
+        const childOrders = orderResult.child_order_list?.aeop_child_order_info || []
+        let productAmount = 0
+        let shippingAmount = 0
+        let taxAmount = 0
+        for (const child of childOrders) {
+          const unitPrice = parseFloat(child.product_price?.amount || '0')
+          const count = parseInt(child.product_count) || 1
+          productAmount += unitPrice * count
+          shippingAmount += parseFloat(child.shipping_fee?.amount || '0')
+          taxAmount += parseFloat(child.actual_tax_fee?.amount || '0')
+        }
 
         let realCostUSD = null
         let costBreakdown = ''
 
-        if (payAmount > 0) {
-          realCostUSD = payAmount
-          costBreakdown = `pay_amount (total charged)`
+        if (orderAmountTotal > 0) {
+          realCostUSD = orderAmountTotal
+          costBreakdown = `order_amount (product: $${productAmount.toFixed(2)} + shipping: $${shippingAmount.toFixed(2)} + tax: $${taxAmount.toFixed(2)})`
         } else if (productAmount > 0 || shippingAmount > 0 || taxAmount > 0) {
           realCostUSD = productAmount + shippingAmount + taxAmount
-          costBreakdown = `product: $${productAmount.toFixed(2)} + shipping: $${shippingAmount.toFixed(2)} + tax: $${taxAmount.toFixed(2)}`
+          costBreakdown = `summed children: product: $${productAmount.toFixed(2)} + shipping: $${shippingAmount.toFixed(2)} + tax: $${taxAmount.toFixed(2)}`
         }
 
         if (realCostUSD && realCostUSD > 0) {
-          const marginUSD = order.sale_price - realCostUSD
+          const marginUSD = salePrice - realCostUSD
           results.push({
             orderRef: order.platform_order_id,
             product: order.product_title?.slice(0, 50),
             aeOrderId: order.supplier_order_id,
-            customerPaidUSD: order.sale_price,
+            customerPaidUSD: salePrice,
             aeBilledUSD: realCostUSD,
             marginUSD: marginUSD,
             costBreakdown,
             createdAt: order.created_at,
           })
-          console.log(`[Fetch] ${order.platform_order_id}: Customer paid US$${order.sale_price.toFixed(2)}, AE billed US$${realCostUSD.toFixed(2)}, margin US$${marginUSD.toFixed(2)}`)
+          console.log(`[Fetch] ${order.platform_order_id}: Customer paid US$${salePrice.toFixed(2)}, AE billed US$${realCostUSD.toFixed(2)}, margin US$${marginUSD.toFixed(2)}`)
+
+          if (apply) {
+            try {
+              const aeActualCostAUD = Math.round(realCostUSD * usdToAud * 100) / 100
+              await sql`
+                UPDATE user_orders
+                SET ae_actual_cost_usd = ${realCostUSD},
+                    ae_actual_fetched_at = NOW(),
+                    notes = ${'Real AE cost: US$' + realCostUSD.toFixed(2) + ' (A$' + aeActualCostAUD.toFixed(2) + ')'},
+                    updated_at = NOW()
+                WHERE id = ${order.id}
+              `
+              applied++
+            } catch (dbErr) {
+              console.error(`[Fetch] DB update failed for ${order.platform_order_id || order.supplier_order_id}:`, dbErr.message)
+              // Don't fail the whole order — the results array still has the cost data
+            }
+          }
         } else {
           errors.push({
             orderRef: order.platform_order_id,
@@ -113,10 +151,17 @@ export default async function handler(req, res) {
       success: true,
       totalOrders: orders.length,
       fetched: results.length,
-      errors: errors.length,
+      errorsCount: errors.length,
+      applied: apply ? applied : null,
       results,
       errors,
-      nextStep: results.length > 0 ? `Use /api/admin/batch-update-order-costs?secret=JWT to apply these values` : 'No valid costs to update',
+      nextStep: apply
+        ? (applied === results.length
+            ? `Applied ${applied} of ${results.length} cost values to user_orders. Check /admin/orders.`
+            : `Applied ${applied} of ${results.length}. Some DB updates may have failed — check logs.`)
+        : (results.length > 0
+            ? `Re-run with &apply=1 to write these values to user_orders, or POST to /api/admin/batch-update-order-costs`
+            : 'No valid costs to update'),
     })
   } catch (err) {
     console.error('[Fetch Real Costs] Error:', err)

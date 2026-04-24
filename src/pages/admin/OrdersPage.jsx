@@ -35,6 +35,10 @@ const statusConfig = {
   refunded: { color: 'bg-zinc-500/10 text-zinc-400', icon: XCircle },
 };
 
+// Statuses hidden when the "Active" filter is selected — pending carts,
+// abandoned payments, cancelled/refunded are audit-only clutter for day-to-day use.
+const HIDDEN_STATUSES_ON_ACTIVE = ['pending', 'pending_payment', 'cancelled', 'refunded'];
+
 const disputeStatusColors = {
   open: 'bg-red-500/10 text-red-400',
   under_review: 'bg-[#FFD23F]/10 text-[#FFD23F]',
@@ -47,9 +51,10 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [financials, setFinancials] = useState({ total_fees: 0, total_payouts: 0, platform_balance: 0 });
+  const [subscriptions, setSubscriptions] = useState({ activeCount: 0, mrr: 0 });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active'); // hides abandoned + cancelled by default
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
@@ -84,6 +89,7 @@ export default function OrdersPage() {
         setOrders(data.orders || []);
         setDisputes(data.disputes || []);
         setFinancials(data.financials || { total_fees: 0, total_payouts: 0, platform_balance: 0 });
+        setSubscriptions(data.subscriptions || { activeCount: 0, mrr: 0 });
       }
     } catch (err) {
       console.error('Failed to fetch orders:', err);
@@ -101,7 +107,11 @@ export default function OrdersPage() {
         !(o.product_title || '').toLowerCase().includes(q)
       ) return false;
     }
-    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+    if (statusFilter === 'active') {
+      if (HIDDEN_STATUSES_ON_ACTIVE.includes(o.status)) return false;
+    } else if (statusFilter !== 'all' && o.status !== statusFilter) {
+      return false;
+    }
     return true;
   });
 
@@ -148,16 +158,34 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {/* Financial Summary */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {/* Financial Summary — 4 cards: Order Commissions · Subscription MRR
+          · Total Payouts · Platform Balance. MRR is a new data point from
+          the subscriptions table; commissions stayed as "Total Fees
+          Collected" but relabelled for clarity now that subscriptions
+          are shown alongside. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-[16px] bg-[#111] p-5">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-zinc-500">Total Fees Collected</p>
+              <p className="text-sm font-medium text-zinc-500">Order Commissions</p>
               <p className="mt-1 text-2xl font-bold text-white">${totalFees.toFixed(2)}</p>
             </div>
             <div className="rounded-xl bg-[#06D6A0]/10 p-3">
               <DollarSign className="h-6 w-6 text-[#06D6A0]" />
+            </div>
+          </div>
+        </div>
+        <div className="rounded-[16px] bg-[#111] p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-500">Subscription MRR</p>
+              <p className="mt-1 text-2xl font-bold text-white">${subscriptions.mrr.toFixed(2)}</p>
+              <p className="mt-0.5 text-xs text-zinc-500">
+                {subscriptions.activeCount} active shop{subscriptions.activeCount === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="rounded-xl bg-[#8B5CF6]/10 p-3">
+              <CreditCard className="h-6 w-6 text-[#8B5CF6]" />
             </div>
           </div>
         </div>
@@ -203,8 +231,10 @@ export default function OrdersPage() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="rounded-xl border border-white/[0.08] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white capitalize focus:border-[#FF6B35] focus:outline-none"
           >
+            <option value="active">Active (default)</option>
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
+            <option value="pending_payment">Pending Payment</option>
             <option value="processing">Processing</option>
             <option value="shipped">Shipped</option>
             <option value="delivered">Delivered</option>
@@ -234,6 +264,8 @@ export default function OrdersPage() {
                   <th className="pb-3 pr-4 text-right">Customer paid</th>
                   <th className="pb-3 pr-4 text-right">AE billed</th>
                   <th className="pb-3 pr-4 text-right">Real margin</th>
+                  <th className="pb-3 pr-4 text-right">ToGoGo</th>
+                  <th className="pb-3 pr-4 text-right">Owner profit</th>
                   <th className="pb-3 pr-4">Status</th>
                   <th className="pb-3 pr-4">Date</th>
                   <th className="pb-3 text-right">Details</th>
@@ -251,6 +283,14 @@ export default function OrdersPage() {
                     : realMargin > 0 ? 'text-emerald-400'
                     : realMargin < 0 ? 'text-red-400'
                     : 'text-zinc-400'
+                  // commission (ToGoGo's 30% cut) and profit (owner's 70%)
+                  // come straight from the order row — populated by checkout
+                  // at order-creation time using the store's commission_rate.
+                  const togogoCommission = parseFloat(o.commission || 0)
+                  const ownerProfit = parseFloat(o.profit || 0)
+                  const profitColor = ownerProfit > 0 ? 'text-emerald-400'
+                    : ownerProfit < 0 ? 'text-red-400'
+                    : 'text-zinc-400'
                   return (
                     <tr key={o.id} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]">
                       <td className="py-3 pr-4 font-mono text-sm font-medium text-[#FF6B35]">{o.id.slice(0, 8)}</td>
@@ -261,6 +301,12 @@ export default function OrdersPage() {
                       <td className="py-3 pr-4 text-right text-zinc-300 tabular-nums">{aeBilled != null ? `$${aeBilled.toFixed(2)}` : '—'}</td>
                       <td className={`py-3 pr-4 text-right tabular-nums font-medium ${marginColor}`}>
                         {realMargin != null ? `${realMargin >= 0 ? '+' : ''}$${realMargin.toFixed(2)}` : '—'}
+                      </td>
+                      <td className="py-3 pr-4 text-right tabular-nums text-emerald-400">
+                        {togogoCommission > 0 ? `+$${togogoCommission.toFixed(2)}` : '—'}
+                      </td>
+                      <td className={`py-3 pr-4 text-right tabular-nums font-medium ${profitColor}`}>
+                        {ownerProfit !== 0 ? `${ownerProfit > 0 ? '+' : '−'}$${Math.abs(ownerProfit).toFixed(2)}` : '—'}
                       </td>
                       <td className="py-3 pr-4">
                         <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${sc.color}`}>
@@ -381,7 +427,7 @@ export default function OrdersPage() {
               {selectedOrder.notes && (
                 <div className="rounded-xl border border-white/[0.06] p-3">
                   <p className="text-xs text-zinc-500">Notes</p>
-                  <p className="text-sm text-white">{selectedOrder.notes}</p>
+                  <p className="text-sm text-white break-all">{selectedOrder.notes}</p>
                 </div>
               )}
             </div>

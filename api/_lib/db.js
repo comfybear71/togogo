@@ -212,6 +212,12 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_categories JSONB` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_built_at TIMESTAMPTZ` } catch { /* */ }
+  // Per-store markup % applied on top of break-even (our AE wholesale cost).
+  // Example: markup_percent = 40 → sale_price_displayed = break_even × 1.40.
+  // The delta between charged and cost is "profit", which splits via
+  // Stripe Connect: application_fee = profit × platform commission rate
+  // (see api/_lib/commission.js → getCommissionRate).
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS markup_percent DECIMAL(5,2) DEFAULT 40.00` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS niches TEXT[] DEFAULT ARRAY[]::TEXT[]` } catch { /* */ }
   try { await sql`CREATE INDEX IF NOT EXISTS idx_user_products_niches ON user_products USING GIN (niches)` } catch { /* */ }
   // Per-SKU variants with real USD prices — the source of truth for pricing.
@@ -382,6 +388,10 @@ export async function initializeSchema() {
   `
   await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_status ON store_build_queue(status, created_at)`
   await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_store ON store_build_queue(store_id)`
+  // Retry columns for rate-limited keywords (process-build-queue cron)
+  try { await sql`ALTER TABLE store_build_queue ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0` } catch { /* */ }
+  try { await sql`ALTER TABLE store_build_queue ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ` } catch { /* */ }
+  await sql`CREATE INDEX IF NOT EXISTS idx_store_build_queue_retry ON store_build_queue(status, next_retry_at)`
 
   // Indexes
   await sql`CREATE INDEX IF NOT EXISTS idx_store_customers_store ON store_customers(store_id)`
