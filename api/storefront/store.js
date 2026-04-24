@@ -162,6 +162,16 @@ export default async function handler(req, res) {
         try { images = JSON.parse(images) } catch { images = images.replace(/[{}]/g, '').split(',').filter(Boolean) }
       }
       if (!Array.isArray(images)) images = []
+      // Stored sale_price is break-even (our AE cost). Apply the store's
+      // markup here so every field the frontend reads (product.price,
+      // product.originalPrice) is customer-facing. break_even_usd is
+      // preserved for debugging / commission math on the server side.
+      const breakEvenUsd = parseFloat(p.sale_price) || 0
+      const markedPrice = Math.round(breakEvenUsd * markupMultiplier * 100) / 100
+      const breakEvenOriginal = parseFloat(p.original_price) || 0
+      const markedOriginal = breakEvenOriginal > 0
+        ? Math.round(breakEvenOriginal * markupMultiplier * 100) / 100
+        : 0
       return {
       id: p.id,
       supplierProductId: p.supplier_product_id || '',
@@ -169,7 +179,8 @@ export default async function handler(req, res) {
       description: p.description,
       image: p.image || (images[0] || ''),
       images,
-      price: parseFloat(p.sale_price) || 0,
+      price: markedPrice,
+      breakEvenUsd,
       currency: p.price_currency || 'USD',
       shipping: parseFloat(p.shipping_usd ?? p.shipping_cost) || 0,
       supplierCost: parseFloat(p.supplier_cost) || 0,
@@ -184,7 +195,7 @@ export default async function handler(req, res) {
       totalSold: p.total_sold || 0,
       rating: parseFloat(p.product_rating) || 0,
       ordersCount: p.orders_count || 0,
-      originalPrice: parseFloat(p.original_price) || 0,
+      originalPrice: markedOriginal,
       discountPercent: p.discount_percent || 0,
       inStock: p.in_stock !== false,
       createdAt: p.created_at,
@@ -261,15 +272,8 @@ export default async function handler(req, res) {
       if (feeRows[0]) shippingFee = parseFloat(feeRows[0].value) || 0
     } catch { /* default 0 */ }
 
-    // Apply store's markup to every product's sale_price on the way out.
-    // markupMultiplier was computed near the top of the handler so the
-    // same multiplier is used for WHERE filters, price-range bucket
-    // counts, and the response payload.
-    const markedUpProducts = products.map(p => {
-      const breakEven = parseFloat(p.sale_price) || 0
-      const marked = Math.round(breakEven * markupMultiplier * 100) / 100
-      return { ...p, sale_price: marked, break_even_usd: breakEven }
-    })
+    // Markup was already applied inside the product map above (on the
+    // `price` field the frontend reads). No second pass needed.
 
     const response = {
       store: {
@@ -283,7 +287,7 @@ export default async function handler(req, res) {
         createdAt: store.created_at,
         markupPercent,
       },
-      products: markedUpProducts,
+      products,
       categories,
       priceRanges,
       shippingFee,
