@@ -869,13 +869,8 @@ export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1
       queryDeliveryReq: JSON.stringify(deliveryReq),
     }
 
-    // Try without OAuth first, then with (proved it works with OAuth; may also work without)
-    let data
-    try {
-      data = await callAPI('aliexpress.ds.freight.query', params)
-    } catch {
-      data = await callAuthenticatedAPI('aliexpress.ds.freight.query', params)
-    }
+    // ds.freight.query requires OAuth — verified via /admin/api-tester 2026-04-24
+    const data = await callAuthenticatedAPI('aliexpress.ds.freight.query', params)
 
     const result = data?.aliexpress_ds_freight_query_response?.result
     if (!result || result.success === false) {
