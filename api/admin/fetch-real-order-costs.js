@@ -44,6 +44,10 @@ export default async function handler(req, res) {
     const errors = []
 
     for (const order of orders) {
+      // sale_price comes back from PostgreSQL NUMERIC as a string via @vercel/postgres;
+      // parseFloat once here so `.toFixed()` and arithmetic work everywhere below.
+      const salePrice = parseFloat(order.sale_price) || 0
+
       try {
         // Query AliExpress for the real order cost
         const orderData = await callAuthenticatedAPI('aliexpress.trade.ds.order.get', {
@@ -92,18 +96,18 @@ export default async function handler(req, res) {
         }
 
         if (realCostUSD && realCostUSD > 0) {
-          const marginUSD = order.sale_price - realCostUSD
+          const marginUSD = salePrice - realCostUSD
           results.push({
             orderRef: order.platform_order_id,
             product: order.product_title?.slice(0, 50),
             aeOrderId: order.supplier_order_id,
-            customerPaidUSD: order.sale_price,
+            customerPaidUSD: salePrice,
             aeBilledUSD: realCostUSD,
             marginUSD: marginUSD,
             costBreakdown,
             createdAt: order.created_at,
           })
-          console.log(`[Fetch] ${order.platform_order_id}: Customer paid US$${order.sale_price.toFixed(2)}, AE billed US$${realCostUSD.toFixed(2)}, margin US$${marginUSD.toFixed(2)}`)
+          console.log(`[Fetch] ${order.platform_order_id}: Customer paid US$${salePrice.toFixed(2)}, AE billed US$${realCostUSD.toFixed(2)}, margin US$${marginUSD.toFixed(2)}`)
         } else {
           errors.push({
             orderRef: order.platform_order_id,
