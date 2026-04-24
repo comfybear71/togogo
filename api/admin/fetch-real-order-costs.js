@@ -1,6 +1,7 @@
 // Fetch real AliExpress costs for orders with ae_actual_cost_usd = NULL
 // Queries trade.ds.order.get using the supplier_order_id (AE order number)
 // GET /api/admin/fetch-real-order-costs?secret=JWT&limit=50
+// Add &apply=1 to also write ae_actual_cost_usd back to the DB in the same call
 import { sql, ensureSchema } from '../_lib/db.js'
 import { callAuthenticatedAPI } from '../_lib/suppliers.js'
 
@@ -13,6 +14,9 @@ export default async function handler(req, res) {
   await ensureSchema()
 
   const limit = parseInt(req.query.limit) || 50
+  const apply = req.query.apply === '1'
+  const usdToAud = 1.45  // matches batch-update-order-costs for consistency
+  let applied = 0
 
   try {
     // Get orders with missing ae_actual_cost_usd that have supplier_order_id
@@ -108,6 +112,24 @@ export default async function handler(req, res) {
             createdAt: order.created_at,
           })
           console.log(`[Fetch] ${order.platform_order_id}: Customer paid US$${salePrice.toFixed(2)}, AE billed US$${realCostUSD.toFixed(2)}, margin US$${marginUSD.toFixed(2)}`)
+
+          if (apply) {
+            try {
+              const aeActualCostAUD = Math.round(realCostUSD * usdToAud * 100) / 100
+              await sql`
+                UPDATE user_orders
+                SET ae_actual_cost_usd = ${realCostUSD},
+                    ae_actual_fetched_at = NOW(),
+                    notes = ${'Real AE cost: US$' + realCostUSD.toFixed(2) + ' (A$' + aeActualCostAUD.toFixed(2) + ')'},
+                    updated_at = NOW()
+                WHERE id = ${order.id}
+              `
+              applied++
+            } catch (dbErr) {
+              console.error(`[Fetch] DB update failed for ${order.platform_order_id || order.supplier_order_id}:`, dbErr.message)
+              // Don't fail the whole order — the results array still has the cost data
+            }
+          }
         } else {
           errors.push({
             orderRef: order.platform_order_id,
@@ -129,10 +151,17 @@ export default async function handler(req, res) {
       success: true,
       totalOrders: orders.length,
       fetched: results.length,
-      errors: errors.length,
+      errorsCount: errors.length,
+      applied: apply ? applied : null,
       results,
       errors,
-      nextStep: results.length > 0 ? `Use /api/admin/batch-update-order-costs?secret=JWT to apply these values` : 'No valid costs to update',
+      nextStep: apply
+        ? (applied === results.length
+            ? `Applied ${applied} of ${results.length} cost values to user_orders. Check /admin/orders.`
+            : `Applied ${applied} of ${results.length}. Some DB updates may have failed — check logs.`)
+        : (results.length > 0
+            ? `Re-run with &apply=1 to write these values to user_orders, or POST to /api/admin/batch-update-order-costs`
+            : 'No valid costs to update'),
     })
   } catch (err) {
     console.error('[Fetch Real Costs] Error:', err)
