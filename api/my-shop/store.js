@@ -23,19 +23,41 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
-      const { rows } = await sql`
-        SELECT id, subdomain, full_domain, store_name, status, tier, theme_id,
-               markup_percent, stripe_connect_status, stripe_connect_id,
-               created_at, updated_at
-        FROM user_stores
-        WHERE user_id = ${user.id}
-        LIMIT 1
-      `
-      if (!rows[0]) return res.json({ store: null })
-      return res.json({ store: rows[0] })
+      const [storeResult, subResult] = await Promise.all([
+        sql`
+          SELECT id, subdomain, full_domain, store_name, status, tier, theme_id,
+                 markup_percent, stripe_connect_status, stripe_connect_id,
+                 created_at, updated_at
+          FROM user_stores
+          WHERE user_id = ${user.id}
+          LIMIT 1
+        `,
+        // Most recent subscription for this user. We pick the freshest row
+        // ordered by created_at so a cancelled-then-resubscribed user gets
+        // their current state, not a stale 'cancelled' from months ago.
+        sql`
+          SELECT status, stripe_subscription_id, expires_at
+          FROM subscriptions
+          WHERE user_id = ${user.id}
+          ORDER BY created_at DESC
+          LIMIT 1
+        `.catch(() => ({ rows: [] })),
+      ])
+
+      if (!storeResult.rows[0]) return res.json({ store: null, subscription: null })
+
+      const subRow = subResult.rows[0] || null
+      // Shape the subscription block so the frontend has everything it
+      // needs to decide whether to show a "complete payment" prompt
+      // without making another round trip.
+      const subscription = subRow
+        ? { status: subRow.status, expiresAt: subRow.expires_at }
+        : { status: 'missing', expiresAt: null }
+
+      return res.json({ store: storeResult.rows[0], subscription })
     } catch (err) {
       console.error('My store GET error:', err)
-      return res.json({ store: null })
+      return res.json({ store: null, subscription: null })
     }
   }
 
