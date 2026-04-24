@@ -74,8 +74,14 @@ export default async function handler(req, res) {
   const uniqueKeywords = [...new Set(allKeywords.map(k => String(k).trim()).filter(Boolean))]
   const cappedKeywords = uniqueKeywords.slice(0, maxKeywords)
 
-  // Wipe any existing pending entries for this store, then queue new ones
-  await sql`DELETE FROM store_build_queue WHERE store_id = ${storeId} AND status = 'pending'`
+  // Wipe ALL existing queue rows for this store, then queue new ones.
+  // Earlier we only cleared 'pending' which meant re-running Build Store
+  // accumulated done/failed counts from prior sessions, and the UI
+  // progress widget ("X of Y keywords searched") showed misleading
+  // totals (e.g. 200 total after a second 100-keyword build). Products
+  // already in user_products from past runs are NOT affected — only the
+  // queue tracking rows are reset.
+  await sql`DELETE FROM store_build_queue WHERE store_id = ${storeId}`
 
   let queued = 0
   for (const kw of cappedKeywords) {

@@ -326,7 +326,7 @@ export default function StoreBuilderPage() {
                     <div className="p-2">
                       <p className="text-[11px] text-zinc-300 line-clamp-2 leading-tight">{p.title || ''}</p>
                       {p.sale_price && (
-                        <p className="mt-1 text-xs font-bold text-[#FF6B35]">A${parseFloat(p.sale_price).toFixed(2)}</p>
+                        <p className="mt-1 text-xs font-bold text-[#FF6B35]">US ${parseFloat(p.sale_price).toFixed(2)}</p>
                       )}
                     </div>
                   </div>
