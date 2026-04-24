@@ -32,18 +32,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Earnings rollup — profit column is the store owner's share after
-    // commission (set by the checkout endpoint at order creation time).
-    // Exclude cancelled/refunded so the numbers reflect actual income.
+    // Earnings + sales rollup — two numbers per window:
+    //   sales    = SUM(sale_price)  (what customers paid — "revenue")
+    //   earnings = SUM(profit)      (owner's net share after commission)
+    // Both exclude cancelled/refunded so the numbers reflect actual
+    // completed transactions. The Orders page handles per-row display;
+    // this endpoint is pure aggregate.
     const { rows: agg } = await sql`
       SELECT
         COALESCE(SUM(profit) FILTER (
           WHERE created_at >= date_trunc('month', NOW())
         ), 0)::numeric AS month_earnings,
+        COALESCE(SUM(sale_price) FILTER (
+          WHERE created_at >= date_trunc('month', NOW())
+        ), 0)::numeric AS month_sales,
         COUNT(*) FILTER (
           WHERE created_at >= date_trunc('month', NOW())
         )::int AS month_count,
         COALESCE(SUM(profit), 0)::numeric AS lifetime_earnings,
+        COALESCE(SUM(sale_price), 0)::numeric AS lifetime_sales,
         COUNT(*)::int AS lifetime_count
       FROM user_orders
       WHERE user_id = ${user.id}
@@ -91,10 +98,12 @@ export default async function handler(req, res) {
 
     return res.json({
       thisMonth: {
+        sales: parseFloat(a.month_sales) || 0,
         earnings: parseFloat(a.month_earnings) || 0,
         orderCount: a.month_count || 0,
       },
       lifetime: {
+        sales: parseFloat(a.lifetime_sales) || 0,
         earnings: parseFloat(a.lifetime_earnings) || 0,
         orderCount: a.lifetime_count || 0,
       },

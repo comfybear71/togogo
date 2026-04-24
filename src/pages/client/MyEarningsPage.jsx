@@ -79,8 +79,8 @@ export default function MyEarningsPage() {
     )
   }
 
-  const month    = data?.thisMonth  || { earnings: 0, orderCount: 0 }
-  const lifetime = data?.lifetime   || { earnings: 0, orderCount: 0 }
+  const month    = data?.thisMonth  || { sales: 0, earnings: 0, orderCount: 0 }
+  const lifetime = data?.lifetime   || { sales: 0, earnings: 0, orderCount: 0 }
   const stripe   = data?.stripe     || { connected: false, status: 'not_connected', available: 0, pending: 0, dashboardUrl: null }
 
   return (
@@ -90,20 +90,26 @@ export default function MyEarningsPage() {
         <p className="text-[16px] text-zinc-400">Track your income and payouts from ToGoGo.</p>
       </header>
 
-      {/* 4 big metric cards */}
+      {/* 4 big metric cards. The first two (This month / Lifetime) show
+          both SALES (big — what customers paid) and YOUR PROFIT (under,
+          smaller — net after commission). Store owners' first question
+          is "how much did I sell", and the profit line satisfies the
+          "after-fees" follow-up without burying the headline number. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard
+        <SalesMetricCard
           icon={TrendingUp}
           label="This month"
-          value={money(month.earnings)}
-          sub={`${month.orderCount} order${month.orderCount === 1 ? '' : 's'}`}
+          sales={month.sales}
+          profit={month.earnings}
+          orderCount={month.orderCount}
           emphasis
         />
-        <MetricCard
+        <SalesMetricCard
           icon={DollarSign}
           label="Lifetime"
-          value={money(lifetime.earnings)}
-          sub={`${lifetime.orderCount} total order${lifetime.orderCount === 1 ? '' : 's'}`}
+          sales={lifetime.sales}
+          profit={lifetime.earnings}
+          orderCount={lifetime.orderCount}
         />
         <MetricCard
           icon={Wallet}
@@ -185,6 +191,43 @@ function MetricCard({ icon: Icon, label, value, sub, emphasis }) {
           {value}
         </div>
         {sub && <div className="text-[14px] text-zinc-500 mt-1">{sub}</div>}
+      </div>
+    </section>
+  )
+}
+
+// Card variant for the top two metrics (This month / Lifetime) — shows
+// sales as the headline number and profit as a smaller line beneath.
+// Designed so elderly users see their shop activity at a glance without
+// the "my profit is only $1?" confusion when most of revenue goes to
+// AE + commission.
+function SalesMetricCard({ icon: Icon, label, sales, profit, orderCount, emphasis }) {
+  const profitColor = profit > 0 ? 'text-emerald-400' : profit < 0 ? 'text-red-400' : 'text-zinc-400'
+  return (
+    <section
+      className={`rounded-2xl border p-5 min-h-[160px] flex flex-col justify-between ` +
+        (emphasis
+          ? 'border-[#FF6B35]/30 bg-[#FF6B35]/[0.05]'
+          : 'border-white/[0.06] bg-[#111]')}
+    >
+      <div className="flex items-center gap-2">
+        <Icon className={`h-5 w-5 ${emphasis ? 'text-[#FF6B35]' : 'text-zinc-400'}`} aria-hidden />
+        <span className="text-[13px] uppercase tracking-wider text-zinc-400">{label}</span>
+      </div>
+      <div>
+        <div className={`text-[13px] uppercase tracking-wider ${emphasis ? 'text-[#FF6B35]/70' : 'text-zinc-500'}`}>Sales</div>
+        <div className={`text-[30px] md:text-[34px] font-bold tabular-nums ${emphasis ? 'text-[#FF6B35]' : 'text-white'}`}>
+          {money(sales)}
+        </div>
+        <div className="mt-2 pt-2 border-t border-white/[0.06]">
+          <div className="text-[12px] uppercase tracking-wider text-zinc-500">Your profit (after commission)</div>
+          <div className={`text-[18px] font-semibold tabular-nums ${profitColor}`}>{money(profit)}</div>
+        </div>
+        {orderCount !== undefined && (
+          <div className="text-[13px] text-zinc-500 mt-2">
+            {orderCount} order{orderCount === 1 ? '' : 's'}
+          </div>
+        )}
       </div>
     </section>
   )
