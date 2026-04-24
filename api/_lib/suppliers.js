@@ -66,9 +66,10 @@ export async function callAPI(method, params = {}) {
   baseParams.sign = signRequest(baseParams, appSecret)
 
   const qs = new URLSearchParams(baseParams).toString()
-  const response = await fetch(`https://api-sg.aliexpress.com/sync?${qs}`, {
+  const response = await fetch(`https://api-sg.aliexpress.com/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: qs,
   })
 
   if (!response.ok) {
