@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   DollarSign, TrendingUp, Wallet, Clock, ExternalLink,
   Loader2, AlertCircle, CreditCard, ShieldCheck,
@@ -15,12 +16,25 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 // They want to see: "this month / lifetime / available now / pending".
 
 export default function MyEarningsPage() {
+  const navigate = useNavigate()
+  const user = useAuthStore(s => s.user)
   const token = useAuthStore(s => s.token)
+  const authLoading = useAuthStore(s => s.loading)
+
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
 
+  // Kick auth init on cold start
   useEffect(() => {
+    if (authLoading) useAuthStore.getState().initialize?.()
+  }, [])
+
+  // Wait for auth; otherwise first render has token=undefined and
+  // /api/my-shop/earnings returns 401.
+  useEffect(() => {
+    if (authLoading) return
+    if (!user || !token) { navigate('/auth?redirect=/my-shop/earnings'); return }
     let cancelled = false
     async function load() {
       setLoading(true); setErr(null)
@@ -39,7 +53,7 @@ export default function MyEarningsPage() {
     }
     load()
     return () => { cancelled = true }
-  }, [token])
+  }, [user, token, authLoading])
 
   if (loading) {
     return (

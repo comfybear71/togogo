@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   Store, ExternalLink, Check, Copy, Palette, DollarSign,
   Package, Loader2, AlertCircle,
@@ -14,13 +14,29 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 // token; backend ownership guard is /api/my-shop/store PATCH.
 
 export default function MyStorePage() {
+  const navigate = useNavigate()
+  const user = useAuthStore(s => s.user)
   const token = useAuthStore(s => s.token)
+  const authLoading = useAuthStore(s => s.loading)
+
   const [store, setStore] = useState(null)
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
 
-  useEffect(() => { load() }, [])
+  // Kick auth init on cold start
+  useEffect(() => {
+    if (authLoading) useAuthStore.getState().initialize?.()
+  }, [])
+
+  // Wait for auth to be ready before fetching — otherwise the bearer
+  // token is undefined on first render and every /api/my-shop/* call
+  // returns 401.
+  useEffect(() => {
+    if (authLoading) return
+    if (!user || !token) { navigate('/auth?redirect=/my-shop/store'); return }
+    load()
+  }, [user, token, authLoading])
 
   async function load() {
     setLoading(true)
