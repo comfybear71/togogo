@@ -579,8 +579,18 @@ export default function StorefrontPage({ subdomain }) {
                     )}
                   </div>
 
-                  {/* Shipping is bundled into the displayed price post-markup,
-                      so a separate "shipping" line on list cards was removed. */}
+                  {/* Shipping badge on product card — shows real AE shipping
+                      so customer sees we're not hiding fees. Only rendered
+                      when we have a shipping cost on file; "Free shipping"
+                      fallback was removed because shipping is bundled into
+                      the displayed price post-markup (see header change). */}
+                  {shippingCost > 0 && (
+                    <div className="mt-1.5">
+                      <span className={`inline-flex items-center gap-0.5 text-xs ${theme.textMuted}`}>
+                        <Truck className="h-3 w-3" /> Incl. US ${shippingCost.toFixed(2)} shipping
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )})}
