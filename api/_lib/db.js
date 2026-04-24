@@ -199,6 +199,11 @@ export async function initializeSchema() {
   // fetched via aliexpress.trade.ds.order.get after order.create succeeds.
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS ae_actual_cost_usd NUMERIC(10,2)` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS ae_actual_fetched_at TIMESTAMPTZ` } catch { /* */ }
+  // AE discount captured at reconciliation: supplier_cost (estimate at
+  // checkout) minus ae_actual_cost in AUD. Always goes to ToGoGo — surfaced
+  // as its own column on /admin/orders so ToGoGo + Bonus + Owner = Real
+  // Margin. NULL until reconciled, 0 when the estimate matched reality.
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS ae_bonus NUMERIC(10,2)` } catch { /* */ }
   // Expand order status to include pending_payment
   try { await sql`ALTER TABLE user_orders DROP CONSTRAINT IF EXISTS user_orders_status_check` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD CONSTRAINT user_orders_status_check CHECK (status IN ('pending', 'pending_payment', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'))` } catch { /* */ }

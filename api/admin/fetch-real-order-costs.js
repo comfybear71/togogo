@@ -117,19 +117,18 @@ export default async function handler(req, res) {
           if (apply) {
             try {
               const aeActualCostAUD = Math.round(realCostUSD * usdToAud * 100) / 100
-              // Roll the AE discount delta into ToGoGo's commission so admin
-              // orders columns reconcile cleanly (ToGoGo + Owner = Real Margin).
-              // Discount = estimated supplier_cost (frozen at checkout) − what
-              // AE actually billed us. Clamp negatives to 0 so an AE overcharge
-              // never eats into the store owner's locked-in profit.
+              // AE discount captured — goes into the ae_bonus column (shown
+              // as its own "Bonus" column on /admin/orders). Clamp negatives
+              // to 0 so an AE overcharge never eats the owner's locked-in
+              // profit; commission stays as-is (what Stripe actually split).
               const supplierCostStored = parseFloat(order.supplier_cost) || 0
               const bonus = Math.max(0, Math.round((supplierCostStored - aeActualCostAUD) * 100) / 100)
               await sql`
                 UPDATE user_orders
                 SET ae_actual_cost_usd = ${realCostUSD},
                     ae_actual_fetched_at = NOW(),
-                    commission = COALESCE(commission, 0) + ${bonus},
-                    notes = ${'Real AE cost: US$' + realCostUSD.toFixed(2) + ' (A$' + aeActualCostAUD.toFixed(2) + '). AE discount +A$' + bonus.toFixed(2) + ' rolled into commission.'},
+                    ae_bonus = ${bonus},
+                    notes = ${'Real AE cost: US$' + realCostUSD.toFixed(2) + ' (A$' + aeActualCostAUD.toFixed(2) + '). AE bonus A$' + bonus.toFixed(2) + '.'},
                     updated_at = NOW()
                 WHERE id = ${order.id}
               `

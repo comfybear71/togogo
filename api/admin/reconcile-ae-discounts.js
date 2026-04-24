@@ -1,14 +1,18 @@
-// One-shot retroactive reconciliation: rolls AE discount deltas into the
-// commission column for orders that already have ae_actual_cost_usd set
-// but were reconciled BEFORE fetch-real-order-costs started topping up
-// commission automatically. Idempotent via a marker in the notes field.
+// One-shot retroactive reconciliation: populates the ae_bonus column for
+// orders that already have ae_actual_cost_usd set but were reconciled BEFORE
+// ae_bonus existed (so the Bonus column on /admin/orders reads "—" for them).
+// Idempotent — skips orders where ae_bonus is already set to a non-null value.
+//
+// Also clears the old "rolled into commission" pattern from a previous
+// short-lived version: if notes contains "rolled into commission", back
+// that bonus out of commission before writing it to ae_bonus.
 //
 // GET /api/admin/reconcile-ae-discounts?secret=JWT              (dry run)
 // GET /api/admin/reconcile-ae-discounts?secret=JWT&apply=1      (writes)
 import { sql, ensureSchema } from '../_lib/db.js'
 
-const ROLLED_MARKER = 'AE discount +A$'
 const USD_TO_AUD = 1.45
+const OLD_ROLLED_MARKER = 'rolled into commission'
 
 export default async function handler(req, res) {
   const secret = req.query.secret
@@ -28,7 +32,7 @@ export default async function handler(req, res) {
   try {
     const { rows: orders } = await sql`
       SELECT id, platform_order_id, product_title,
-             supplier_cost, ae_actual_cost_usd, commission, notes
+             supplier_cost, ae_actual_cost_usd, commission, ae_bonus, notes
       FROM user_orders
       WHERE ae_actual_cost_usd IS NOT NULL
         AND status NOT IN ('cancelled', 'refunded')
@@ -38,16 +42,23 @@ export default async function handler(req, res) {
     let skipped = 0
 
     for (const order of orders) {
-      if ((order.notes || '').includes(ROLLED_MARKER)) { skipped++; continue }
+      // Skip if ae_bonus already populated — idempotent.
+      if (order.ae_bonus != null) { skipped++; continue }
 
       const supplierCost = parseFloat(order.supplier_cost) || 0
       const aeActualUsd = parseFloat(order.ae_actual_cost_usd) || 0
       const aeActualAud = Math.round(aeActualUsd * USD_TO_AUD * 100) / 100
       const bonus = Math.max(0, Math.round((supplierCost - aeActualAud) * 100) / 100)
 
-      if (bonus === 0) { skipped++; continue }
-
+      // If the short-lived commission-rollup version ran against this order,
+      // the bonus is currently sitting inside commission. Back it out so the
+      // commission column shows only the real frozen commission rate.
+      const hadOldRollup = (order.notes || '').includes(OLD_ROLLED_MARKER)
       const currentCommission = parseFloat(order.commission) || 0
+      const commissionAfter = hadOldRollup
+        ? Math.round((currentCommission - bonus) * 100) / 100
+        : currentCommission
+
       toUpdate.push({
         id: order.id,
         platform_order_id: order.platform_order_id,
@@ -56,7 +67,8 @@ export default async function handler(req, res) {
         aeActualAud,
         bonus,
         commissionBefore: currentCommission,
-        commissionAfter: Math.round((currentCommission + bonus) * 100) / 100,
+        commissionAfter,
+        backedOutRollup: hadOldRollup,
       })
     }
 
@@ -66,8 +78,8 @@ export default async function handler(req, res) {
         try {
           await sql`
             UPDATE user_orders
-            SET commission = ${u.commissionAfter},
-                notes = COALESCE(notes, '') || ${' ' + ROLLED_MARKER + u.bonus.toFixed(2) + ' (retro reconcile).'},
+            SET ae_bonus = ${u.bonus},
+                commission = ${u.commissionAfter},
                 updated_at = NOW()
             WHERE id = ${u.id}
           `
@@ -87,7 +99,7 @@ export default async function handler(req, res) {
       dryRun: !apply,
       rows: toUpdate,
       nextStep: apply
-        ? `Rolled AE discounts into commission for ${applied} of ${toUpdate.length} orders.`
+        ? `Populated ae_bonus for ${applied} of ${toUpdate.length} orders.`
         : `${toUpdate.length} orders would be updated. Re-run with &apply=1 to commit.`,
     })
   } catch (err) {
