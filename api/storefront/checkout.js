@@ -297,7 +297,7 @@ export default async function handler(req, res) {
     // Then the destination (store owner) receives:
     //   destination = totalAmount − applicationFee
     //                = profit × (1 − commissionRate)
-    //                = store owner's 70% of profit (with 30% commissionRate)
+    //                = store owner's 30% of profit (with 70% commissionRate)
     const applicationFee = totalSupplierCostCents
       + Math.round(Math.max(profitCents, 0) * commissionRate)
       + shippingFeeCents
