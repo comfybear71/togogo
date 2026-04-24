@@ -393,9 +393,16 @@ export async function getProductDetails(productId) {
 // ============================================
 
 export async function verifyProduct(productId, skuAttr = '', quantity = 1, storedSupplierCost = 0) {
-  const USD_TO_AUD = 1.45
-  const MAX_SHIPPING_AUD = 3.00
-  const MAX_PRICE_INCREASE = 0.10 // 10%
+  // Pre-checkout sanity check. Both stored supplier_cost (in user_products)
+  // and details.cost (from getProductDetails → ds.product.wholesale.get)
+  // are USD now after the v1.3.0 migration, so we compare in USD directly.
+  // Pre-v1.3.0 this function multiplied details.cost × 1.45 to convert
+  // USD→AUD against legacy AUD-stored values, which after migration
+  // looked like a 45% price spike on every product and tripped the
+  // MAX_PRICE_INCREASE check below for almost every checkout.
+  const MAX_SHIPPING_USD = 5.00       // ≈ A$7.50 — AE shipping is volatile, give headroom
+  const MAX_PRICE_INCREASE = 0.20     // 20%; was 10% — AE Choice prices fluctuate enough that
+                                       // 10% triggered too often, blocking otherwise good orders
 
   try {
     const details = await getProductDetails(productId)
@@ -432,23 +439,24 @@ export async function verifyProduct(productId, skuAttr = '', quantity = 1, store
       }
     }
 
-    // Check 4: Price hasn't increased more than 10%
+    // Check 4: Price hasn't increased more than MAX_PRICE_INCREASE.
+    // Both sides USD (post-v1.3.0). Apples to apples.
     if (storedSupplierCost > 0) {
-      const currentCostAUD = details.cost * USD_TO_AUD
-      const priceIncrease = (currentCostAUD - storedSupplierCost) / storedSupplierCost
+      const currentCostUSD = details.cost
+      const priceIncrease = (currentCostUSD - storedSupplierCost) / storedSupplierCost
       if (priceIncrease > MAX_PRICE_INCREASE) {
         return {
           available: false,
           reason: 'price_increased',
           message: 'This product is temporarily unavailable due to a price change',
           oldCost: storedSupplierCost,
-          newCost: Math.round(currentCostAUD * 100) / 100,
+          newCost: Math.round(currentCostUSD * 100) / 100,
         }
       }
     }
 
     // Check 5: Shipping — accept EITHER schema from AliExpress DS API
-    //   Old schema: non-empty details.shipping array → verify cheapest under A$3
+    //   Old schema: non-empty details.shipping array → verify cheapest under threshold
     //   New schema (2026-04-22+): details.shipsToCountry confirms shipping country
     //     (AE now returns only { ship_to_country, delivery_time }, no carrier list)
     //   Neither present → genuine no_shipping
@@ -457,8 +465,8 @@ export async function verifyProduct(productId, skuAttr = '', quantity = 1, store
 
     if (hasShippingList) {
       const cheapest = details.shipping.reduce((min, s) => s.shippingFee < min.shippingFee ? s : min, details.shipping[0])
-      const shippingAUD = cheapest.shippingFee * USD_TO_AUD
-      if (shippingAUD > MAX_SHIPPING_AUD) {
+      // shippingFee is USD post-v1.3.0; compare in USD directly.
+      if (cheapest.shippingFee > MAX_SHIPPING_USD) {
         return {
           available: false,
           reason: 'shipping_too_expensive',
