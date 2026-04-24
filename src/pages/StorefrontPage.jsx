@@ -1333,6 +1333,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
           oldTotalUsd: data.oldTotalUsd,
           newTotalUsd: data.newTotalUsd,
           message: data.message,
+          priceDropped: !!data.priceDropped,  // true when AE is now cheaper
         })
         setSubmitting(false)
         return
