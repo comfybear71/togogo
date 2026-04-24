@@ -865,20 +865,21 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
   // Variant-aware pricing — three transparent components:
   //   Product:   from variant.priceUsd (live AE API)
   //   Shipping:  from ds.freight.query (live AE API)
-  //   Est. tax:  10% of product (flat estimate — AE doesn't expose tax
-  //              via API; labelled "Est. tax" so customer knows it's an
-  //              estimate, not a guarantee)
+  //   Est. tax:  10% of (product + shipping) — AU GST base, matches AE's
+  //              real checkout billing (verified 2026-04-24). Labelled
+  //              "Est. tax" so customer knows it's an estimate.
   // Matches api/_lib/pricing.js → breakEvenUsd
   const TAX_RATE = 0.10
   const productShippingUsd = Number(product.shipping) || 0
   const basePrice = Number(product.price) || 0
   const selectedProductUsd = selectedVariant?.priceUsd > 0 ? selectedVariant.priceUsd : null
-  // For products without a selected variant, derive product-only subtotal
-  // by stripping shipping and reversing the 10% tax from stored sale_price.
-  const baseProductDerived = Math.max(0, (basePrice - productShippingUsd) / (1 + TAX_RATE))
+  // For products without a selected variant, derive product-only subtotal.
+  // Stored sale_price = (product + shipping) × (1 + TAX_RATE), so:
+  //   product = basePrice / (1 + TAX_RATE) − shipping
+  const baseProductDerived = Math.max(0, (basePrice / (1 + TAX_RATE)) - productShippingUsd)
   const displayProductUsd = selectedProductUsd != null ? selectedProductUsd : baseProductDerived
   const displayShippingUsd = productShippingUsd
-  const displayTaxUsd = Math.round(displayProductUsd * TAX_RATE * 100) / 100
+  const displayTaxUsd = Math.round((displayProductUsd + displayShippingUsd) * TAX_RATE * 100) / 100
   const displayPrice = Math.round((displayProductUsd + displayShippingUsd + displayTaxUsd) * 100) / 100
   const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
   const needsVariantChoice = hasVariants && !selectedVariant
