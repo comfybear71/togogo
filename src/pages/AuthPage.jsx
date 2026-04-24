@@ -15,7 +15,10 @@ export default function AuthPage() {
   const [searchParams] = useSearchParams();
   const { user, signIn, signUp, signInWithGoogle } = useAuthStore();
 
-  const redirectTo = searchParams.get('redirect') || '/';
+  // Default landing after sign-in is the store owner dashboard. The marketing
+  // home and other public pages stay accessible — this only kicks in when no
+  // explicit ?redirect= was set on the auth URL.
+  const redirectTo = searchParams.get('redirect') || '/my-shop';
   const [tab, setTab] = useState(searchParams.get('tab') === 'signup' ? 'signup' : 'signin');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');

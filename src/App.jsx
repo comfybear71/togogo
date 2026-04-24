@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense, useMemo } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
@@ -30,7 +30,6 @@ import AuthPage from './pages/AuthPage'
 const BrowsePage = lazy(() => import('./pages/BrowsePage'))
 const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage'))
 const WatchlistPage = lazy(() => import('./pages/WatchlistPage'))
-const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const AssistantPage = lazy(() => import('./pages/AssistantPage'))
 const PlatformGuidePage = lazy(() => import('./pages/PlatformGuidePage'))
 const AdminDashboard = lazy(() => import('./pages/admin/DashboardPage'))
@@ -44,7 +43,6 @@ const AdminSearchAliExpress = lazy(() => import('./pages/admin/SearchAliExpressP
 const AdminApiTester = lazy(() => import('./pages/admin/ApiTesterPage'))
 const AdminStoreBuilder = lazy(() => import('./pages/admin/StoreBuilderPage'))
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage'))
-const DashboardPage = lazy(() => import('./pages/DashboardPage'))
 const LaunchStorePage = lazy(() => import('./pages/LaunchStorePage'))
 const OneClickStorePage = lazy(() => import('./pages/OneClickStorePage'))
 const CartPage = lazy(() => import('./pages/CartPage'))
@@ -140,8 +138,8 @@ export default function App() {
           <Route path="/sell" element={<SellPage />} />
           <Route path="/marketing" element={<ProtectedRoute><MarketingPage /></ProtectedRoute>} />
           <Route path="/shipping" element={<ShippingPage />} />
-          <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/profile" element={<Navigate to="/my-shop/account" replace />} />
+          <Route path="/dashboard" element={<Navigate to="/my-shop" replace />} />
         </Route>
 
         {/* Admin routes — protected by JWT / setup secret, wrapped in dark AdminLayout */}

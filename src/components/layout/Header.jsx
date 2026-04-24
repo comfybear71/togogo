@@ -1,6 +1,6 @@
 import { Link, NavLink } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
-import { Store, LayoutDashboard } from 'lucide-react'
+import { Store } from 'lucide-react'
 import Logo from './Logo'
 
 export default function Header() {
@@ -30,19 +30,6 @@ export default function Header() {
               <Store className="w-4 h-4" />
               My Shop
             </NavLink>
-            <NavLink
-              to="/dashboard"
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'text-[#FF6B35] bg-[#FF6B35]/10'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5'
-                }`
-              }
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Dashboard
-            </NavLink>
           </nav>
         )}
 
@@ -50,7 +37,7 @@ export default function Header() {
         <div className="flex items-center">
           {user ? (
             <Link
-              to="/profile"
+              to="/my-shop/account"
               className="flex items-center justify-center w-9 h-9 rounded-full overflow-hidden transition-opacity hover:opacity-80"
             >
               {profile?.avatar_url ? (
