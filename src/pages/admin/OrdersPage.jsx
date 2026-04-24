@@ -381,7 +381,7 @@ export default function OrdersPage() {
               {selectedOrder.notes && (
                 <div className="rounded-xl border border-white/[0.06] p-3">
                   <p className="text-xs text-zinc-500">Notes</p>
-                  <p className="text-sm text-white">{selectedOrder.notes}</p>
+                  <p className="text-sm text-white break-all">{selectedOrder.notes}</p>
                 </div>
               )}
             </div>
