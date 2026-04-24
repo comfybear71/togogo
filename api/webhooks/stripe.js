@@ -342,19 +342,26 @@ export default async function handler(req, res) {
                         ? Math.round(result.realCostUSD * 100) / 100
                         : null
                       if (aeActualCostUsd != null) {
+                        // Compute the AE bonus at the same time so /admin/orders
+                        // shows ToGoGo + Bonus + Owner summing to Real Margin on
+                        // brand-new orders without anyone running the backfill.
+                        // Both values in USD; clamp negative (AE overcharges) to 0.
+                        const supplierCostUsd = parseFloat(order.supplier_cost) || 0
+                        const aeBonus = Math.max(0, Math.round((supplierCostUsd - aeActualCostUsd) * 100) / 100)
                         await sql`
                           UPDATE user_orders
                           SET supplier_order_id = ${result.orderId},
                               status = 'processing',
                               ae_actual_cost_usd = ${aeActualCostUsd},
                               ae_actual_fetched_at = NOW(),
-                              notes = ${`Submitted to AliExpress. AE billed US$${aeActualCostUsd.toFixed(2)}`},
+                              ae_bonus = ${aeBonus},
+                              notes = ${`Submitted to AliExpress. AE billed US$${aeActualCostUsd.toFixed(2)}. AE bonus US$${aeBonus.toFixed(2)}.`},
                               updated_at = NOW()
                           WHERE id = ${order.id}
                         `
                         const customerPaidUsd = parseFloat(order.sale_price) || 0
                         const marginUsd = Math.round((customerPaidUsd - aeActualCostUsd) * 100) / 100
-                        console.log(`[Webhook Reconcile] ${order.id}: customer paid US$${customerPaidUsd.toFixed(2)} · AE billed US$${aeActualCostUsd.toFixed(2)} · margin US$${marginUsd.toFixed(2)}`)
+                        console.log(`[Webhook Reconcile] ${order.id}: customer paid US$${customerPaidUsd.toFixed(2)} · AE billed US$${aeActualCostUsd.toFixed(2)} · margin US$${marginUsd.toFixed(2)} · bonus US$${aeBonus.toFixed(2)}`)
                       } else {
                         await sql`UPDATE user_orders SET supplier_order_id = ${result.orderId}, status = 'processing', notes = ${'Submitted to AliExpress (AE total not yet available — admin can re-fetch)'}, updated_at = NOW() WHERE id = ${order.id}`
                       }
