@@ -647,70 +647,63 @@ export async function submitOrder({ productId, skuId, skuAttr, quantity, shippin
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
     const aeOrderId = result.order_list?.number?.[0] || result.order_id || result.ae_order_id
 
-    // Step 2: Trigger auto-pay — call payment API to charge the authorized PayPal/card
-    // Without this, orders sit in "Awaiting Payment" even with auto-pay activated
-    if (aeOrderId) {
-      try {
-        // Try multiple payment API endpoints
-        const payApis = [
-          'aliexpress.trade.order.pay',
-          'aliexpress.ds.order.pay',
-          'aliexpress.trade.pay.order',
-        ]
-        let paySuccess = false
-        for (const payApi of payApis) {
-          try {
-            const payResult = await callAuthenticatedAPI(payApi, {
-              order_id: String(aeOrderId),
-              pay_type: 'autopay',
-            })
-            console.log(`[AliExpress] Auto-pay (${payApi}): ${JSON.stringify(payResult).slice(0, 300)}`)
-            if (payResult && !payResult.error_response) {
-              paySuccess = true
-              break
-            }
-          } catch (payErr) {
-            console.log(`[AliExpress] Auto-pay ${payApi} failed: ${payErr.message}`)
-          }
-        }
-        if (!paySuccess) {
-          console.log(`[AliExpress] Auto-pay APIs not available — order ${aeOrderId} may need manual payment`)
-        }
-      } catch (autoPayErr) {
-        console.error(`[AliExpress] Auto-pay error for ${aeOrderId}:`, autoPayErr.message)
-      }
-    }
+    // Auto-pay is driven by ds_extend_request.payment.try_to_pay = "true"
+    // in the ds.order.create call above. AE handles the PayPal / card
+    // charge internally; we don't need a separate "pay this order" API
+    // call. A previous version of this code tried three follow-up
+    // methods (trade.order.pay, ds.order.pay, trade.pay.order) but
+    // none of those paths exist on AE's DS API — every attempt returned
+    // InvalidApiPath and spammed the log. Removed.
 
-    // Step 3: Query the order to get the REAL AliExpress cost (product + shipping + tax in USD)
+    // Step 2: Query the order to get the REAL AliExpress cost (pay_amount
+    // in USD — what was actually charged). Uses callAuthenticatedAPI
+    // because trade.ds.order.get requires OAuth (verified 2026-04-24
+    // via admin/api-tester). Earlier we fixed ONE call site for this
+    // method; this is the second one in submitOrder which was missed.
+    //
+    // Response shape is the same as /api/admin/fetch-real-order-costs
+    // uses: `order_amount.amount` for the total, `child_order_list` for
+    // per-SKU breakdown. Old field names (pay_amount, total_product_amount,
+    // logistics_amount) don't exist — removed.
     let realCostUSD = null
     if (aeOrderId) {
       try {
-        const orderData = await callAPI('aliexpress.trade.ds.order.get', {
+        const orderData = await callAuthenticatedAPI('aliexpress.trade.ds.order.get', {
           single_order_query: JSON.stringify({ order_id: Number(aeOrderId) }),
         })
         const orderResult = orderData?.aliexpress_trade_ds_order_get_response?.result
           || orderData?.result
         if (orderResult) {
-          // Extract the actual cost — can be in different fields
-          // pay_amount = total charged to card/PayPal (includes product + shipping + tax)
-          // If pay_amount not available, sum up the parts
-          const payAmount = parseFloat(orderResult.pay_amount || '0')
-          const productAmount = parseFloat(orderResult.total_product_amount || orderResult.product_amount || '0')
-          const shippingAmount = parseFloat(orderResult.logistics_amount || orderResult.shipping_amount || '0')
-          const taxAmount = parseFloat(orderResult.tax_amount || '0')
+          const orderAmountTotal = parseFloat(orderResult.order_amount?.amount || '0')
 
-          if (payAmount > 0) {
-            // Best: use the actual total charged (includes everything)
-            realCostUSD = payAmount
-            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (pay_amount — total charged inc. tax)`)
+          if (orderAmountTotal > 0) {
+            realCostUSD = orderAmountTotal
+            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (order_amount.amount — total AE billed)`)
           } else {
-            // Fallback: sum the parts
-            realCostUSD = productAmount + shippingAmount + taxAmount
-            console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (product: $${productAmount}, shipping: $${shippingAmount}, tax: $${taxAmount})`)
+            // Fallback: sum child order lines if top-level total is empty
+            const childOrders = orderResult.child_order_list?.aeop_child_order_info || []
+            let productAmount = 0
+            let shippingAmount = 0
+            let taxAmount = 0
+            for (const child of childOrders) {
+              const unitPrice = parseFloat(child.product_price?.amount || '0')
+              const count = parseInt(child.product_count) || 1
+              productAmount += unitPrice * count
+              shippingAmount += parseFloat(child.shipping_fee?.amount || '0')
+              taxAmount += parseFloat(child.actual_tax_fee?.amount || '0')
+            }
+            const summed = productAmount + shippingAmount + taxAmount
+            if (summed > 0) {
+              realCostUSD = summed
+              console.log(`[AliExpress] Real cost for order ${aeOrderId}: US$${realCostUSD.toFixed(2)} (summed children: product $${productAmount.toFixed(2)} + shipping $${shippingAmount.toFixed(2)} + tax $${taxAmount.toFixed(2)})`)
+            }
           }
         }
       } catch (costErr) {
-        console.log(`[AliExpress] Could not query order cost for ${aeOrderId}: ${costErr.message}`)
+        // AE often doesn't populate pay_amount immediately after order
+        // creation — takes a few minutes. Not an error worth escalating;
+        // the admin fetch-real-order-costs endpoint backfills later.
+        console.log(`[AliExpress] Cost query deferred for ${aeOrderId}: ${costErr.message}`)
       }
     }
 
@@ -1047,7 +1040,12 @@ export async function reportOrderForDSLevel({ productId, orderId, orderAmount, s
       console.log(`[AliExpress] DS Level: reported order ${orderId} for product ${productId}`)
       return { success: true }
     } else {
-      console.error('[AliExpress] DS Level report failed:', JSON.stringify(data).slice(0, 300))
+      // This endpoint is an AE affiliate/publisher reporting hook that
+      // returns "This publisher is not registered" for our account. It's
+      // optional and unrelated to the actual order flow. Logging at
+      // info instead of error so it doesn't clutter the Vercel error
+      // feed on every order.
+      console.log('[AliExpress] DS Level report not registered (optional affiliate hook):', JSON.stringify(data).slice(0, 200))
       return { success: false, error: result?.error_msg || 'Report failed' }
     }
   } catch (err) {
