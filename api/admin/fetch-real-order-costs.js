@@ -2,7 +2,7 @@
 // Queries trade.ds.order.get using the supplier_order_id (AE order number)
 // GET /api/admin/fetch-real-order-costs?secret=JWT&limit=50
 import { sql, ensureSchema } from '../_lib/db.js'
-import { callAPI } from '../_lib/suppliers.js'
+import { callAuthenticatedAPI } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   const secret = req.query.secret
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     for (const order of orders) {
       try {
         // Query AliExpress for the real order cost
-        const orderData = await callAPI('aliexpress.trade.ds.order.get', {
+        const orderData = await callAuthenticatedAPI('aliexpress.trade.ds.order.get', {
           single_order_query: JSON.stringify({ order_id: Number(order.supplier_order_id) }),
         })
 
