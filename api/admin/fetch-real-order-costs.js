@@ -15,7 +15,6 @@ export default async function handler(req, res) {
 
   const limit = parseInt(req.query.limit) || 50
   const apply = req.query.apply === '1'
-  const usdToAud = 1.45  // matches batch-update-order-costs for consistency
   let applied = 0
 
   try {
@@ -116,19 +115,21 @@ export default async function handler(req, res) {
 
           if (apply) {
             try {
-              const aeActualCostAUD = Math.round(realCostUSD * usdToAud * 100) / 100
               // AE discount captured — goes into the ae_bonus column (shown
-              // as its own "Bonus" column on /admin/orders). Clamp negatives
-              // to 0 so an AE overcharge never eats the owner's locked-in
-              // profit; commission stays as-is (what Stripe actually split).
+              // as its own "Bonus" column on /admin/orders). Both
+              // supplier_cost and ae_actual_cost_usd are stored in USD
+              // (checkout.js writes breakEvenUsd straight into supplier_cost),
+              // so subtract them directly — no exchange-rate conversion.
+              // Clamp negatives to 0 so an AE overcharge never eats the
+              // owner's locked-in profit; commission stays as-is.
               const supplierCostStored = parseFloat(order.supplier_cost) || 0
-              const bonus = Math.max(0, Math.round((supplierCostStored - aeActualCostAUD) * 100) / 100)
+              const bonus = Math.max(0, Math.round((supplierCostStored - realCostUSD) * 100) / 100)
               await sql`
                 UPDATE user_orders
                 SET ae_actual_cost_usd = ${realCostUSD},
                     ae_actual_fetched_at = NOW(),
                     ae_bonus = ${bonus},
-                    notes = ${'Real AE cost: US$' + realCostUSD.toFixed(2) + ' (A$' + aeActualCostAUD.toFixed(2) + '). AE bonus A$' + bonus.toFixed(2) + '.'},
+                    notes = ${'Real AE cost: US$' + realCostUSD.toFixed(2) + '. AE bonus US$' + bonus.toFixed(2) + '.'},
                     updated_at = NOW()
                 WHERE id = ${order.id}
               `
