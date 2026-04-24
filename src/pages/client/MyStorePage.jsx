@@ -16,8 +16,10 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 export default function MyStorePage() {
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
-  const token = useAuthStore(s => s.token)
   const authLoading = useAuthStore(s => s.loading)
+  // authStore only persists `profile` — token lives in localStorage. Read
+  // it here so the bearer header is actually populated on fetch.
+  const token = typeof window !== 'undefined' ? localStorage.getItem('togogo-token') : null
 
   const [store, setStore] = useState(null)
   const [products, setProducts] = useState([])
