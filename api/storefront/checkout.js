@@ -297,7 +297,10 @@ export default async function handler(req, res) {
     // Then the destination (store owner) receives:
     //   destination = totalAmount − applicationFee
     //                = profit × (1 − commissionRate)
-    //                = store owner's 70% of profit (with 30% commissionRate)
+    //                = store owner's 70% of profit (with 30% commissionRate).
+    // Any AE discount (estimate vs actual bill) stays entirely on ToGoGo's
+    // Stripe balance because applicationFee was locked in using the estimate.
+    // The rollup into the commission column happens at reconciliation.
     const applicationFee = totalSupplierCostCents
       + Math.round(Math.max(profitCents, 0) * commissionRate)
       + shippingFeeCents

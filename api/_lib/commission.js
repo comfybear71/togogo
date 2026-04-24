@@ -1,4 +1,8 @@
-// Shared commission rate helper — reads from admin_settings, falls back to 5%
+// Shared commission rate helper — reads from admin_settings, falls back to 30%.
+// Business rule: ToGoGo takes 30% of the owner's intended profit as commission.
+// On reconciliation, any AE discount captured (estimate minus real AE bill)
+// gets rolled on top of commission — so ToGoGo's displayed total is
+// (30% of profit) + (AE discount). Owner keeps their locked-in 70% share.
 import { sql } from './db.js'
 
 const DEFAULT_COMMISSION_PERCENT = 30
