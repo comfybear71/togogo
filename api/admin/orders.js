@@ -1,6 +1,7 @@
 // Admin orders API — fetches real orders and disputes from database
 import { sql } from '../_lib/db.js'
 import { requireAdminLite } from '../_lib/auth.js'
+import { getAudRate, usdToAud, DEFAULT_USD_TO_AUD } from '../_lib/pricing.js'
 
 export default async function handler(req, res) {
   try {
@@ -19,6 +20,7 @@ export default async function handler(req, res) {
                  o.status, o.tracking_number, o.tracking_url, o.notes,
                  o.created_at, o.updated_at,
                  o.ae_actual_cost_usd, o.ae_actual_fetched_at, o.ae_bonus, o.supplier_order_id,
+                 o.pricing_currency, o.order_data,
                  u.name AS seller_name, u.email AS seller_email
           FROM user_orders o
           LEFT JOIN users u ON u.id = o.user_id
@@ -61,8 +63,30 @@ export default async function handler(req, res) {
       // If some rows had no price_per_month set, top up at the default $19.99
       const mrr = mrrFromRows + (zeroPriced * 19.99)
 
+      // Decorate each order row with the AUD-equivalent of the AE bill +
+      // a "real margin" the page can display directly. AE bills us in USD
+      // even when the customer paid AUD, so the admin page would otherwise
+      // mix currencies inside the Real Margin column. Use the rate
+      // snapshotted on the order at checkout time when available, fall
+      // back to the live admin rate. Pre-cutover orders (pricing_currency
+      // = 'USD') keep their numbers as-is — labelling alone is enough.
+      const fallbackRate = await getAudRate().catch(() => DEFAULT_USD_TO_AUD)
+      const ordersDecorated = ordersResult.rows.map(o => {
+        const aeUsd = o.ae_actual_cost_usd != null ? parseFloat(o.ae_actual_cost_usd) : null
+        if (aeUsd == null) return o
+        let rate = fallbackRate
+        try {
+          const od = typeof o.order_data === 'string' ? JSON.parse(o.order_data) : o.order_data
+          if (od?.audRate) rate = parseFloat(od.audRate) || fallbackRate
+        } catch { /* */ }
+        // For legacy USD-priced orders, "AE billed" already lives in the
+        // same currency as sale_price — don't convert.
+        const aeBilledDisplay = (o.pricing_currency === 'USD') ? aeUsd : usdToAud(aeUsd, rate)
+        return { ...o, ae_actual_cost_aud: aeBilledDisplay, audRateUsed: rate }
+      })
+
       return res.json({
-        orders: ordersResult.rows,
+        orders: ordersDecorated,
         disputes: disputesResult.rows,
         financials: financialsResult.rows[0] || { total_fees: 0, total_payouts: 0, platform_balance: 0 },
         subscriptions: {

@@ -204,6 +204,15 @@ export async function initializeSchema() {
   // as its own column on /admin/orders so ToGoGo + Bonus + Owner = Real
   // Margin. NULL until reconciled, 0 when the estimate matched reality.
   try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS ae_bonus NUMERIC(10,2)` } catch { /* */ }
+  // Currency the customer-facing money columns (sale_price, profit,
+  // commission, ae_bonus) are stored in. Orders placed before the
+  // 2026-04-25 AUD cutover are 'USD'; everything from then on is 'AUD'.
+  // supplier_cost and ae_actual_cost_usd remain in USD regardless —
+  // they reconcile against AE's USD bill.
+  try { await sql`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS pricing_currency TEXT DEFAULT 'AUD'` } catch { /* */ }
+  // Backfill existing rows that pre-date the cutover. Idempotent — only
+  // touches rows still showing the column default.
+  try { await sql`UPDATE user_orders SET pricing_currency = 'USD' WHERE pricing_currency = 'AUD' AND created_at < '2026-04-25 00:00:00+00'` } catch { /* */ }
   // Expand order status to include pending_payment
   try { await sql`ALTER TABLE user_orders DROP CONSTRAINT IF EXISTS user_orders_status_check` } catch { /* */ }
   try { await sql`ALTER TABLE user_orders ADD CONSTRAINT user_orders_status_check CHECK (status IN ('pending', 'pending_payment', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'))` } catch { /* */ }
