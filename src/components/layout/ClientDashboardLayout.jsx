@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import {
-  Home, Store, Package, DollarSign, Settings, LogOut, ChevronDown,
+  Home, Store, Package, DollarSign, Settings, LogOut, ChevronDown, Shield,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 
@@ -23,6 +23,10 @@ const NAV_ITEMS = [
   { to: '/my-shop/earnings', label: 'Earnings', icon: DollarSign },
   { to: '/my-shop/account',  label: 'Account',  icon: Settings },
 ]
+
+// Shown only when the signed-in user has role === 'admin'. Sits at the
+// bottom of the sidebar so store owners' primary items aren't crowded.
+const ADMIN_ITEM = { to: '/admin/orders', label: 'Admin Panel', icon: Shield }
 
 function SidebarNav({ items, onNavigate }) {
   return (
@@ -125,6 +129,8 @@ export default function ClientDashboardLayout() {
     navigate('/')
   }
 
+  const isAdmin = user?.role === 'admin'
+
   return (
     <div className="flex min-h-screen bg-[#0a0a0a] text-zinc-100">
       {/* Sidebar — always visible on desktop */}
@@ -135,6 +141,15 @@ export default function ClientDashboardLayout() {
           </span>
         </div>
         <SidebarNav items={NAV_ITEMS} />
+        {/* Admin shortcut — only rendered for admin users. Separated from
+            the main nav by a divider so regular store owners don't see
+            an orphan item and admins can still find it at a glance. */}
+        {isAdmin && (
+          <div className="mt-auto border-t border-white/[0.06] pt-2 pb-3">
+            <div className="px-5 pb-1 text-[11px] uppercase tracking-wider text-zinc-500">Admin</div>
+            <SidebarNav items={[ADMIN_ITEM]} />
+          </div>
+        )}
       </aside>
 
       {/* Main column */}
@@ -153,12 +168,14 @@ export default function ClientDashboardLayout() {
           <Outlet />
         </main>
 
-        {/* Mobile bottom nav — thumb reachable */}
+        {/* Mobile bottom nav — thumb reachable. Admin users see a 6th
+            item here instead of a separate section since there's no
+            room for dividers in the bottom bar. */}
         <nav
           aria-label="Main"
           className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/[0.08] bg-[#0f0f0f] flex justify-around z-40"
         >
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {(isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS).map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
