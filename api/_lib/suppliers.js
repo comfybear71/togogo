@@ -107,7 +107,7 @@ async function getAccessToken() {
 }
 
 // Call DS API with OAuth access_token
-async function callAuthenticatedAPI(method, params = {}) {
+export async function callAuthenticatedAPI(method, params = {}) {
   const accessToken = await getAccessToken()
   if (!accessToken) {
     throw new Error('No AliExpress OAuth token. Authorize at /api/platforms/callback/aliexpress')
