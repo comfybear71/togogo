@@ -5,6 +5,9 @@ import { useThemeStore } from './stores/themeStore'
 import AppLayout from './components/layout/AppLayout'
 import ClientDashboardLayout from './components/layout/ClientDashboardLayout'
 import AccountPage from './pages/client/AccountPage'
+import ClientMyStorePage from './pages/client/MyStorePage'
+import ClientMyOrdersPage from './pages/client/MyOrdersPage'
+import ClientMyEarningsPage from './pages/client/MyEarningsPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/admin/AdminRoute'
 import AdminLayout from './components/admin/AdminLayout'
@@ -155,6 +158,9 @@ export default function App() {
             (sidebar + top bar) rather than the marketplace AppLayout. */}
         <Route element={<ClientDashboardLayout />}>
           <Route path="/my-shop" element={<ProtectedRoute><MyShopPage /></ProtectedRoute>} />
+          <Route path="/my-shop/store" element={<ProtectedRoute><ClientMyStorePage /></ProtectedRoute>} />
+          <Route path="/my-shop/orders" element={<ProtectedRoute><ClientMyOrdersPage /></ProtectedRoute>} />
+          <Route path="/my-shop/earnings" element={<ProtectedRoute><ClientMyEarningsPage /></ProtectedRoute>} />
           <Route path="/my-shop/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
         </Route>
 
