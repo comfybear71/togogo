@@ -11,7 +11,10 @@
 // GET /api/admin/reconcile-ae-discounts?secret=JWT&apply=1      (writes)
 import { sql, ensureSchema } from '../_lib/db.js'
 
-const USD_TO_AUD = 1.45
+// Both supplier_cost and ae_actual_cost_usd are stored in USD — checkout.js
+// uses currency: 'usd' on Stripe line items and writes breakEvenUsd straight
+// into supplier_cost. Do NOT multiply by any exchange rate here; that was
+// the original bug that produced bonus=0 on every past order.
 const OLD_ROLLED_MARKER = 'rolled into commission'
 
 export default async function handler(req, res) {
@@ -28,6 +31,10 @@ export default async function handler(req, res) {
 
   await ensureSchema()
   const apply = req.query.apply === '1'
+  // force=1 ignores the idempotency guard — needed after a previous run
+  // wrote wrong values (e.g. the USD→AUD-conversion bug) and we need to
+  // recompute every row.
+  const force = req.query.force === '1'
 
   try {
     const { rows: orders } = await sql`
@@ -42,13 +49,12 @@ export default async function handler(req, res) {
     let skipped = 0
 
     for (const order of orders) {
-      // Skip if ae_bonus already populated — idempotent.
-      if (order.ae_bonus != null) { skipped++; continue }
+      // Skip if ae_bonus already populated (idempotent), unless force=1.
+      if (!force && order.ae_bonus != null) { skipped++; continue }
 
       const supplierCost = parseFloat(order.supplier_cost) || 0
       const aeActualUsd = parseFloat(order.ae_actual_cost_usd) || 0
-      const aeActualAud = Math.round(aeActualUsd * USD_TO_AUD * 100) / 100
-      const bonus = Math.max(0, Math.round((supplierCost - aeActualAud) * 100) / 100)
+      const bonus = Math.max(0, Math.round((supplierCost - aeActualUsd) * 100) / 100)
 
       // If the short-lived commission-rollup version ran against this order,
       // the bonus is currently sitting inside commission. Back it out so the
@@ -63,8 +69,8 @@ export default async function handler(req, res) {
         id: order.id,
         platform_order_id: order.platform_order_id,
         product_title: order.product_title?.slice(0, 60),
-        supplierCostAud: supplierCost,
-        aeActualAud,
+        supplierCostUsd: supplierCost,
+        aeActualUsd,
         bonus,
         commissionBefore: currentCommission,
         commissionAfter,
