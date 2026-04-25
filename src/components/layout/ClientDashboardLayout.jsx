@@ -5,6 +5,31 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+// Split a store name into two halves so we can colour the right-hand
+// part orange — same visual hook as the "ToGoGo" wordmark, but for the
+// owner's own brand. Picks a natural split point in this order:
+//   1. Last word boundary (space) — "Annie's Shop" → "Annie's " + "Shop"
+//   2. Apostrophe — "Jummi's" → "Jummi" + "'s"
+//   3. Roughly half — "Stuie" → "Stu" + "ie"
+function splitBrand(name) {
+  const trimmed = (name || '').trim()
+  if (!trimmed) return ['To', 'GoGo']
+  const lastSpace = trimmed.lastIndexOf(' ')
+  if (lastSpace > 0 && lastSpace < trimmed.length - 1) {
+    return [trimmed.slice(0, lastSpace + 1), trimmed.slice(lastSpace + 1)]
+  }
+  const apos = trimmed.indexOf("'")
+  if (apos > 0 && apos < trimmed.length - 1) {
+    return [trimmed.slice(0, apos), trimmed.slice(apos)]
+  }
+  // Short or single-word names: split roughly in half so the orange
+  // accent is at least 2 chars long where possible.
+  const mid = Math.max(1, Math.ceil(trimmed.length / 2))
+  return [trimmed.slice(0, mid), trimmed.slice(mid)]
+}
+
 // Client-facing dashboard layout for store owners (/my-shop and sub-routes).
 //
 // Deliberate accessibility choices for our elderly user base:
@@ -121,6 +146,28 @@ export default function ClientDashboardLayout() {
   const user = useAuthStore(s => s.user)
   const signOut = useAuthStore(s => s.signOut)
 
+  // Fetch the owner's store name once when the dashboard mounts so the
+  // top-left wordmark reads "Jummi's" instead of "ToGoGo" on her side.
+  // Falls back to the platform name if no store yet (new signups before
+  // provisioning, or auth races on first render).
+  const [storeName, setStoreName] = useState('')
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('togogo-token') : null
+    if (!token) return
+    let cancelled = false
+    fetch(`${API_BASE}/api/my-shop/store`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled) return
+        const name = data?.store?.store_name || ''
+        if (name) setStoreName(name)
+      })
+      .catch(() => { /* silent — falls back to ToGoGo wordmark */ })
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  const [brandLeft, brandRight] = splitBrand(storeName)
+
   async function handleSignOut() {
     // Small confirmation — elderly users are the primary audience and a
     // misclick on sign-out is annoying.
@@ -136,8 +183,11 @@ export default function ClientDashboardLayout() {
       {/* Sidebar — always visible on desktop */}
       <aside className="hidden md:flex w-64 flex-col border-r border-white/[0.06] bg-[#0f0f0f]">
         <div className="flex items-center px-5 py-5 border-b border-white/[0.06]">
-          <span className="text-[22px] font-bold text-white">
-            To<span className="text-[#FF6B35]">GoGo</span>
+          <span
+            className="text-[22px] font-bold text-white truncate max-w-full"
+            title={storeName || 'ToGoGo'}
+          >
+            {brandLeft}<span className="text-[#FF6B35]">{brandRight}</span>
           </span>
         </div>
         <SidebarNav items={NAV_ITEMS} />
@@ -156,8 +206,11 @@ export default function ClientDashboardLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-white/[0.06] bg-[#0f0f0f] px-4 py-3 md:px-6">
-          <span className="md:hidden text-[20px] font-bold text-white">
-            To<span className="text-[#FF6B35]">GoGo</span>
+          <span
+            className="md:hidden text-[20px] font-bold text-white truncate max-w-[60%]"
+            title={storeName || 'ToGoGo'}
+          >
+            {brandLeft}<span className="text-[#FF6B35]">{brandRight}</span>
           </span>
           <div className="flex-1" />
           <AccountDropdown user={user} onSignOut={handleSignOut} />
