@@ -87,11 +87,20 @@ export default async function handler(req, res) {
   // Stamp the debounce now that auth + ownership pass.
   recentBuilds.set(storeId, Date.now())
 
-  // Save niche + categories on the store
+  // Save niche + categories on the store. The legacy `niche` column
+  // stays as the "most recent niche" pointer (used for display and the
+  // empty-shop default). The `niches` array is the source of truth the
+  // storefront filter reads — every build appends to it (deduped via
+  // SELECT DISTINCT) so old niches stay visible when the owner adds
+  // a new one. niche_categories is overwritten because it relates to
+  // the current build's keyword plan, not the historical mix.
   try {
     await sql`
       UPDATE user_stores
       SET niche = ${niche},
+          niches = ARRAY(
+            SELECT DISTINCT UNNEST(COALESCE(niches, ARRAY[]::TEXT[]) || ARRAY[${niche}])
+          ),
           niche_categories = ${JSON.stringify(categories || {})}::jsonb,
           updated_at = NOW()
       WHERE id = ${storeId}

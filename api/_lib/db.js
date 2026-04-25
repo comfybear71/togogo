@@ -226,6 +226,18 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche TEXT` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_categories JSONB` } catch { /* */ }
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niche_built_at TIMESTAMPTZ` } catch { /* */ }
+  // Multi-niche store: every AI Builder run appends its niche here so
+  // the storefront shows ALL products the owner has ever asked AI to
+  // add, not just the most recent niche. The legacy single `niche`
+  // column stays as the "most recent" pointer for display purposes.
+  // Storefront filters using overlap (niches && this array) so any
+  // product whose niches[] tag matches one of the owner's accumulated
+  // niches stays visible. NULL/empty array = no filter (general store).
+  try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niches TEXT[] DEFAULT ARRAY[]::TEXT[]` } catch { /* */ }
+  // Backfill: any existing store with a `niche` set but an empty `niches`
+  // array gets seeded so the storefront keeps showing the same products
+  // it did pre-migration. Idempotent — only touches rows that need it.
+  try { await sql`UPDATE user_stores SET niches = ARRAY[niche] WHERE niche IS NOT NULL AND (niches IS NULL OR cardinality(niches) = 0)` } catch { /* */ }
   // Per-store markup % applied on top of break-even (our AE wholesale cost).
   // Example: markup_percent = 40 → sale_price_displayed = break_even × 1.40.
   // The delta between charged and cost is "profit", which splits via

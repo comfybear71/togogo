@@ -68,7 +68,14 @@ export default function BrowseProductsPage() {
     setSearchError('')
     setHasSearched(true)
     try {
-      const res = await fetch(`${API_BASE}/api/dropship/search?query=${encodeURIComponent(trimmed)}&page=1`)
+      // Use the authenticated text-search endpoint that hits
+      // aliexpress.ds.text.search directly. The older
+      // /api/dropship/search only matched against our pre-fetched feed
+      // pool, so pasting an AE product title returned irrelevant items.
+      const res = await fetch(
+        `${API_BASE}/api/my-shop/search?keyword=${encodeURIComponent(trimmed)}&page=1&sort=orders`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setSearchError(data?.error || 'Search failed. Please try again.')
@@ -223,7 +230,22 @@ export default function BrowseProductsPage() {
                   )}
                 </div>
                 <div className="p-3 flex flex-col flex-1">
-                  <h3 className="text-[14px] text-white line-clamp-2 leading-tight mb-2">{p.title}</h3>
+                  <h3 className="text-[14px] text-white line-clamp-2 leading-tight mb-1.5">{p.title}</h3>
+                  {/* Cost + orders/rating row — gives the owner enough
+                      context to spot whether this is the right product
+                      before tapping Add. Cost is the AE wholesale in
+                      USD; the storefront markup turns it into AUD. */}
+                  <div className="text-[13px] text-zinc-400 mb-2 flex items-center gap-2 flex-wrap">
+                    {p.cost > 0 && (
+                      <span className="text-emerald-400 font-semibold">US ${parseFloat(p.cost).toFixed(2)}</span>
+                    )}
+                    {p.orders > 0 && (
+                      <span>· {p.orders >= 1000 ? `${(p.orders / 1000).toFixed(1)}k+ sold` : `${p.orders}+ sold`}</span>
+                    )}
+                    {p.rating > 0 && (
+                      <span>· ★ {p.rating.toFixed(1)}</span>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={() => addToShop(p)}
