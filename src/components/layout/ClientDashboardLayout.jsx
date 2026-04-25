@@ -4,6 +4,9 @@ import {
   Home, Store, Package, DollarSign, Settings, LogOut, ChevronDown, Shield,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
+import { splitBrand } from '../../lib/brand'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 

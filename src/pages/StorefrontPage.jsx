@@ -4,6 +4,7 @@ import {
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star,
 } from 'lucide-react'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
+import { splitBrand } from '../lib/brand'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -1203,17 +1204,21 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
 }
 
 function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInput, onSearchChange }) {
+  // The header wordmark belongs to the OWNER's shop, not the platform —
+  // customers visiting jum.togogo.me are in "Jummi's", not in "ToGoGo".
+  // Right-half coloured with the store's chosen theme.accent so the
+  // wordmark blends into the rest of the storefront palette. Falls
+  // back to the platform name when store_name is unset.
+  const [brandLeft, brandRight] = splitBrand(store?.name || '')
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <span className="text-base font-bold tracking-tight">
-            <span style={{ color: '#FF6B35' }}>T</span>
-            <span style={{ color: '#FF6B35' }}>o</span>
-            <span style={{ color: '#FFD23F' }}>G</span>
-            <span style={{ color: '#FFD23F' }}>o</span>
-            <span style={{ color: '#06D6A0' }}>G</span>
-            <span style={{ color: '#06D6A0' }}>o</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0 max-w-[40%] sm:max-w-none">
+          <span
+            className="text-base font-bold tracking-tight text-white truncate"
+            title={store?.name || 'ToGoGo'}
+          >
+            {brandLeft}<span style={{ color: theme?.accent || '#FF6B35' }}>{brandRight}</span>
           </span>
         </div>
         {/* Search bar in header */}
