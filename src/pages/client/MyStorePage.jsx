@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Store, ExternalLink, Check, Copy, Palette, DollarSign,
-  Package, Loader2, AlertCircle,
+  Package, Loader2, AlertCircle, AlertTriangle, Trash2,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { STOREFRONT_THEMES } from '../../lib/storefrontThemes'
@@ -121,6 +121,7 @@ export default function MyStorePage() {
       <MarkupCard store={store} onSave={patchStore} />
       <ThemeCard store={store} onSave={patchStore} />
       <ProductsCard products={products} />
+      <ResetShopCard productCount={products.length} token={token} onReset={load} />
     </div>
   )
 }
@@ -363,7 +364,7 @@ function ProductsCard({ products }) {
           You have <strong className="text-white">{count}</strong> product{count === 1 ? '' : 's'}.
         </div>
         <Link
-          to="/browse"
+          to="/my-shop/browse"
           className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] px-4 py-2 text-[15px] font-semibold text-white hover:bg-white/[0.06] min-h-[44px]"
         >
           Browse more
@@ -395,5 +396,106 @@ function ProductsCard({ products }) {
         </ul>
       )}
     </Card>
+  )
+}
+
+// Danger-zone card for wiping every product on this shop. Used when the
+// owner wants to pivot their niche entirely. Two-step confirm modal so
+// a misclick can't destroy the catalogue. Subscription, orders, store
+// settings and theme are untouched — only the product rows go.
+function ResetShopCard({ productCount, token, onReset }) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [err, setErr] = useState(null)
+  const [done, setDone] = useState(null)
+
+  async function doReset() {
+    setResetting(true)
+    setErr(null)
+    setDone(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/my-shop/products/reset`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ confirm: 'YES' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErr(data?.error || `Could not reset (${res.status}).`)
+        return
+      }
+      setDone(`Removed ${data.deleted || 0} product${data.deleted === 1 ? '' : 's'}. Your shop is empty and ready for a fresh start.`)
+      setConfirmOpen(false)
+      onReset?.()
+    } catch {
+      setErr('Could not reach the reset service. Please try again.')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  return (
+    <section className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/[0.04] p-6">
+      <div className="flex items-start gap-3 mb-4">
+        <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" aria-hidden />
+        <div>
+          <h3 className="text-[18px] font-semibold text-white mb-1">Reset shop</h3>
+          <p className="text-[15px] text-zinc-300">
+            Remove every product from your shop so you can start over with a different niche. Your subscription, orders, payouts, and store settings are unaffected — only the product list gets wiped.
+          </p>
+        </div>
+      </div>
+
+      {done && (
+        <div className="mb-3 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.06] p-3 text-[14px] text-emerald-200">
+          {done}
+        </div>
+      )}
+      {err && (
+        <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/[0.08] p-3 text-[14px] text-red-200">
+          {err}
+        </div>
+      )}
+
+      {!confirmOpen ? (
+        <button
+          type="button"
+          onClick={() => setConfirmOpen(true)}
+          disabled={productCount === 0}
+          className="inline-flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/[0.08] hover:bg-red-500/[0.16] disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 min-h-[44px] text-[15px] font-semibold text-red-200"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+          {productCount === 0 ? 'Already empty' : `Remove all ${productCount} product${productCount === 1 ? '' : 's'}`}
+        </button>
+      ) : (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/[0.06] p-4">
+          <p className="text-[15px] text-white mb-3">
+            <strong>Are you sure?</strong> This permanently removes all {productCount} product{productCount === 1 ? '' : 's'} from your shop. You can build a new catalogue afterwards with AI Builder or by browsing manually.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={doReset}
+              disabled={resetting}
+              className="inline-flex items-center gap-2 rounded-xl bg-red-500 hover:bg-red-400 disabled:opacity-60 disabled:cursor-wait px-4 py-2 min-h-[44px] text-[15px] font-semibold text-white"
+            >
+              {resetting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Trash2 className="h-4 w-4" aria-hidden />}
+              {resetting ? 'Removing…' : 'Yes, remove all products'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmOpen(false)}
+              disabled={resetting}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] hover:bg-white/[0.06] px-4 py-2 min-h-[44px] text-[15px] font-medium text-zinc-200"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }

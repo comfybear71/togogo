@@ -102,9 +102,11 @@ export default function BuildStorePage() {
     }
   }
 
-  // Queue the build. If the store already has a niche, show the confirm
-  // dialog first — rebuild is destructive (existing products unlinked
-  // from visible catalogue).
+  // Queue the build. If the store already has a niche, show a brief
+  // confirmation so the owner knows the run will *add* products to the
+  // existing shop — earlier wording said it would replace them, which
+  // was incorrect. AI Builder always appends; the Reset shop button on
+  // /my-shop/store is the wipe-and-start-over path.
   function requestBuild() {
     if (store?.niche) {
       setConfirmRebuild(true)
@@ -375,12 +377,12 @@ export default function BuildStorePage() {
         </section>
       )}
 
-      {/* Rebuild confirmation modal */}
+      {/* Add-more confirmation modal */}
       {confirmRebuild && (
         <ConfirmModal
-          title="Rebuild your shop?"
-          body={`This will replace your current shop products with new ones for "${plan?.niche}". Your orders and earnings stay the same.`}
-          confirmLabel="Yes, rebuild"
+          title="Add more products to your shop?"
+          body={`We'll add fresh products for "${plan?.niche}" on top of your current catalogue. Existing products, orders, and earnings stay exactly as they are.`}
+          confirmLabel="Yes, add more"
           cancelLabel="Cancel"
           onConfirm={doBuild}
           onCancel={() => setConfirmRebuild(false)}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Sparkles, Search, ArrowRight, ArrowLeft, AlertTriangle, Loader2 } from 'lucide-react'
+import { Sparkles, Search, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -76,14 +76,15 @@ export default function AddProductsPage() {
         </p>
       </header>
 
-      {/* Rebuild warning banner — only shown when the shop already has
-          a niche. Separates the destructive intent from the friendly
-          "add some more" framing. */}
+      {/* Adds-more reassurance banner — shown when the shop already has
+          a niche. Earlier copy here said "rebuild replaces" which was
+          incorrect; AI Builder appends to whatever's already in the
+          shop. To start over, store owners use Reset shop on /my-shop/store. */}
       {hasExistingNiche && (
-        <div className="mb-6 rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] p-4 flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" aria-hidden />
-          <div className="text-[15px] text-amber-100">
-            <strong className="text-amber-300">Heads up:</strong> using AI Builder again will replace your current products with ones from a new niche. Your existing orders and earnings are unaffected.
+        <div className="mb-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4 flex items-start gap-3">
+          <Sparkles className="h-5 w-5 text-emerald-400 flex-shrink-0 mt-0.5" aria-hidden />
+          <div className="text-[15px] text-emerald-100">
+            <strong className="text-emerald-300">Good to know:</strong> running AI Builder again <em>adds more products</em> to your shop — it doesn't remove what you already have. Want to start over instead? Use <Link to="/my-shop/store" className="underline">Reset shop</Link> on the My Store page.
           </div>
         </div>
       )}
@@ -92,18 +93,18 @@ export default function AddProductsPage() {
         <PathCard
           to="/my-shop/build"
           icon={Sparkles}
-          title={hasExistingNiche ? 'Build with AI (rebuild)' : 'Let AI build my shop'}
+          title={hasExistingNiche ? 'Add more with AI' : 'Let AI build my shop'}
           description={hasExistingNiche
-            ? 'Pick a new niche and we\'ll refill your shop automatically.'
+            ? 'Tell us a new niche — we\'ll add fresh products on top of what\'s already in your shop.'
             : 'Tell us what you want to sell — Claude picks great products and fills your shop in minutes.'}
-          cta={hasExistingNiche ? 'Rebuild with AI' : 'Get started'}
+          cta={hasExistingNiche ? 'Add more with AI' : 'Get started'}
           tone="primary"
         />
         <PathCard
-          to="/browse"
+          to="/my-shop/browse"
           icon={Search}
           title="Browse and pick myself"
-          description="Look through our catalogue and add products one at a time, your way."
+          description="Search our catalogue and add the exact products you want, one tap at a time."
           cta="Browse products"
           tone="neutral"
         />
