@@ -234,10 +234,46 @@ export async function initializeSchema() {
   // product whose niches[] tag matches one of the owner's accumulated
   // niches stays visible. NULL/empty array = no filter (general store).
   try { await sql`ALTER TABLE user_stores ADD COLUMN IF NOT EXISTS niches TEXT[] DEFAULT ARRAY[]::TEXT[]` } catch { /* */ }
-  // Backfill: any existing store with a `niche` set but an empty `niches`
-  // array gets seeded so the storefront keeps showing the same products
-  // it did pre-migration. Idempotent — only touches rows that need it.
-  try { await sql`UPDATE user_stores SET niches = ARRAY[niche] WHERE niche IS NOT NULL AND (niches IS NULL OR cardinality(niches) = 0)` } catch { /* */ }
+  // Deep heal of niches[] — rebuilds the array from the actual niche
+  // tags present on the store's products, plus the legacy single
+  // `niche` pointer, plus whatever's already in niches[]. Idempotent
+  // — safe to run on every initializeSchema() call.
+  //
+  // Why we need this and not just ARRAY[niche]:
+  // when the AI Builder ran twice ("modern ladies fashion" then
+  // "ladies underwear"), the second run overwrote `user_stores.niche`
+  // before this migration existed. The first niche pointer was lost,
+  // but the products tagged with it survived in user_products.niches.
+  // Pull the union back together so visibility is restored without
+  // any manual intervention.
+  try {
+    await sql`
+      UPDATE user_stores s
+      SET niches = ARRAY(
+        SELECT DISTINCT n FROM (
+          SELECT UNNEST(COALESCE(s.niches, ARRAY[]::TEXT[])) AS n
+          UNION
+          SELECT s.niche WHERE s.niche IS NOT NULL AND s.niche != ''
+          UNION
+          SELECT UNNEST(p.niches)
+          FROM user_products p
+          WHERE p.user_id = s.user_id
+            AND p.niches IS NOT NULL
+            AND cardinality(p.niches) > 0
+        ) all_niches
+        WHERE n IS NOT NULL AND n != ''
+      )
+      WHERE EXISTS (
+        SELECT 1 FROM user_products p
+        WHERE p.user_id = s.user_id
+          AND p.niches IS NOT NULL
+          AND cardinality(p.niches) > 0
+      )
+        OR (s.niche IS NOT NULL AND s.niche != '' AND (s.niches IS NULL OR cardinality(s.niches) = 0))
+    `
+  } catch (err) {
+    console.error('[db] niches heal failed:', err?.message || err)
+  }
   // Per-store markup % applied on top of break-even (our AE wholesale cost).
   // Example: markup_percent = 40 → sale_price_displayed = break_even × 1.40.
   // The delta between charged and cost is "profit", which splits via
