@@ -28,6 +28,7 @@ export default function MyShopPage() {
   const [store, setStore] = useState(null)
   const [subscription, setSubscription] = useState(null)
   const [productCount, setProductCount] = useState(0)
+  const [orderCount, setOrderCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [resumingPayment, setResumingPayment] = useState(false)
 
@@ -45,9 +46,10 @@ export default function MyShopPage() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      const [storeRes, productsRes] = await Promise.all([
+      const [storeRes, productsRes, ordersRes] = await Promise.all([
         fetch(`${API_BASE}/api/my-shop/store`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
         fetch(`${API_BASE}/api/my-shop/products`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+        fetch(`${API_BASE}/api/my-shop/orders`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
       ])
       if (storeRes?.ok) {
         const data = await storeRes.json()
@@ -57,6 +59,10 @@ export default function MyShopPage() {
       if (productsRes?.ok) {
         const data = await productsRes.json()
         setProductCount((data.products || []).length)
+      }
+      if (ordersRes?.ok) {
+        const data = await ordersRes.json()
+        setOrderCount((data.orders || []).length)
       }
     } finally {
       setLoading(false)
@@ -114,7 +120,7 @@ export default function MyShopPage() {
     { key: 'store',    label: 'Your store is live',         done: !!store?.subdomain, hint: store?.subdomain ? `${store.subdomain}.togogo.me` : 'Waiting for store setup' },
     { key: 'payments', label: 'Payments set up',            done: stripeConnected,    hint: stripeConnected ? 'Ready to receive payouts' : 'You need this to receive money' },
     { key: 'products', label: 'Add your first product',     done: productCount > 0,   hint: productCount > 0 ? `${productCount} product${productCount === 1 ? '' : 's'} listed` : 'Zero products yet' },
-    { key: 'sale',     label: 'Make your first sale',       done: false,              hint: 'Happens after a customer buys' },
+    { key: 'sale',     label: 'Make your first sale',       done: orderCount > 0,     hint: orderCount > 0 ? `${orderCount} order${orderCount === 1 ? '' : 's'} so far` : 'Happens after a customer buys' },
   ]
   const completed = setupSteps.filter(s => s.done).length
   const totalSteps = setupSteps.length
