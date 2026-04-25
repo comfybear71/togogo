@@ -23,6 +23,37 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     try {
+      // Self-heal niches[] from the user's actual product tags before
+      // returning store info. Pre-v1.12.1, AI Builder overwrote
+      // user_stores.niche on each run so the previous niche pointer
+      // was lost and the storefront filter hid products tagged with
+      // it. Rebuild the array from product tags + the legacy niche +
+      // whatever's already there. Idempotent — same array out for
+      // unchanged inputs. Failures are logged but never block the
+      // dashboard from rendering.
+      try {
+        await sql`
+          UPDATE user_stores s
+          SET niches = ARRAY(
+            SELECT DISTINCT n FROM (
+              SELECT UNNEST(COALESCE(s.niches, ARRAY[]::TEXT[])) AS n
+              UNION
+              SELECT s.niche WHERE s.niche IS NOT NULL AND s.niche != ''
+              UNION
+              SELECT UNNEST(p.niches)
+              FROM user_products p
+              WHERE p.user_id = s.user_id
+                AND p.niches IS NOT NULL
+                AND cardinality(p.niches) > 0
+            ) all_niches
+            WHERE n IS NOT NULL AND n != ''
+          )
+          WHERE s.user_id = ${user.id}
+        `
+      } catch (healErr) {
+        console.error('[my-shop/store] niches heal skipped:', healErr?.message || healErr)
+      }
+
       const [storeResult, subResult] = await Promise.all([
         sql`
           SELECT id, subdomain, full_domain, store_name, status, tier, theme_id,
