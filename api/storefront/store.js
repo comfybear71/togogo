@@ -39,11 +39,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Get store info — includes `niche` which gates which products this
-    // storefront sees (NULL niche = general store, sees everything)
+    // Get store info — `niches[]` (multi-niche array) gates which
+    // products this storefront sees. Each AI Builder run appends to
+    // that array; storefront filters by overlap so all accumulated
+    // niches stay visible. Empty/NULL array = general store, sees
+    // everything. Legacy `niche` column kept for display.
     const { rows: stores } = await sql`
       SELECT s.id, s.subdomain, s.full_domain, s.store_name, s.status, s.created_at,
-             s.theme_id, s.niche, s.markup_percent,
+             s.theme_id, s.niche, s.niches, s.markup_percent,
              u.id AS owner_id, u.name AS owner_name, u.avatar_url AS owner_avatar, u.email AS owner_email
       FROM user_stores s
       JOIN users u ON u.id = s.user_id
@@ -106,7 +109,10 @@ export default async function handler(req, res) {
     // Try Redis cache (cache per store+page+filters, 2 min TTL)
     // Cache key includes niche so setting/changing a store's niche
     // naturally invalidates the old "all products" cached result.
-    const cacheKey = `store:${subdomain}:n${store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
+    // Cache key includes the FULL niche set (sorted) so adding a new
+    // niche via AI Builder invalidates the cache for this store.
+    const nichesForCacheKey = (Array.isArray(store.niches) ? store.niches : []).slice().sort().join(',')
+    const cacheKey = `store:${subdomain}:n${nichesForCacheKey || store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
     if (redis && page > 0) {
       try {
         const cached = await redis.get(cacheKey)
@@ -117,11 +123,20 @@ export default async function handler(req, res) {
       } catch { /* cache miss, continue */ }
     }
 
-    // Niche gate: a store with a `niche` set only sees products tagged with
-    // that niche. NULL-niche stores (your pre-existing general stores) see
-    // everything. Uses GIN index on user_products.niches for speed.
-    const nicheWhere = store.niche
-      ? ` AND niches @> ARRAY['${String(store.niche).replace(/'/g, "''")}']::TEXT[]`
+    // Niche gate: a store accumulates niches[] over multiple AI Builder
+    // runs. Storefront shows products tagged with ANY of those niches
+    // (overlap operator &&). Stores with empty niches[] AND no legacy
+    // `niche` see everything (general store). Uses the GIN index on
+    // user_products.niches for speed.
+    //
+    // Backward-compat: if niches[] is empty but legacy `niche` is set
+    // (only happens on a brand-new store before db.js backfill ran),
+    // fall back to the single-niche behaviour.
+    const storeNiches = Array.isArray(store.niches) && store.niches.length > 0
+      ? store.niches
+      : (store.niche ? [store.niche] : [])
+    const nicheWhere = storeNiches.length > 0
+      ? ` AND niches && ARRAY[${storeNiches.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',')}]::TEXT[]`
       : ''
 
     // Price integrity gate: only surface products that have been priced
