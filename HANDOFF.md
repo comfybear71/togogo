@@ -1,7 +1,7 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-18 (End of Session 10)
+**Last Updated:** 2026-04-25 (End of Session 12)
 **Branch:** master (PRODUCTION on Vercel)
 **GitHub:** https://github.com/comfybear71/togogo
 
@@ -498,3 +498,110 @@ ORDER TIME (overwrites import estimate with real data):
 
 Full documentation at: `docs/TOGOGO-HOW-IT-WORKS.md`
 AliExpress API reference: `docs/ALIEXPRESS-API-REFERENCE.md`
+
+---
+
+## Pinned Next Steps (2026-04-25, end of Session 12)
+
+Picked from a Grok-run third-party audit + my own observations. Five items
+that address genuine risk, not theoretical polish. Project is shipping,
+working, and earning revenue — these are evolutionary, not blockers.
+
+Stuart's working environment: iPad at work, PC at home — keep that in mind
+when sequencing (PC sessions can run heavier refactors).
+
+1. **Rate limiting on AE-touching endpoints**
+   - At risk: `/api/my-shop/search`, `/api/dropship/search`, `/api/storefront/*`,
+     `/api/cron/*`. A scripted attacker could blow through the AliExpress
+     API quota and rack up real costs.
+   - Implementation: Upstash is already in deps. ~1 hour. Add a per-IP /
+     per-user limiter helper in `_lib/`, apply to the four endpoint groups
+     above.
+
+2. **JWT in httpOnly + Secure cookie (off localStorage)**
+   - Token in `localStorage` is XSS-stealable. Risk grows as the storefront
+     accepts more customer-facing input (reviews, future custom fields).
+   - Implementation: ~2-3 hours, mostly because frontend `authFetch` and
+     every `localStorage.getItem('togogo-token')` site need to migrate.
+     Backend signs+sets cookie on signin/signup; frontend stops reading
+     the token directly. Migration deploy needs a fallback so existing
+     tokens still work for 30 days.
+
+3. **LICENSE file**
+   - 5 minute job. MIT is open-friendly; "All rights reserved" if you
+     plan to commercialise the platform itself someday. Without one, the
+     code is in a legal grey zone.
+
+4. **Sentry / Vercel error monitoring**
+   - Currently the debug loop is "Stuart screenshots a problem, we hunt
+     for it in Vercel logs." Sentry has a free tier and emails you on
+     uncaught throws in prod. ~30 min setup.
+   - Bonus: add a small `/api/_internal/healthcheck` endpoint that pings
+     Neon, Stripe, AE token, Redis — pages can hit it after deploys.
+
+5. **Service worker version stamp + asset cache busting**
+   - Has bitten three times this session (Bonus column, first-sale tick,
+     AUD switch — Stuart's wife clearing site data shouldn't be the
+     recovery path). The PWA service worker holds onto the JS bundle
+     across deploys.
+   - Implementation: tweak `vite-plugin-pwa` config to embed a build hash
+     in the SW name + use `cleanupOutdatedCaches: true`. Asset URLs
+     already content-hashed by Vite. ~30 min.
+
+### Worth doing on a PC session (not iPad)
+
+6. **Delete the legacy `server/` folder + dead code**
+   - Audit flagged this. It's a tax on every Claude session — pollutes
+     greps, confuses LLMs about what's wired up. Verify nothing imports
+     from it, then `git rm -r server/`.
+
+7. **One Vitest spec around the checkout / commission math**
+   - The bit where mistakes cost real money. Test fixtures for: AUD
+     conversion, 30% commission split, AE bonus reconciliation, drift
+     check. Not a full test suite — just the financial math. ~2 hours.
+
+### Explicitly skipped (don't do)
+
+- **Full TypeScript migration** — multi-week death march mid-flight.
+  Cost outweighs benefit at this stage.
+- **CSP / security headers, OpenAPI docs, centralised error middleware**
+  — generic polish that doesn't address an actual problem.
+- **Architecture diagrams in README** — CLAUDE.md already covers it.
+
+---
+
+## Session 12 Summary (2026-04-25)
+
+Shipped 6 PRs across one long Saturday session:
+
+- **v1.10.0** — `/dashboard` and `/profile` retire to redirects; sign-in
+  lands on `/my-shop`. Payment-needed banner on `/my-shop` for shops
+  with incomplete subscription.
+- **v1.11.0/v1.11.1** — Customer-facing prices flip to AUD. Stripe
+  charges AUD directly, owner payouts in AUD. Internal USD math
+  preserved (AE invoice currency). Per-row `pricing_currency` flag for
+  legacy USD orders. First-sale checklist tick wired to real order
+  count. Tag bumped to v1.11.1 same-day after USD→AUD bonus
+  conversion bug.
+- **v1.12.0** — `/my-shop/browse` page (real AE text search via
+  `aliexpress.ds.text.search`), `POST /api/my-shop/products/add`,
+  `POST /api/my-shop/products/reset` with two-step confirm, AI Builder
+  copy fixed to "adds more" instead of "rebuilds".
+- **v1.12.1/v1.12.2** — Multi-niche stores: every AI Builder run
+  appends to `user_stores.niches[]` rather than overwriting the single
+  niche pointer. Storefront filter switches from containment to overlap.
+  Deep-heal on `/api/my-shop/store` GET reconstructs `niches[]` from
+  product tags so previously-hidden products reappear.
+- **v1.13.0/v1.13.1/v1.13.2** — Dashboard sidebar + storefront header
+  read the owner's store name in two-tone style instead of "ToGoGo".
+  v1.13.2 was a build-fix patch for duplicate declarations introduced
+  by the squash-merge.
+
+Bonus column reconciled, AE discount captured into ToGoGo's commission
+column, admin orders sums clean. Subscription MRR card on admin orders
+shows ~$99.95 across 5 active shops. Stripe Connect splits flowing in
+AUD, customer bank statements show AUD directly.
+
+All sacred files (CLAUDE.md, HANDOFF.md, SAFETY-RULES.md) preserved.
+
+---
