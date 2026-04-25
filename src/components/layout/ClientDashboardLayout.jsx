@@ -4,31 +4,9 @@ import {
   Home, Store, Package, DollarSign, Settings, LogOut, ChevronDown, Shield,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
+import { splitBrand } from '../../lib/brand'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
-
-// Split a store name into two halves so we can colour the right-hand
-// part orange — same visual hook as the "ToGoGo" wordmark, but for the
-// owner's own brand. Picks a natural split point in this order:
-//   1. Last word boundary (space) — "Annie's Shop" → "Annie's " + "Shop"
-//   2. Apostrophe — "Jummi's" → "Jummi" + "'s"
-//   3. Roughly half — "Stuie" → "Stu" + "ie"
-function splitBrand(name) {
-  const trimmed = (name || '').trim()
-  if (!trimmed) return ['To', 'GoGo']
-  const lastSpace = trimmed.lastIndexOf(' ')
-  if (lastSpace > 0 && lastSpace < trimmed.length - 1) {
-    return [trimmed.slice(0, lastSpace + 1), trimmed.slice(lastSpace + 1)]
-  }
-  const apos = trimmed.indexOf("'")
-  if (apos > 0 && apos < trimmed.length - 1) {
-    return [trimmed.slice(0, apos), trimmed.slice(apos)]
-  }
-  // Short or single-word names: split roughly in half so the orange
-  // accent is at least 2 chars long where possible.
-  const mid = Math.max(1, Math.ceil(trimmed.length / 2))
-  return [trimmed.slice(0, mid), trimmed.slice(mid)]
-}
 
 // Client-facing dashboard layout for store owners (/my-shop and sub-routes).
 //
