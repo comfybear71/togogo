@@ -10,6 +10,7 @@ import ClientMyOrdersPage from './pages/client/MyOrdersPage'
 import ClientMyEarningsPage from './pages/client/MyEarningsPage'
 import ClientAddProductsPage from './pages/client/AddProductsPage'
 import ClientBuildStorePage from './pages/client/BuildStorePage'
+import ClientBrowseProductsPage from './pages/client/BrowseProductsPage'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import AdminRoute from './components/admin/AdminRoute'
 import AdminLayout from './components/admin/AdminLayout'
@@ -164,6 +165,7 @@ export default function App() {
           <Route path="/my-shop/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
           <Route path="/my-shop/add-products" element={<ProtectedRoute><ClientAddProductsPage /></ProtectedRoute>} />
           <Route path="/my-shop/build" element={<ProtectedRoute><ClientBuildStorePage /></ProtectedRoute>} />
+          <Route path="/my-shop/browse" element={<ProtectedRoute><ClientBrowseProductsPage /></ProtectedRoute>} />
         </Route>
 
         <Route element={<AppLayout />}>
