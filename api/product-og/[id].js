@@ -59,10 +59,16 @@ export default async function handler(req, res) {
       `
       const p = rows[0]
       if (p) {
-        title = (p.title || title).slice(0, 110)
+        // Truncate the title to 60 chars so FB / Twitter / LinkedIn
+        // unfurls don't render a 4-line block. opengraph.xyz flagged
+        // the 95-char originals as overlong; FB also occasionally
+        // rejects cards whose title fields exceed its rendering limit.
+        // Add an ellipsis only when we actually trimmed.
+        const fullTitle = p.title || title
+        title = fullTitle.length > 60 ? fullTitle.slice(0, 57).trimEnd() + '…' : fullTitle
         const desc = p.description && p.description !== p.title
           ? p.description
-          : `Buy ${p.title} on ${host.split('.')[0]}.togogo.me`
+          : `Buy ${fullTitle} on ${host.split('.')[0]}.togogo.me`
         description = desc.slice(0, 200)
         if (p.image) image = p.image
       }
@@ -81,6 +87,12 @@ export default async function handler(req, res) {
   // ideally 1200x630). Keep the original URL as a Twitter fallback
   // since X already accepts it.
   const ogImage = image.replace(/_\.webp(\?.*)?$/i, '$1')
+  // No og:image:width / og:image:height. AE images vary (most are
+  // 1024x1024 but some sources send 640x640 or non-square). Declaring
+  // a fixed size that disagrees with the actual bytes makes FB reject
+  // the image — opengraph.xyz reported "Image is 1024x1024px" for the
+  // same URL where we'd previously declared 640. Letting unfurlers
+  // probe the file is more reliable than guessing.
   const ogTags = `
     <meta property="og:type" content="product" />
     <meta property="og:title" content="${escapeHtml(title)}" />
@@ -89,8 +101,6 @@ export default async function handler(req, res) {
     <meta property="og:image:secure_url" content="${escapeHtml(ogImage)}" />
     <meta property="og:image:alt" content="${escapeHtml(title)}" />
     <meta property="og:image:type" content="image/jpeg" />
-    <meta property="og:image:width" content="640" />
-    <meta property="og:image:height" content="640" />
     <meta property="og:url" content="${escapeHtml(productPageUrl)}" />
     <meta property="og:site_name" content="${escapeHtml(host.split('.')[0])}" />
     <meta name="twitter:card" content="summary_large_image" />
