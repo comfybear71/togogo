@@ -98,10 +98,28 @@ function ShareButton({ product, subdomain, theme, size = 'md' }) {
     e.stopPropagation()
     // Native share sheet on mobile / supported browsers — best UX,
     // covers WhatsApp, Messages, email, AirDrop, system contacts in
-    // one prompt with no third-party SDKs.
+    // one prompt with no third-party SDKs. We try to attach the
+    // product image as a File so receiving apps (Messages, WhatsApp)
+    // show the actual photo, not just a link preview. Falls back to
+    // text+url if the browser doesn't support file sharing or AE's
+    // CDN refuses CORS — partial share is better than no share.
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
-        await navigator.share({ title, text, url })
+        const shareData = { title, text, url }
+        if (product?.image && typeof navigator.canShare === 'function') {
+          try {
+            const imgRes = await fetch(product.image, { mode: 'cors' })
+            if (imgRes.ok) {
+              const blob = await imgRes.blob()
+              const ext = (blob.type.split('/')[1] || 'jpg').split('+')[0]
+              const file = new File([blob], `product.${ext}`, { type: blob.type || 'image/jpeg' })
+              if (navigator.canShare({ files: [file] })) {
+                shareData.files = [file]
+              }
+            }
+          } catch { /* CORS / network — share text+url only */ }
+        }
+        await navigator.share(shareData)
         return
       } catch (err) {
         // User cancelled — silent. Any other rejection falls through
