@@ -35,9 +35,21 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.togogo\.me\/api\/.*/i,
+            // Exclude /api/storefront/* — these include the shuffled
+            // featured-products response which the PWA must never
+            // cache, otherwise refresh shows the same order every time.
+            urlPattern: ({ url }) =>
+              /^https:\/\/.*\.togogo\.me\/api\//i.test(url.href) &&
+              !url.pathname.startsWith('/api/storefront/'),
             handler: 'NetworkFirst',
             options: { cacheName: 'api-cache', expiration: { maxEntries: 50, maxAgeSeconds: 300 } }
+          },
+          {
+            // Storefront API responses always go straight to the
+            // network. No cache, no fallback — the shuffle stays fresh.
+            urlPattern: ({ url }) =>
+              /^https:\/\/.*\.togogo\.me\/api\/storefront\//i.test(url.href),
+            handler: 'NetworkOnly',
           },
           {
             urlPattern: /^https:\/\/ae-pic.*\.aliexpress-media\.com\/.*/i,
