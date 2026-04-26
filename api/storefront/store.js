@@ -87,7 +87,13 @@ export default async function handler(req, res) {
     const offset = (page - 1) * limit
     const category = req.query.category || ''
     const priceRange = req.query.priceRange || ''
-    const sortBy = req.query.sort || 'newest'
+    // Default to 'featured' (= per-request shuffle). The frontend
+    // omits the `sort` param when on Featured to keep URLs clean, so
+    // unspecified MUST mean shuffle here. Previously defaulted to
+    // 'newest' which was mapped to `ORDER BY created_at DESC` —
+    // which is why customers refreshing saw the same hero products
+    // every time even after we plumbed `random()` into the SQL.
+    const sortBy = req.query.sort || 'featured'
     const search = req.query.search || ''
 
     // Build WHERE conditions — price thresholds are filter buckets the
