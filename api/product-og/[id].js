@@ -71,11 +71,26 @@ export default async function handler(req, res) {
     }
   }
 
+  // AE serves WEBP at URLs ending in `_.webp`. Facebook's crawler
+  // sometimes rejects WEBP outright (X/Twitter handle it fine, which
+  // is why customers reported X working but FB showing no image).
+  // Strip the trailing `_.webp` so FB gets the underlying JPG, which
+  // AE's CDN serves at the same path. We also strip an inner
+  // `.jpg_640x640q90.jpg` size suffix back to a smaller variant if
+  // needed — but a 640x640 source is fine for FB (they want >= 200x200,
+  // ideally 1200x630). Keep the original URL as a Twitter fallback
+  // since X already accepts it.
+  const ogImage = image.replace(/_\.webp(\?.*)?$/i, '$1')
   const ogTags = `
     <meta property="og:type" content="product" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
-    <meta property="og:image" content="${escapeHtml(image)}" />
+    <meta property="og:image" content="${escapeHtml(ogImage)}" />
+    <meta property="og:image:secure_url" content="${escapeHtml(ogImage)}" />
+    <meta property="og:image:alt" content="${escapeHtml(title)}" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="640" />
+    <meta property="og:image:height" content="640" />
     <meta property="og:url" content="${escapeHtml(productPageUrl)}" />
     <meta property="og:site_name" content="${escapeHtml(host.split('.')[0])}" />
     <meta name="twitter:card" content="summary_large_image" />
