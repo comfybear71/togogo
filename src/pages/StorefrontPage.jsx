@@ -135,13 +135,22 @@ function ShareButton({ product, subdomain, theme, size = 'md' }) {
     : 'h-10 w-10'
   const iconSize = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
 
+  // Card variant ('sm') sits over a product image whose background can
+  // be anything (often pure white photography), so it needs hard contrast
+  // — solid dark backdrop + white icon. Detail-page variant ('md') sits
+  // over the dark card body, so the lighter translucent style is fine
+  // and matches the rest of the action chrome.
+  const buttonClasses = size === 'sm'
+    ? 'bg-black/55 hover:bg-black/75 text-white shadow-md'
+    : 'bg-white/[0.08] hover:bg-white/[0.16] backdrop-blur text-white'
+
   return (
     <div className="relative inline-block" ref={ref}>
       <button
         type="button"
         onClick={onClick}
         aria-label="Share this product"
-        className={`inline-flex items-center justify-center rounded-full bg-white/[0.08] hover:bg-white/[0.16] backdrop-blur text-white transition-colors ${sizeClasses}`}
+        className={`inline-flex items-center justify-center rounded-full transition-colors ${buttonClasses} ${sizeClasses}`}
       >
         <Share2 className={iconSize} aria-hidden />
       </button>
@@ -195,7 +204,10 @@ export default function StorefrontPage({ subdomain }) {
   const searchTimerRef = useRef(null)
   const [selectedCategory, setSelectedCategory] = useState('')
   const [priceRange, setPriceRange] = useState('')
-  const [sortBy, setSortBy] = useState('newest')
+  // 'featured' = the daily-rotating shuffle on the API. Keeps the page
+  // from always showing the same hero products on cold-start. Customers
+  // can switch to Newest, Price, Rating etc. via the dropdown.
+  const [sortBy, setSortBy] = useState('featured')
   const cart = useCart(subdomain)
   const loadingRef = useRef(false)
   const PRODUCTS_PER_PAGE = 30
@@ -256,7 +268,7 @@ export default function StorefrontPage({ subdomain }) {
     })
     if (selectedCategory) params.set('category', selectedCategory)
     if (priceRange) params.set('priceRange', priceRange)
-    if (sortBy !== 'newest') params.set('sort', sortBy)
+    if (sortBy !== 'featured') params.set('sort', sortBy)
     if (searchQuery) params.set('search', searchQuery)
     return `${API_BASE}/api/storefront/store?${params}`
   }, [subdomain, selectedCategory, priceRange, sortBy, searchQuery])
@@ -293,6 +305,15 @@ export default function StorefrontPage({ subdomain }) {
     if (filterAbortRef.current) filterAbortRef.current.abort()
     const controller = new AbortController()
     filterAbortRef.current = controller
+
+    // Scroll the page to the top of the product grid whenever filters
+    // change. Without this, tapping a category from halfway down the
+    // page leaves the customer staring at the middle of the new
+    // results — usually the same screen position but a different
+    // product set, which feels broken. `behavior: 'smooth'` is gentle.
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
 
     setFilterLoading(true)
     fetch(buildUrl(1), { signal: controller.signal })
@@ -579,6 +600,7 @@ export default function StorefrontPage({ subdomain }) {
                 className="flex-shrink-0 ml-auto rounded-full border border-white/[0.1] px-3 py-1 text-[11px] text-slate-400 bg-transparent"
                 style={{ outline: 'none', colorScheme: 'dark' }}
               >
+                <option value="featured">Featured</option>
                 <option value="newest">Newest</option>
                 <option value="bestsellers">Bestsellers</option>
                 <option value="price-low">Price: Low → High</option>
@@ -706,18 +728,21 @@ export default function StorefrontPage({ subdomain }) {
                     )}
                   </div>
 
-                  {/* Shipping badge on product card — shows real AE shipping
-                      so customer sees we're not hiding fees. Only rendered
-                      when we have a shipping cost on file; "Free shipping"
-                      fallback was removed because shipping is bundled into
-                      the displayed price post-markup (see header change). */}
-                  {shippingCost > 0 && (
-                    <div className="mt-1.5">
-                      <span className={`inline-flex items-center gap-0.5 text-xs ${theme.textMuted}`}>
-                        <Truck className="h-3 w-3" /> Incl. A${shippingCost.toFixed(2)} shipping
-                      </span>
-                    </div>
-                  )}
+                  {/* Shipping badge on product card. Always rendered so
+                      every card has the same vertical rhythm — when AE
+                      didn't return a shipping cost we treat it as free
+                      (which is how the customer experiences it: their
+                      total is the displayed price). When AE did return
+                      a value, surface it explicitly so we're not hiding
+                      a fee. */}
+                  <div className="mt-1.5">
+                    <span className={`inline-flex items-center gap-0.5 text-xs ${theme.textMuted}`}>
+                      <Truck className="h-3 w-3" />{' '}
+                      {shippingCost > 0
+                        ? `Incl. A$${shippingCost.toFixed(2)} shipping`
+                        : 'Free shipping'}
+                    </span>
+                  </div>
                 </div>
               </div>
             )})}
@@ -1159,13 +1184,17 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                             {/* Hover-zoom (PC only) — bigger preview pops
                                 above the swatch on mouse hover so customers
                                 can compare colour/style without selecting.
-                                Mobile users tap to select normally. */}
+                                Mobile users tap to select normally.
+                                Container is explicitly square; the inner
+                                img fills it via h-full w-full + object-cover
+                                so AE thumbnails with weird aspects don't
+                                stretch into a tall rectangle. */}
                             {v.image && (
-                              <span className="hidden md:block pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 opacity-0 group-hover/swatch:opacity-100 transition-opacity duration-150">
+                              <span className="hidden md:block pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-56 h-56 opacity-0 group-hover/swatch:opacity-100 transition-opacity duration-150">
                                 <img
                                   src={v.image}
                                   alt=""
-                                  className="h-40 w-40 rounded-lg object-cover border border-white/[0.12] shadow-2xl bg-[#0a0a0a]"
+                                  className="block h-full w-full rounded-lg object-cover border border-white/[0.12] shadow-2xl bg-[#0a0a0a]"
                                 />
                               </span>
                             )}
@@ -1196,11 +1225,11 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                               {/* Hover-zoom (PC only) — see flat-list
                                   branch above for the rationale. */}
                               {img && (
-                                <span className="hidden md:block pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 opacity-0 group-hover/swatch:opacity-100 transition-opacity duration-150">
+                                <span className="hidden md:block pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 w-56 h-56 opacity-0 group-hover/swatch:opacity-100 transition-opacity duration-150">
                                   <img
                                     src={img}
                                     alt=""
-                                    className="h-40 w-40 rounded-lg object-cover border border-white/[0.12] shadow-2xl bg-[#0a0a0a]"
+                                    className="block h-full w-full rounded-lg object-cover border border-white/[0.12] shadow-2xl bg-[#0a0a0a]"
                                   />
                                 </span>
                               )}
