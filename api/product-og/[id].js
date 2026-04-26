@@ -117,7 +117,20 @@ export default async function handler(req, res) {
   // product URL — that would loop right back to this function).
   let html
   if (indexHtml && indexHtml.includes('</head>')) {
-    html = indexHtml.replace('</head>', `${ogTags}\n</head>`)
+    // Strip any existing og:* / twitter:* meta tags that ship in the
+    // SPA's index.html — those default to the platform-wide
+    // "ToGoGo — Trade · Swap..." card. Facebook (and most other
+    // unfurlers) use first-match-wins when parsing OG tags, so
+    // without this strip the platform defaults shadow the
+    // product-specific tags we just built. Confirmed via a curl from
+    // Stuart's PC: the response had two og:title tags, FB picked the
+    // generic one and ignored ours. Strip them once, inject ours,
+    // FB sees only the product card.
+    const stripped = indexHtml.replace(
+      /<meta[^>]+(?:property|name)\s*=\s*["'](?:og:|twitter:)[^"']+["'][^>]*>\s*/gi,
+      ''
+    )
+    html = stripped.replace('</head>', `${ogTags}\n</head>`)
   } else {
     const homeUrl = `https://${host}/`
     html = `<!doctype html>
