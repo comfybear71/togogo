@@ -261,7 +261,13 @@ export default function StorefrontPage({ subdomain }) {
   // Always use midnight (dark) theme — stored in database, never localStorage
   const theme = getThemeById(storeData?.store?.themeId || 'midnight')
 
-  // Build API URL with filters
+  // Build API URL with filters. Featured (= shuffled) responses get a
+  // monotonically-increasing cache-bust suffix so neither the browser
+  // disk cache nor any CDN edge cache can return a stale order. We
+  // already set Cache-Control: no-store on the API and exclude the
+  // route from the PWA service worker, but the cache-bust is the
+  // belt-and-braces guarantee that every refresh produces a new URL
+  // → new request → new shuffle.
   const buildUrl = useCallback((page) => {
     const params = new URLSearchParams({
       subdomain, page, limit: PRODUCTS_PER_PAGE,
@@ -270,12 +276,15 @@ export default function StorefrontPage({ subdomain }) {
     if (priceRange) params.set('priceRange', priceRange)
     if (sortBy !== 'featured') params.set('sort', sortBy)
     if (searchQuery) params.set('search', searchQuery)
+    if (sortBy === 'featured') params.set('_t', Date.now().toString())
     return `${API_BASE}/api/storefront/store?${params}`
   }, [subdomain, selectedCategory, priceRange, sortBy, searchQuery])
 
-  // Load initial page
+  // Load initial page. Default (no sort) hits the shuffled featured
+  // response, so cache-bust suffix here too — otherwise mobile Safari
+  // / Chrome might disk-cache the first SSR-style response.
   useEffect(() => {
-    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=1&limit=${PRODUCTS_PER_PAGE}`)
+    fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&page=1&limit=${PRODUCTS_PER_PAGE}&_t=${Date.now()}`)
       .then((r) => r.ok ? r.json() : Promise.reject('Store not found'))
       .then((data) => {
         setStoreData(data)
