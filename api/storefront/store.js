@@ -98,13 +98,21 @@ export default async function handler(req, res) {
     else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
     if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
 
-    // Build ORDER BY
-    let orderBy = 'created_at DESC'
+    // Build ORDER BY. Default ('newest' / unspecified) used to be
+    // `created_at DESC`, which meant every cold-start saw the same first
+    // 30 products until the next cron import. Replace with a date-seeded
+    // shuffle so the order rotates daily but stays stable within the
+    // day — Redis cache stays warm, customers don't see the same hero
+    // products forever. Explicit user sorts (price, rating, etc.) keep
+    // their natural ordering.
+    const todaySeed = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+    let orderBy = `md5(id::text || '${todaySeed}')`
     if (sortBy === 'price-low') orderBy = 'sale_price ASC'
     else if (sortBy === 'price-high') orderBy = 'sale_price DESC'
     else if (sortBy === 'bestsellers') orderBy = 'COALESCE(orders_count, 0) DESC, COALESCE(total_sold, 0) DESC'
     else if (sortBy === 'rating') orderBy = 'COALESCE(product_rating, 0) DESC'
     else if (sortBy === 'discount') orderBy = 'COALESCE(discount_percent, 0) DESC'
+    else if (sortBy === 'newest') orderBy = 'created_at DESC'
 
     // Try Redis cache (cache per store+page+filters, 2 min TTL)
     // Cache key includes niche so setting/changing a store's niche
@@ -112,7 +120,11 @@ export default async function handler(req, res) {
     // Cache key includes the FULL niche set (sorted) so adding a new
     // niche via AI Builder invalidates the cache for this store.
     const nichesForCacheKey = (Array.isArray(store.niches) ? store.niches : []).slice().sort().join(',')
-    const cacheKey = `store:${subdomain}:n${nichesForCacheKey || store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
+    // Cache key includes today's date for the default sort so the
+    // shuffled ordering rolls over at midnight UTC without us having to
+    // explicitly evict. Two-minute TTL means the worst-case staleness
+    // around midnight is also two minutes.
+    const cacheKey = `store:${subdomain}:n${nichesForCacheKey || store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}:d${todaySeed}`
     if (redis && page > 0) {
       try {
         const cached = await redis.get(cacheKey)
