@@ -105,12 +105,22 @@ export default async function handler(req, res) {
     const t20s = (20 / audRate / markupMultiplier).toFixed(4)
     const t50s = (50 / audRate / markupMultiplier).toFixed(4)
     let whereExtra = ''
-    if (category) whereExtra += ` AND category = '${category.replace(/'/g, "''")}'`
-    if (priceRange === 'under10') whereExtra += ` AND sale_price < ${t10s}`
-    else if (priceRange === '10to20') whereExtra += ` AND sale_price >= ${t10s} AND sale_price < ${t20s}`
-    else if (priceRange === '20to50') whereExtra += ` AND sale_price >= ${t20s} AND sale_price < ${t50s}`
-    else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
-    if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
+    // Single-product filter for deep-links (`/product/:id`). When set,
+    // skips category/price/search/sort entirely so the response always
+    // contains the requested product even if it would normally be
+    // outside the active filter or off the current page. Strict UUID
+    // gate so a junk param can't broaden the WHERE clause.
+    const productId = req.query.id || ''
+    if (productId && /^[0-9a-f-]{36}$/i.test(productId)) {
+      whereExtra += ` AND id = '${productId}'`
+    } else {
+      if (category) whereExtra += ` AND category = '${category.replace(/'/g, "''")}'`
+      if (priceRange === 'under10') whereExtra += ` AND sale_price < ${t10s}`
+      else if (priceRange === '10to20') whereExtra += ` AND sale_price >= ${t10s} AND sale_price < ${t20s}`
+      else if (priceRange === '20to50') whereExtra += ` AND sale_price >= ${t20s} AND sale_price < ${t50s}`
+      else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
+      if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
+    }
 
     // Build ORDER BY. Default 'featured' is a true per-request random
     // shuffle so every page load surfaces a different mix of products
