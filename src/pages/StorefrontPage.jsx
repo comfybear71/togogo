@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft, ChevronRight,
-  Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star,
+  Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star, Share2, Check, Copy,
+  Mail, MessageCircle, Facebook,
 } from 'lucide-react'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 import { splitBrand } from '../lib/brand'
@@ -61,6 +62,122 @@ function useCart(subdomain) {
     },
     clear() { save([]) },
   }
+}
+
+// ─── Share button ─────────────────────────────────────────────────────────
+// Share a product link to messaging / social. Uses the OS share sheet
+// via Web Share API on mobile (one tap → Messages, WhatsApp, email,
+// the lot). Falls back on desktop to a small popover with copy-link
+// + explicit social buttons. Always shares the storefront subdomain
+// URL so the customer who opens the link lands in the SAME shop.
+function ShareButton({ product, subdomain, theme, size = 'md' }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const ref = useRef(null)
+
+  const url = product?.id
+    ? `https://${subdomain}.togogo.me/product/${product.id}`
+    : `https://${subdomain}.togogo.me`
+  const title = product?.title || `Check out this product`
+  const text = product?.title
+    ? `Found this on ${subdomain}.togogo.me — ${product.title}`
+    : `Check out this shop on ToGoGo`
+
+  // Close popover on click-outside (desktop fallback only)
+  useEffect(() => {
+    if (!open) return
+    function onClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [open])
+
+  async function onClick(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    // Native share sheet on mobile / supported browsers — best UX,
+    // covers WhatsApp, Messages, email, AirDrop, system contacts in
+    // one prompt with no third-party SDKs.
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title, text, url })
+        return
+      } catch (err) {
+        // User cancelled — silent. Any other rejection falls through
+        // to the popover so they have an alternative.
+        if (err && err.name === 'AbortError') return
+      }
+    }
+    setOpen(v => !v)
+  }
+
+  function copyLink(e) {
+    e.preventDefault()
+    e.stopPropagation()
+    try {
+      navigator.clipboard?.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch { /* no-op */ }
+  }
+
+  // Build share intents that work without OAuth or SDKs.
+  const enc = encodeURIComponent
+  const targets = [
+    { key: 'fb',    label: 'Facebook', Icon: Facebook,      href: `https://www.facebook.com/sharer/sharer.php?u=${enc(url)}` },
+    { key: 'wa',    label: 'WhatsApp', Icon: MessageCircle, href: `https://wa.me/?text=${enc(text + ' ' + url)}` },
+    { key: 'email', label: 'Email',    Icon: Mail,          href: `mailto:?subject=${enc(title)}&body=${enc(text + '\n\n' + url)}` },
+  ]
+
+  const sizeClasses = size === 'sm'
+    ? 'h-8 w-8'
+    : 'h-10 w-10'
+  const iconSize = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5'
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="Share this product"
+        className={`inline-flex items-center justify-center rounded-full bg-white/[0.08] hover:bg-white/[0.16] backdrop-blur text-white transition-colors ${sizeClasses}`}
+      >
+        <Share2 className={iconSize} aria-hidden />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-white/[0.08] bg-[#0f0f0f] p-1 shadow-xl z-50"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={copyLink}
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[14px] text-white hover:bg-white/[0.06] min-h-[40px]"
+          >
+            {copied ? <Check className="h-4 w-4 text-emerald-400" aria-hidden /> : <Copy className="h-4 w-4" aria-hidden />}
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
+          {targets.map(({ key, label, Icon, href }) => (
+            <a
+              key={key}
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-[14px] text-white hover:bg-white/[0.06] min-h-[40px]"
+              onClick={() => setOpen(false)}
+            >
+              <Icon className="h-4 w-4" aria-hidden style={{ color: theme?.accent }} />
+              {label}
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Main Storefront Component ────────────────────────────────────────────
@@ -539,6 +656,15 @@ export default function StorefrontPage({ subdomain }) {
                       -{discount}%
                     </div>
                   )}
+                  {/* Share button — top-right of the image. Stops the
+                      card's onClick navigation so tapping share doesn't
+                      also open the product. */}
+                  <div
+                    className="absolute top-2 right-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ShareButton product={product} subdomain={subdomain} theme={theme} size="sm" />
+                  </div>
                   {/* Quick add button — hidden when out of stock */}
                   {!outOfStock && (
                     <button
@@ -914,7 +1040,13 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
 
           {/* Product Info */}
           <div>
-            <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm font-medium mb-1" style={{ color: theme.accent }}>{product.category}</p>
+              {/* Share — same intent as the small button on each card,
+                  bigger touch target on the detail page where the
+                  customer is more likely to want to send it on. */}
+              <ShareButton product={displayProduct} subdomain={subdomain} theme={theme} size="md" />
+            </div>
             <h1 className="text-2xl font-bold text-white mb-3">{displayProduct.title}</h1>
             <p className="text-3xl font-bold text-white mb-2">
               A${displayPrice.toFixed(2)} <span className="text-sm text-slate-500">AUD</span>
@@ -1012,15 +1144,31 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                 return (
                   <div className="mb-6">
                     <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">Options</p>
-                    <div className="flex flex-wrap gap-2 overflow-x-auto">
+                    {/* Scroll horizontally on mobile, but allow the
+                        hover-zoom popover to escape on desktop where
+                        overflow:auto would otherwise clip it. */}
+                    <div className="flex flex-wrap gap-2 overflow-x-auto md:overflow-visible">
                       {details.variants.map((v, i) => {
                         const label = v.label || `Option ${i + 1}`
                         const isSelected = selectedVariant?.skuId === v.skuId
                         return (
                           <button key={v.skuId} onClick={() => setSelectedVariant(isSelected ? null : v)}
-                            className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
+                            className={`group/swatch relative flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
                             {v.image && <img src={v.image} alt="" className="h-6 w-6 rounded object-cover" />}
                             <span>{label}</span>
+                            {/* Hover-zoom (PC only) — bigger preview pops
+                                above the swatch on mouse hover so customers
+                                can compare colour/style without selecting.
+                                Mobile users tap to select normally. */}
+                            {v.image && (
+                              <span className="hidden md:block pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 opacity-0 group-hover/swatch:opacity-100 transition-opacity duration-150">
+                                <img
+                                  src={v.image}
+                                  alt=""
+                                  className="h-40 w-40 rounded-lg object-cover border border-white/[0.12] shadow-2xl bg-[#0a0a0a]"
+                                />
+                              </span>
+                            )}
                           </button>
                         )
                       })}
@@ -1034,7 +1182,7 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                   {groupNames.map(groupName => (
                     <div key={groupName}>
                       <p className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">{groupName}</p>
-                      <div className="flex flex-wrap gap-2 overflow-x-auto">
+                      <div className="flex flex-wrap gap-2 overflow-x-auto md:overflow-visible">
                         {[...propGroups[groupName]].map(val => {
                           const img = variants.find(v =>
                             (v.properties || []).some(p => p.name === groupName && p.value === val && p.image)
@@ -1042,9 +1190,20 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                           const isSelected = selectedProps[groupName] === val
                           return (
                             <button key={val} onClick={() => handleSelect(groupName, val)}
-                              className={`flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
+                              className={`group/swatch relative flex-shrink-0 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-all ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]/10 text-white' : 'border-white/[0.08] text-slate-300 hover:border-white/[0.2]'}`}>
                               {img && <img src={img} alt="" className="h-6 w-6 rounded object-cover" />}
                               <span>{val}</span>
+                              {/* Hover-zoom (PC only) — see flat-list
+                                  branch above for the rationale. */}
+                              {img && (
+                                <span className="hidden md:block pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 opacity-0 group-hover/swatch:opacity-100 transition-opacity duration-150">
+                                  <img
+                                    src={img}
+                                    alt=""
+                                    className="h-40 w-40 rounded-lg object-cover border border-white/[0.12] shadow-2xl bg-[#0a0a0a]"
+                                  />
+                                </span>
+                              )}
                             </button>
                           )
                         })}
