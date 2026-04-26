@@ -191,21 +191,42 @@ export default async function handler(req, res) {
     const totalProducts = parseInt(countResult.rows[0].total)
 
     // Get the store owner's products — paginated with filters and sort
-    const productResult = await sql.query(
-      `SELECT * FROM (
-        SELECT DISTINCT ON (supplier_product_id) id, title, description, image, images, supplier, supplier_cost,
-               sale_price, shipping_cost, price_currency, category, total_sold, created_at, supplier_product_id,
-               product_rating, orders_count, original_price, discount_percent, in_stock,
-               variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
-        FROM user_products
-        WHERE is_active = true${nicheWhere}${pricedWhere}
-        ORDER BY supplier_product_id, created_at DESC
-      ) products
-      WHERE true${whereExtra}
-      ORDER BY ${orderBy}
-      LIMIT $1 OFFSET $2`,
-      [limit, offset]
-    )
+    // Single-product deep-link: bypass the niche filter and the priced
+    // gate entirely. The product is referenced by an explicit UUID so
+    // the customer is asking for THAT product specifically — niche
+    // misalignment (legacy product imported under a different niche)
+    // or stale variant pricing shouldn't hide it from a shared link.
+    // The detail view will fetch live AE pricing on render anyway.
+    let productResult
+    if (productId && /^[0-9a-f-]{36}$/i.test(productId)) {
+      productResult = await sql.query(
+        `SELECT id, title, description, image, images, supplier, supplier_cost,
+                sale_price, shipping_cost, price_currency, category, total_sold,
+                created_at, supplier_product_id,
+                product_rating, orders_count, original_price, discount_percent, in_stock,
+                variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
+         FROM user_products
+         WHERE id = $1 AND is_active = true
+         LIMIT 1`,
+        [productId]
+      )
+    } else {
+      productResult = await sql.query(
+        `SELECT * FROM (
+          SELECT DISTINCT ON (supplier_product_id) id, title, description, image, images, supplier, supplier_cost,
+                 sale_price, shipping_cost, price_currency, category, total_sold, created_at, supplier_product_id,
+                 product_rating, orders_count, original_price, discount_percent, in_stock,
+                 variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
+          FROM user_products
+          WHERE is_active = true${nicheWhere}${pricedWhere}
+          ORDER BY supplier_product_id, created_at DESC
+        ) products
+        WHERE true${whereExtra}
+        ORDER BY ${orderBy}
+        LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      )
+    }
     const ownerProducts = productResult.rows
 
     let products = ownerProducts.map((p) => {
