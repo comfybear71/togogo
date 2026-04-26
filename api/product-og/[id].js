@@ -1,0 +1,115 @@
+// Server-rendered HTML with product-specific Open Graph tags so link
+// unfurlers (WhatsApp / iMessage / Facebook / Slack / Telegram) show
+// the actual product image and title when a customer shares a
+// /product/:id link. The SPA bundle still mounts on the same page —
+// real users get the same React app they'd get from index.html, with
+// the OG meta tags pre-baked in the head.
+//
+// Reached via a vercel.json rewrite from /product/:id. The handler
+// fetches the index.html from the deployment, injects four meta tags
+// + a canonical link, and returns the modified HTML. If anything
+// fails we fall back to plain index.html so the SPA still loads.
+import { sql } from '../_lib/db.js'
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+export default async function handler(req, res) {
+  const { id } = req.query
+  // Sanitise the host header — it's customer-visible in og:url, so a
+  // forged Host shouldn't leak into the rendered page. Storefronts are
+  // *.togogo.me only.
+  const rawHost = (req.headers.host || '').toLowerCase()
+  const host = /^[a-z0-9-]+\.togogo\.me$/.test(rawHost) ? rawHost : 'togogo.me'
+  const productPageUrl = `https://${host}/product/${id || ''}`
+
+  // Fetch the production index.html on every request. Vercel serves it
+  // from the same deployment so this is a same-origin fetch, fast and
+  // reliable. We don't read from disk because the path layout differs
+  // between local dev and Vercel runtime.
+  let indexHtml = ''
+  try {
+    const indexRes = await fetch(`https://${host}/index.html`, {
+      // Avoid recursive rewrites — go straight to the static file.
+      headers: { 'x-internal-og-fetch': '1' },
+    })
+    indexHtml = await indexRes.text()
+  } catch (err) {
+    console.error('[product-og] Failed to fetch index.html:', err.message)
+  }
+
+  // Look up the product. Failures fall through to a generic share card
+  // — better than 500ing on a corner case.
+  let title = 'ToGoGo'
+  let description = 'Discover great products on ToGoGo'
+  let image = `https://${host}/pwa-512x512.png`
+  if (id && /^[0-9a-f-]{36}$/i.test(String(id))) {
+    try {
+      const { rows } = await sql`
+        SELECT title, description, image
+        FROM user_products
+        WHERE id = ${id} AND is_active = true
+        LIMIT 1
+      `
+      const p = rows[0]
+      if (p) {
+        title = (p.title || title).slice(0, 110)
+        const desc = p.description && p.description !== p.title
+          ? p.description
+          : `Buy ${p.title} on ${host.split('.')[0]}.togogo.me`
+        description = desc.slice(0, 200)
+        if (p.image) image = p.image
+      }
+    } catch (err) {
+      console.error('[product-og] DB lookup failed:', err.message)
+    }
+  }
+
+  const ogTags = `
+    <meta property="og:type" content="product" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:image" content="${escapeHtml(image)}" />
+    <meta property="og:url" content="${escapeHtml(productPageUrl)}" />
+    <meta property="og:site_name" content="${escapeHtml(host.split('.')[0])}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(title)}" />
+    <meta name="twitter:description" content="${escapeHtml(description)}" />
+    <meta name="twitter:image" content="${escapeHtml(image)}" />
+    <link rel="canonical" href="${escapeHtml(productPageUrl)}" />
+  `.trim()
+
+  // Inject the meta tags into the <head>. If we couldn't fetch
+  // index.html (rare — same-origin same-deployment fetch), serve a
+  // tiny stub with the OG tags. Bots get what they need; a real
+  // human would see the storefront home as a fallback (NOT the
+  // product URL — that would loop right back to this function).
+  let html
+  if (indexHtml && indexHtml.includes('</head>')) {
+    html = indexHtml.replace('</head>', `${ogTags}\n</head>`)
+  } else {
+    const homeUrl = `https://${host}/`
+    html = `<!doctype html>
+<html><head>
+<meta charset="utf-8" />
+${ogTags}
+<meta http-equiv="refresh" content="0; url=${escapeHtml(homeUrl)}" />
+<title>${escapeHtml(title)}</title>
+</head><body>
+<script>window.location.replace(${JSON.stringify(homeUrl)})</script>
+</body></html>`
+  }
+
+  // Short cache so unfurlers hit a fresh OG response when product
+  // titles/images change, but we don't crush the function on every
+  // SPA navigation. 5 minutes is a reasonable middle.
+  res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=300')
+  res.status(200).send(html)
+}
