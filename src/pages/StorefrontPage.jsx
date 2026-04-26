@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   ShoppingCart, Search, X, Plus, Minus, Trash2, Package, ChevronLeft, ChevronRight,
   Store, Truck, Shield, Loader2, CheckCircle, AlertCircle, Star, Share2, Check, Copy,
-  Mail, MessageCircle, Facebook,
+  Mail, MessageCircle, Facebook, Twitter, MessageSquare,
 } from 'lucide-react'
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 import { splitBrand } from '../lib/brand'
@@ -93,17 +93,28 @@ function ShareButton({ product, subdomain, theme, size = 'md' }) {
     return () => document.removeEventListener('mousedown', onClick)
   }, [open])
 
+  // Detect a touch / mobile device — pointer:coarse covers iOS, Android
+  // and Windows tablets; matchMedia is supported on every browser we
+  // care about. Falls back to the popover on anything else.
+  // We deliberately gate Web Share on this rather than on
+  // navigator.share alone because Chrome desktop on Windows reports
+  // navigator.share = function but opens a Windows share sheet that
+  // doesn't include Facebook / X / SMS — customers who tested PC
+  // share couldn't even copy the link. Desktop = popover, always.
+  const isTouchDevice =
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(pointer: coarse)').matches
+
   async function onClick(e) {
     e.preventDefault()
     e.stopPropagation()
-    // Native share sheet on mobile / supported browsers — best UX,
-    // covers WhatsApp, Messages, email, AirDrop, system contacts in
-    // one prompt with no third-party SDKs. We try to attach the
-    // product image as a File so receiving apps (Messages, WhatsApp)
-    // show the actual photo, not just a link preview. Falls back to
-    // text+url if the browser doesn't support file sharing or AE's
-    // CDN refuses CORS — partial share is better than no share.
-    if (typeof navigator !== 'undefined' && navigator.share) {
+    // Native share sheet ONLY on touch devices — covers WhatsApp,
+    // Messages, email, AirDrop, system contacts in one prompt and
+    // can attach the image File for richer previews. Desktop falls
+    // through to the popover so customers see an explicit choice
+    // of Facebook / X / WhatsApp / Email / SMS / Copy link.
+    if (isTouchDevice && typeof navigator !== 'undefined' && navigator.share) {
       try {
         const shareData = { title, text, url }
         if (product?.image && typeof navigator.canShare === 'function') {
@@ -142,10 +153,17 @@ function ShareButton({ product, subdomain, theme, size = 'md' }) {
 
   // Build share intents that work without OAuth or SDKs.
   const enc = encodeURIComponent
+  // Plain href share intents — every platform supports a URL-based
+  // share without needing their SDK. SMS uses the sms: scheme which
+  // Android & iOS open in Messages; on desktop browsers it prompts
+  // the user to pick a handler (often nothing, hence we tag it
+  // "(mobile)"). X (formerly Twitter) takes both `text` and `url`.
   const targets = [
     { key: 'fb',    label: 'Facebook', Icon: Facebook,      href: `https://www.facebook.com/sharer/sharer.php?u=${enc(url)}` },
+    { key: 'x',     label: 'X (Twitter)', Icon: Twitter,    href: `https://twitter.com/intent/tweet?url=${enc(url)}&text=${enc(title)}` },
     { key: 'wa',    label: 'WhatsApp', Icon: MessageCircle, href: `https://wa.me/?text=${enc(text + ' ' + url)}` },
     { key: 'email', label: 'Email',    Icon: Mail,          href: `mailto:?subject=${enc(title)}&body=${enc(text + '\n\n' + url)}` },
+    { key: 'sms',   label: 'SMS',      Icon: MessageSquare, href: `sms:?&body=${enc(text + ' ' + url)}` },
   ]
 
   const sizeClasses = size === 'sm'
@@ -254,20 +272,23 @@ export default function StorefrontPage({ subdomain }) {
     if (newView === 'product' && product) {
       setSelectedProduct(product)
       setView('product')
-      window.history.pushState({ view: 'product', product }, '')
+      // Push the canonical /product/{id} URL so refresh + share + back
+      // button all work. Same path the OG endpoint serves, so a copy
+      // of the URL bar is the same URL we want for sharing.
+      window.history.pushState({ view: 'product', product }, '', `/product/${product.id}`)
     } else if (newView === 'cart') {
       setView('cart')
-      window.history.pushState({ view: 'cart' }, '')
+      window.history.pushState({ view: 'cart' }, '', '/')
     } else if (newView === 'grid') {
       setView('grid')
       setSelectedProduct(null)
       // Replace the current history entry with grid so the back button
       // doesn't return to cart / orders / checkout / success that the
-      // user just clicked away from
-      window.history.replaceState({ view: 'grid' }, '')
+      // user just clicked away from. Reset URL to root.
+      window.history.replaceState({ view: 'grid' }, '', '/')
     } else {
       setView(newView)
-      window.history.pushState({ view: newView }, '')
+      window.history.pushState({ view: newView }, '', '/')
     }
     // View changes are React state swaps, not real navigations — browser keeps
     // the previous scroll position. Reset to top so every view starts fresh.
@@ -312,6 +333,29 @@ export default function StorefrontPage({ subdomain }) {
       })
       .catch(() => { setStoreData(null) })
       .finally(() => setLoading(false))
+
+    // Deep-link support: when a customer opens a shared
+    // /product/{uuid} link, jump straight to the detail view for that
+    // product. We don't use React Router on storefront subdomains
+    // (StorefrontPage is the only top-level), so we parse the path by
+    // hand. Fetches the product directly via the storefront API's
+    // single-id filter so it works even if the product is on page 5
+    // of the shuffle.
+    const pathMatch = (window.location.pathname || '').match(/^\/product\/([0-9a-f-]{36})$/i)
+    if (pathMatch) {
+      const productId = pathMatch[1]
+      fetch(`${API_BASE}/api/storefront/store?subdomain=${subdomain}&id=${productId}&page=1&limit=1`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((data) => {
+          const p = (data?.products || [])[0]
+          if (p) {
+            setSelectedProduct(p)
+            setView('product')
+            window.history.replaceState({ view: 'product', product: p }, '')
+          }
+        })
+        .catch(() => { /* fall back to grid view */ })
+    }
 
     const urlParams = new URLSearchParams(window.location.search)
     if (urlParams.get('checkout') === 'success') {
