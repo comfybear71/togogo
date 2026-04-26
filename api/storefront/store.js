@@ -98,34 +98,28 @@ export default async function handler(req, res) {
     else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
     if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
 
-    // Build ORDER BY. Default ('newest' / unspecified) used to be
-    // `created_at DESC`, which meant every cold-start saw the same first
-    // 30 products until the next cron import. Replace with a date-seeded
-    // shuffle so the order rotates daily but stays stable within the
-    // day — Redis cache stays warm, customers don't see the same hero
-    // products forever. Explicit user sorts (price, rating, etc.) keep
-    // their natural ordering.
-    const todaySeed = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
-    let orderBy = `md5(id::text || '${todaySeed}')`
-    if (sortBy === 'price-low') orderBy = 'sale_price ASC'
-    else if (sortBy === 'price-high') orderBy = 'sale_price DESC'
-    else if (sortBy === 'bestsellers') orderBy = 'COALESCE(orders_count, 0) DESC, COALESCE(total_sold, 0) DESC'
-    else if (sortBy === 'rating') orderBy = 'COALESCE(product_rating, 0) DESC'
-    else if (sortBy === 'discount') orderBy = 'COALESCE(discount_percent, 0) DESC'
-    else if (sortBy === 'newest') orderBy = 'created_at DESC'
+    // Build ORDER BY. Default 'featured' is a true per-request random
+    // shuffle so every page load surfaces a different mix of products
+    // — date-seeded versions felt static to customers refreshing
+    // throughout the day, since all visitors saw the same daily order.
+    // Explicit user sorts (price, rating, bestsellers, discount,
+    // newest) bypass the shuffle and keep their natural ordering.
+    let orderBy = 'random()'
+    let isShuffled = true
+    if (sortBy === 'price-low') { orderBy = 'sale_price ASC'; isShuffled = false }
+    else if (sortBy === 'price-high') { orderBy = 'sale_price DESC'; isShuffled = false }
+    else if (sortBy === 'bestsellers') { orderBy = 'COALESCE(orders_count, 0) DESC, COALESCE(total_sold, 0) DESC'; isShuffled = false }
+    else if (sortBy === 'rating') { orderBy = 'COALESCE(product_rating, 0) DESC'; isShuffled = false }
+    else if (sortBy === 'discount') { orderBy = 'COALESCE(discount_percent, 0) DESC'; isShuffled = false }
+    else if (sortBy === 'newest') { orderBy = 'created_at DESC'; isShuffled = false }
 
-    // Try Redis cache (cache per store+page+filters, 2 min TTL)
-    // Cache key includes niche so setting/changing a store's niche
-    // naturally invalidates the old "all products" cached result.
-    // Cache key includes the FULL niche set (sorted) so adding a new
-    // niche via AI Builder invalidates the cache for this store.
+    // Try Redis cache (cache per store+page+filters, 2 min TTL).
+    // SKIP the cache when shuffling — caching a random order would
+    // freeze it for every visitor who hits within the TTL, defeating
+    // the "fresh on every refresh" promise. Other sorts still cache.
     const nichesForCacheKey = (Array.isArray(store.niches) ? store.niches : []).slice().sort().join(',')
-    // Cache key includes today's date for the default sort so the
-    // shuffled ordering rolls over at midnight UTC without us having to
-    // explicitly evict. Two-minute TTL means the worst-case staleness
-    // around midnight is also two minutes.
-    const cacheKey = `store:${subdomain}:n${nichesForCacheKey || store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}:d${todaySeed}`
-    if (redis && page > 0) {
+    const cacheKey = `store:${subdomain}:n${nichesForCacheKey || store.niche || ''}:p${page}:l${limit}:c${category}:pr${priceRange}:s${sortBy}:q${search}`
+    if (redis && page > 0 && !isShuffled) {
       try {
         const cached = await redis.get(cacheKey)
         if (cached) {
@@ -341,8 +335,9 @@ export default async function handler(req, res) {
       },
     }
 
-    // Cache in Redis (2 min TTL)
-    if (redis) {
+    // Cache in Redis (2 min TTL). Skip for shuffled responses so the
+    // random order doesn't get frozen for every subsequent visitor.
+    if (redis && !isShuffled) {
       try { await redis.set(cacheKey, JSON.stringify(response), { ex: 120 }) } catch { /* non-critical */ }
     }
 
