@@ -153,11 +153,14 @@ export default async function handler(req, res) {
       } catch { /* cache miss, continue */ }
     }
 
-    // Niche gate: a store accumulates niches[] over multiple AI Builder
-    // runs. Storefront shows products tagged with ANY of those niches
-    // (overlap operator &&). Stores with empty niches[] AND no legacy
-    // `niche` see everything (general store). Uses the GIN index on
-    // user_products.niches for speed.
+    // Tenant isolation: every storefront only sees products owned by
+    // its store's user_id. Without this filter, any AI Builder run on
+    // store A that happened to use the same niche as store B causes
+    // store A's products to bleed into store B's storefront — which
+    // is exactly what Stuart spotted in production. Niche filter is
+    // still applied on top so a single owner with multiple niches can
+    // still narrow the catalogue.
+    const ownerWhere = ` AND user_id = '${store.owner_id}'`
     //
     // Backward-compat: if niches[] is empty but legacy `niche` is set
     // (only happens on a brand-new store before db.js backfill ran),
@@ -183,7 +186,7 @@ export default async function handler(req, res) {
     const countResult = await sql.query(
       `SELECT COUNT(*) as total FROM (
         SELECT DISTINCT ON (supplier_product_id) id, sale_price, category, title
-        FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
+        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped WHERE true${whereExtra}`,
       []
@@ -199,6 +202,10 @@ export default async function handler(req, res) {
     // The detail view will fetch live AE pricing on render anyway.
     let productResult
     if (productId && /^[0-9a-f-]{36}$/i.test(productId)) {
+      // Tenant isolation: scope deep-link lookups to the requesting
+      // store's owner so that an attacker can't enumerate UUIDs and
+      // reach products that belong to a different shop. The product
+      // also has to be active.
       productResult = await sql.query(
         `SELECT id, title, description, image, images, supplier, supplier_cost,
                 sale_price, shipping_cost, price_currency, category, total_sold,
@@ -206,9 +213,9 @@ export default async function handler(req, res) {
                 product_rating, orders_count, original_price, discount_percent, in_stock,
                 variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
          FROM user_products
-         WHERE id = $1 AND is_active = true
+         WHERE id = $1 AND user_id = $2 AND is_active = true
          LIMIT 1`,
-        [productId]
+        [productId, store.owner_id]
       )
     } else {
       productResult = await sql.query(
@@ -218,7 +225,7 @@ export default async function handler(req, res) {
                  product_rating, orders_count, original_price, discount_percent, in_stock,
                  variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
           FROM user_products
-          WHERE is_active = true${nicheWhere}${pricedWhere}
+          WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
           ORDER BY supplier_product_id, created_at DESC
         ) products
         WHERE true${whereExtra}
@@ -316,7 +323,7 @@ export default async function handler(req, res) {
     const { rows: catRows } = await sql.query(
       `SELECT category, COUNT(*) as count FROM (
         SELECT DISTINCT ON (supplier_product_id) category, supplier_product_id
-        FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
+        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped
       GROUP BY category ORDER BY count DESC`,
@@ -333,7 +340,7 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE sale_price >= ${t50s}) as over50
       FROM (
         SELECT DISTINCT ON (supplier_product_id) sale_price, supplier_product_id
-        FROM user_products WHERE is_active = true${nicheWhere}${pricedWhere}
+        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped`,
       []

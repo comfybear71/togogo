@@ -1,0 +1,48 @@
+# Allow all well-behaved crawlers everywhere on the site.
+# Facebook's debugger reported a 403 on /product/:id pages with the
+# message "This response code could be due to a robots.txt block.
+# Please allowlist facebookexternalhit on your sites robots.txt
+# config." Adding this file with explicit grants for the common
+# OG / link-unfurl bots stops them from being mis-classified.
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: facebookcatalog
+Allow: /
+
+User-agent: Twitterbot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+User-agent: Slackbot
+Allow: /
+
+User-agent: Slackbot-LinkExpanding
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: WhatsApp
+Allow: /
+
+User-agent: Discordbot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: bingbot
+Allow: /
+
+# Default for everything else — also allowed.
+User-agent: *
+Allow: /
+
+# Sitemap: future work.
