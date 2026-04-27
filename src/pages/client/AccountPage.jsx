@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom'
-import { useState } from 'react'
-import { User, CreditCard, LogOut, ExternalLink } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, CreditCard, LogOut, ExternalLink, AlertTriangle, Loader2 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 // Client-side Account page. Moved out of /profile so the client
 // dashboard has its own settings surface accessible from the sidebar.
@@ -19,17 +21,70 @@ export default function AccountPage() {
   const user = useAuthStore(s => s.user)
   const signOut = useAuthStore(s => s.signOut)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
+  // Subscription / store state — drives the Manage Subscription
+  // button so it can resume payment for a half-provisioned store
+  // (Stuart's dad Michael hit this: subscription checkout never
+  // completed, but a user_stores row exists). Without this we'd
+  // send him to /setup which kicks off creating a SECOND store.
+  const [store, setStore] = useState(null)
+  const [subscription, setSubscription] = useState(null)
+  const [resumingPayment, setResumingPayment] = useState(false)
+  const token = typeof window !== 'undefined' ? localStorage.getItem('togogo-token') : null
+
+  useEffect(() => {
+    if (!token) return
+    let cancelled = false
+    fetch(`${API_BASE}/api/my-shop/store`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (cancelled || !data) return
+        setStore(data.store || null)
+        setSubscription(data.subscription || null)
+      })
+      .catch(() => { /* fall back to default Manage flow */ })
+    return () => { cancelled = true }
+  }, [token])
+
+  const subStatus = subscription?.status || null
+  const hasActiveSub = subStatus === 'active'
+  const needsPayment = !!store && !hasActiveSub
 
   async function handleSignOut() {
     await signOut?.()
     navigate('/')
   }
 
-  async function openStripePortal() {
-    // Placeholder — Stripe Customer Portal requires a session API.
-    // For Phase 1 we send users to the generic subscription page which
-    // already has a portal redirect wired.
-    navigate('/subscription')
+  async function manageSubscription() {
+    // Three branches:
+    //   1. No store yet → /subscription (the marketing/upsell page).
+    //   2. Has store, sub not active → resume payment for THIS store
+    //      via POST /api/subscriptions/checkout with the existing
+    //      storeName + subdomain, redirect to Stripe Checkout.
+    //   3. Has active sub → /subscription (placeholder until we wire
+    //      a real Stripe Customer Portal redirect).
+    if (!store) { navigate('/subscription'); return }
+    if (hasActiveSub) { navigate('/subscription'); return }
+    setResumingPayment(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/subscriptions/checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeName: store.store_name || store.subdomain,
+          subdomain: store.subdomain,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (data?.url) { window.location.href = data.url; return }
+      window.alert(data?.error || 'Could not start checkout. Please try again.')
+    } catch {
+      window.alert('Could not reach the payment service. Please try again.')
+    } finally {
+      setResumingPayment(false)
+    }
   }
 
   return (
@@ -50,16 +105,38 @@ export default function AccountPage() {
 
       {/* Subscription */}
       <Card icon={CreditCard} title="Subscription">
-        <p className="text-[16px] text-zinc-300 mb-4">
-          Manage your ToGoGo plan, billing, and invoices.
-        </p>
-        <button
-          onClick={openStripePortal}
-          className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-[16px] font-semibold text-white hover:opacity-90 min-h-[48px]"
-        >
-          Manage subscription
-          <ExternalLink className="h-4 w-4" aria-hidden />
-        </button>
+        {needsPayment ? (
+          <>
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-4 flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" aria-hidden />
+              <div className="text-[15px] text-amber-100">
+                <strong className="text-amber-300">Payment incomplete.</strong> Your shop {store?.subdomain ? <span className="text-white">{store.subdomain}.togogo.me</span> : null} exists but the $19.99/month subscription hasn't been paid yet. Tap below to finish payment for this shop — it won't create a new one.
+              </div>
+            </div>
+            <button
+              onClick={manageSubscription}
+              disabled={resumingPayment}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-[16px] font-semibold text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-wait min-h-[48px]"
+            >
+              {resumingPayment
+                ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading…</>
+                : <><CreditCard className="h-4 w-4" aria-hidden /> Complete payment</>}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-[16px] text-zinc-300 mb-4">
+              Manage your ToGoGo plan, billing, and invoices.
+            </p>
+            <button
+              onClick={manageSubscription}
+              className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-[16px] font-semibold text-white hover:opacity-90 min-h-[48px]"
+            >
+              Manage subscription
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </button>
+          </>
+        )}
       </Card>
 
       {/* Sign out */}
