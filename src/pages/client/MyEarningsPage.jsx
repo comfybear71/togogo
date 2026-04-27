@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import {
   DollarSign, TrendingUp, Wallet, Clock, ExternalLink,
   Loader2, AlertCircle, CreditCard, ShieldCheck,
@@ -156,8 +156,22 @@ export default function MyEarningsPage() {
             Payments connected — Stripe dashboard link will appear here shortly
           </div>
         ) : (
-          <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-[15px] text-amber-200">
-            You haven't connected payments yet. Once you do, you'll be able to see payouts here.
+          <div className="space-y-3">
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-[15px] text-amber-200">
+              You haven't connected payments yet. Set this up so customer payments can flow into your bank account.
+            </div>
+            {/* Direct link into the Stripe Connect onboarding flow.
+                Without this CTA the page was a dead-end for owners who
+                hadn't completed payment setup at signup (Stuart's dad
+                Michael hit this — no way to recover from /my-shop). */}
+            <Link
+              to="/setup-payments"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-[16px] font-semibold text-white hover:opacity-90 min-h-[48px]"
+            >
+              <CreditCard className="h-4 w-4" aria-hidden />
+              Set up payouts with Stripe
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </Link>
           </div>
         )}
       </section>
