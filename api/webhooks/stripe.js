@@ -389,8 +389,79 @@ export default async function handler(req, res) {
                         })
                       } catch { /* non-critical */ }
                     } else {
-                      await sql`UPDATE user_orders SET notes = ${'AliExpress auto-submit failed: ' + result.error + '. Manual submission required.'}, updated_at = NOW() WHERE id = ${order.id}`
+                      // submitOrder failed — typically because AliExpress
+                      // rejected the address (DELIVERY_NOT_AVAILABLE...),
+                      // the product went out of stock between checkout
+                      // and order, or the SKU resolved to something AE
+                      // refused. Customer has already been charged. The
+                      // right move is an AUTOMATIC FULL REFUND via the
+                      // payment intent we captured above, plus an honest
+                      // email so they're not left wondering. Manual
+                      // re-submission is no longer the default — the
+                      // money is gone from our balance the moment the
+                      // refund completes, so admin can't accidentally
+                      // re-fulfill a refunded order.
+                      const failureNote = `AliExpress auto-submit failed: ${result.error}.`
+                      let refundResult = null
+                      let refundError = null
+                      if (paymentIntent) {
+                        try {
+                          refundResult = await stripe.refunds.create({
+                            payment_intent: paymentIntent,
+                            reason: 'requested_by_customer',
+                            metadata: {
+                              togogo_order_ref: orderRef,
+                              togogo_refund_reason: 'ae_submission_failed',
+                              ae_error: String(result.error || '').slice(0, 480),
+                            },
+                          })
+                          console.log(`[Webhook] Auto-refund issued for ${order.id}: ${refundResult.id} (${refundResult.amount}c)`)
+                        } catch (refundErr) {
+                          refundError = refundErr.message
+                          console.error(`[Webhook] Auto-refund FAILED for ${order.id}:`, refundErr.message)
+                        }
+                      } else {
+                        refundError = 'No payment_intent on session — manual refund required'
+                        console.error(`[Webhook] Cannot auto-refund ${order.id}: no payment_intent`)
+                      }
+
+                      const noteLines = [failureNote]
+                      if (refundResult) {
+                        noteLines.push(`Auto-refunded A$${(refundResult.amount / 100).toFixed(2)} via Stripe (${refundResult.id}).`)
+                      } else if (refundError) {
+                        noteLines.push(`Auto-refund failed: ${refundError}. Admin must refund manually.`)
+                      }
+
+                      await sql`
+                        UPDATE user_orders
+                        SET status = ${refundResult ? 'refunded' : 'cancelled'},
+                            notes = ${noteLines.join(' ')},
+                            updated_at = NOW()
+                        WHERE id = ${order.id}
+                      `
                       console.error(`[Webhook] AliExpress submission failed for ${order.id}: ${result.error}`)
+
+                      // Email the customer so they understand why their
+                      // order didn't go through. Best-effort — if email
+                      // fails the refund still stands.
+                      try {
+                        await sendEmail({
+                          to: order.customer_email,
+                          subject: refundResult
+                            ? `Refund issued for your ${orderRef} order`
+                            : `Issue with your ${orderRef} order — please contact support`,
+                          html: refundResult
+                            ? `<p>Hi ${order.customer_name || 'there'},</p>
+                               <p>Unfortunately the supplier wasn't able to ship "${order.product_title}" to your address. We've automatically refunded <strong>A$${(refundResult.amount / 100).toFixed(2)}</strong> back to your card. The refund typically lands within 3–5 business days.</p>
+                               <p>If you'd still like the item, please pick a different listing on the storefront and try again — we apologise for the inconvenience.</p>
+                               <p>Order ref: ${orderRef}</p>`
+                            : `<p>Hi ${order.customer_name || 'there'},</p>
+                               <p>We hit an issue submitting your order to the supplier and the automatic refund didn't go through. Please reply to this email and we'll sort it out manually within one business day.</p>
+                               <p>Order ref: ${orderRef}</p>`,
+                        })
+                      } catch (emailErr) {
+                        console.error(`[Webhook] Refund-email failed for ${order.id}:`, emailErr.message)
+                      }
                     }
                   }
                 } catch (aeErr) {
