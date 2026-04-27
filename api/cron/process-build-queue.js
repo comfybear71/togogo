@@ -14,7 +14,7 @@
 // Auth: Vercel cron header, CRON_SECRET, or signed admin JWT.
 import { sql, ensureSchema } from '../_lib/db.js'
 import { searchAliExpressDirect, getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
-import { summarisePricing } from '../_lib/pricing.js'
+import { summarisePricing, getAudRate, getMinShippingUsd } from '../_lib/pricing.js'
 
 // Reduced from 5/30 when we switched to real-variant imports.
 // Each new product now costs 2 API calls (ds.product.wholesale.get + ds.freight.query)
@@ -44,6 +44,10 @@ function isRateLimitError(msg) {
 async function processOne(row) {
   const keyword = row.keyword
   let products = []
+  // Cache the FX rate + min-shipping floor once per row processed.
+  // Both helpers hit admin_settings; doing them outside the per-product
+  // loop keeps DB pressure low even when we ingest 50 keywords.
+  const audRate = await getAudRate()
   try {
     // searchAliExpressDirect returns { products: [...], total: N } (not a bare array).
     // On timeout we default to { products: [] } so the shape stays consistent.
@@ -128,8 +132,15 @@ async function processOne(row) {
       continue
     }
 
-    // Real shipping via ds.freight.query for the cheapest SKU — good enough
-    // baseline. Per-SKU freight can be recomputed at checkout.
+    // Real shipping via ds.freight.query for the cheapest SKU — good
+    // enough baseline. Per-SKU freight can be recomputed at checkout.
+    // SAFETY FLOOR: when AE's freight API returns nothing (the
+    // DELIVERY_NOT_AVAILABLE_TO_YOUR_ADDRESS log line we keep seeing),
+    // fall back to the admin-configured minimum shipping. Without
+    // this, products were getting cached with shipping=0 and we'd
+    // eat AE's actual shipping at order time (Stuart's order
+    // #906de9ee lost A$1.38 this way).
+    const minShippingUsd = await getMinShippingUsd(audRate)
     let shippingUsd = 0
     try {
       const firstSkuId = details.variants[0]?.skuId || ''
@@ -141,7 +152,8 @@ async function processOne(row) {
         const cheapest = freight.reduce((m, o) => o.cost < m.cost ? o : m, freight[0])
         shippingUsd = cheapest.cost || 0
       }
-    } catch { /* freight unknown — sale_price will reflect that */ }
+    } catch { /* freight unknown — falls through to floor below */ }
+    if (shippingUsd < minShippingUsd) shippingUsd = minShippingUsd
 
     const summary = summarisePricing(details.variants, shippingUsd)
     const salePriceUsd = summary.breakEvenMinUsd

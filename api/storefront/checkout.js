@@ -3,7 +3,7 @@
 import Stripe from 'stripe'
 import { sql } from '../_lib/db.js'
 import { getCommissionRate } from '../_lib/commission.js'
-import { getAudRate, usdToAud, usdToAudCents } from '../_lib/pricing.js'
+import { getAudRate, usdToAud, usdToAudCents, getMinShippingUsd } from '../_lib/pricing.js'
 import { verifyProduct, getProductDetails, queryDSFreight } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
@@ -54,6 +54,11 @@ export default async function handler(req, res) {
     const orderItems = []
     const commissionRate = await getCommissionRate()
     const audRate = await getAudRate()
+    // Min shipping floor in USD — applied whenever AE's freight query
+    // returns 0/null for the chosen SKU. Without this we'd cache a
+    // sale_price below AE's actual bill (the order #906de9ee
+    // root cause) and eat the shipping ourselves.
+    const minShippingUsd = await getMinShippingUsd(audRate)
     let totalSupplierCost = 0
 
     for (const item of items) {
@@ -162,8 +167,13 @@ export default async function handler(req, res) {
             ? chosenVariant.priceUsd
             : (parseFloat(product.min_variant_price_usd) || parseFloat(product.sale_price) || 0))
       // Shipping — live if we got it, else stored
-      const shippingUsd = liveShippingUsd != null ? liveShippingUsd
+      // Floor every shipping value at min — both the live freight
+      // result and the stored fallback can come back as 0 when AE
+      // says "delivery not available". Customer always pays at
+      // least the min; we re-bill exactly what AE bills us.
+      const rawShipping = liveShippingUsd != null ? liveShippingUsd
         : (parseFloat(product.shipping_cost) || 0)
+      const shippingUsd = Math.max(rawShipping, minShippingUsd)
 
       // Break-even per item (what AE bills us) — product + shipping + 10%
       // tax on (product + shipping) per AE's real AU GST behaviour. This is
