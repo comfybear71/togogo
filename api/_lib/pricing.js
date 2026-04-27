@@ -132,6 +132,34 @@ export function usdToAudCents(usd, rate) {
   return Math.round(u * r * 100)
 }
 
+// Default minimum shipping floor in AUD when admin hasn't configured
+// `min_shipping_cost`. Picked deliberately above AE's typical
+// US$1.99 + tax + AUD conversion + buffer (~A$3.30) so an unset
+// admin still doesn't price products below cost.
+export const DEFAULT_MIN_SHIPPING_AUD = 3.50
+
+// Read the admin-configured minimum shipping floor and convert to
+// USD using the supplied rate (caller already grabbed it via
+// getAudRate to avoid a second DB hit). Used as a safety net
+// whenever AE's freight query returns empty / zero — the cron then
+// caches a sale_price that includes a real shipping cost rather
+// than 0, so customers aren't charged less than what AE will bill
+// us at order time. Verified failure mode: order #906de9ee charged
+// A$6.31 to the customer, AE billed US$2.83 product + US$1.99
+// shipping, we ate the shipping because cron had cached shipping=0
+// after a DELIVERY_NOT_AVAILABLE freight response.
+export async function getMinShippingUsd(audRate) {
+  const r = Number(audRate) || DEFAULT_USD_TO_AUD
+  let minAud = DEFAULT_MIN_SHIPPING_AUD
+  try {
+    const { rows } = await sql`SELECT value FROM admin_settings WHERE key = 'min_shipping_cost'`
+    const v = parseFloat(rows[0]?.value)
+    if (Number.isFinite(v) && v >= 0) minAud = v
+  } catch { /* default applies */ }
+  // Convert AUD floor to USD because all internal pricing math is USD
+  return Math.round((minAud / r) * 100) / 100
+}
+
 // Build the derived price summary for a product given its variants[].
 export function summarisePricing(variants, shippingUsd = DEFAULT_SHIPPING_USD) {
   const prices = (variants || []).map(v => v.priceUsd).filter(p => p > 0)
