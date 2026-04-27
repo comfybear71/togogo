@@ -155,15 +155,31 @@ export default function MyEarningsPage() {
             <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden />
             Payments connected — Stripe dashboard link will appear here shortly
           </div>
+        ) : stripe.pendingSetup ? (
+          /* Account has been created on Stripe but onboarding wasn't
+             finished — owner closed the tab mid-flow (Michael did
+             exactly this). Send them back into /setup-payments which
+             resumes the same accountSession. The amber wording makes
+             clear it's NOT a fresh start; they're picking up where
+             they left off. */
+          <div className="space-y-3">
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-[15px] text-amber-200">
+              Stripe payouts are <strong className="text-amber-100">half set up</strong>. Finish the onboarding so customer payments can flow into your bank account.
+            </div>
+            <Link
+              to="/setup-payments"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-[16px] font-semibold text-white hover:opacity-90 min-h-[48px]"
+            >
+              <CreditCard className="h-4 w-4" aria-hidden />
+              Continue Stripe setup
+              <ExternalLink className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
         ) : (
           <div className="space-y-3">
             <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-[15px] text-amber-200">
               You haven't connected payments yet. Set this up so customer payments can flow into your bank account.
             </div>
-            {/* Direct link into the Stripe Connect onboarding flow.
-                Without this CTA the page was a dead-end for owners who
-                hadn't completed payment setup at signup (Stuart's dad
-                Michael hit this — no way to recover from /my-shop). */}
             <Link
               to="/setup-payments"
               className="inline-flex items-center gap-2 rounded-xl bg-[#FF6B35] px-5 py-3 text-[16px] font-semibold text-white hover:opacity-90 min-h-[48px]"
