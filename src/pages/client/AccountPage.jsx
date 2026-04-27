@@ -60,26 +60,34 @@ export default function AccountPage() {
     //   2. Has store, sub not active → resume payment for THIS store
     //      via POST /api/subscriptions/checkout with the existing
     //      storeName + subdomain, redirect to Stripe Checkout.
-    //   3. Has active sub → /subscription (placeholder until we wire
-    //      a real Stripe Customer Portal redirect).
+    //   3. Has active sub → POST /api/subscriptions/portal which
+    //      returns a Stripe Customer Portal URL (update card,
+    //      cancel, view invoices). NOT /subscription — that page
+    //      would route active customers back into "Get Started"
+    //      which kicks off creating a SECOND store.
     if (!store) { navigate('/subscription'); return }
-    if (hasActiveSub) { navigate('/subscription'); return }
     setResumingPayment(true)
     try {
-      const res = await fetch(`${API_BASE}/api/subscriptions/checkout`, {
+      const endpoint = hasActiveSub
+        ? '/api/subscriptions/portal'
+        : '/api/subscriptions/checkout'
+      const body = hasActiveSub
+        ? {}
+        : {
+            storeName: store.store_name || store.subdomain,
+            subdomain: store.subdomain,
+          }
+      const res = await fetch(`${API_BASE}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          storeName: store.store_name || store.subdomain,
-          subdomain: store.subdomain,
-        }),
+        body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
       if (data?.url) { window.location.href = data.url; return }
-      window.alert(data?.error || 'Could not start checkout. Please try again.')
+      window.alert(data?.error || 'Could not open the billing page. Please try again.')
     } catch {
       window.alert('Could not reach the payment service. Please try again.')
     } finally {

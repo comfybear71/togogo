@@ -61,7 +61,19 @@ export default async function handler(req, res) {
     // Stripe balance lookup — only if connect is active. Swallow all
     // Stripe errors; earnings rollups should still work if Stripe is
     // temporarily unreachable.
-    let stripeBlock = { connected: false, status: 'not_connected', available: 0, pending: 0, dashboardUrl: null }
+    //
+    // Three states:
+    //   - not_connected:  no stripe_connect_id at all → show "Set up payouts"
+    //   - pending:        account created but onboarding not complete →
+    //                     show "Continue Stripe setup". This is the state
+    //                     Michael got into when he opened the onboarding
+    //                     once and closed the tab without finishing.
+    //   - active:         fully onboarded → show balances + dashboard link.
+    //
+    // `connected` is only true when status === 'active' so the
+    // earnings UI doesn't render a balance for an account that
+    // isn't ready to receive funds yet.
+    let stripeBlock = { connected: false, pendingSetup: false, status: 'not_connected', available: 0, pending: 0, dashboardUrl: null }
     try {
       const { rows: stores } = await sql`
         SELECT stripe_connect_id, stripe_connect_status
@@ -71,10 +83,9 @@ export default async function handler(req, res) {
       `
       const store = stores[0]
       if (store?.stripe_connect_id) {
-        stripeBlock.connected = true
         stripeBlock.status = store.stripe_connect_status || 'pending'
-
         if (stripeBlock.status === 'active') {
+          stripeBlock.connected = true
           const stripe = new Stripe(process.env.STRIPE_SECRET_KEY)
           const bal = await stripe.balance.retrieve({ stripeAccount: store.stripe_connect_id })
           // balance.available / balance.pending are arrays by currency
@@ -89,6 +100,9 @@ export default async function handler(req, res) {
             const link = await stripe.accounts.createLoginLink(store.stripe_connect_id)
             stripeBlock.dashboardUrl = link.url
           } catch { /* dashboard link is optional — not fatal */ }
+        } else {
+          // Account exists but onboarding incomplete — flag for the UI.
+          stripeBlock.pendingSetup = true
         }
       }
     } catch (stripeErr) {
