@@ -119,18 +119,20 @@ export default async function handler(req, res) {
       else if (priceRange === '10to20') whereExtra += ` AND sale_price >= ${t10s} AND sale_price < ${t20s}`
       else if (priceRange === '20to50') whereExtra += ` AND sale_price >= ${t20s} AND sale_price < ${t50s}`
       else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
-      // Word-PREFIX search across title + description + category.
+      // Word-PREFIX search across the product TITLE only.
       // Each search word must appear as the START OF A WORD in the
-      // searchable text — not anywhere in the middle. Without this,
-      // searching "men" returns every product whose description happens
-      // to mention "compressed", "implements", "moments", "elements",
-      // "agreement", "improvements" etc. (because "men" is a substring
-      // of all of them) — which is exactly why customers see a near-
-      // random handful of unrelated products and the same shuffle
-      // every time. Same trap for "ring" matching "stringent" /
-      // "interesting", "charge" matching "discharger", etc.
+      // title — not anywhere in the middle, and not in description or
+      // category. Description used to be part of the haystack, but
+      // AliExpress descriptions are SEO-stuffed marketing copy — words
+      // like "TikTok trending", "Hot sale", "Viral on TikTok" appear
+      // in descriptions of completely unrelated products (Robot car,
+      // tissue box, body scrubber). That meant searching "TikTok"
+      // returned a near-random pile of products whose actual subject
+      // had nothing to do with TikTok. Searching only the title kills
+      // that noise — customers find products whose title says what they
+      // typed.
       //
-      // Implementation: pad the haystack with a leading space, then use
+      // Implementation: pad the title with a leading space, then use
       // LIKE '% w%' instead of LIKE '%w%'. The leading-space requirement
       // means the pattern only matches when w sits at a word boundary.
       // Punctuation is stripped from both sides so "Mens" finds "Men's"
@@ -140,11 +142,11 @@ export default async function handler(req, res) {
           .replace(/[^a-z0-9 ]/g, ' ')     // strip ALL punctuation, leave a-z0-9 + space
           .split(/\s+/)
           .filter(w => w.length > 2)       // drop noise
-        // Normalised haystack: title + description + category, lowercased,
-        // punctuation stripped, with a leading space prepended so the
-        // very first word also has a space before it (required for the
-        // word-boundary match below).
-        const haystack = `(' ' || regexp_replace(LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '')), '[^a-z0-9 ]', '', 'g'))`
+        // Normalised haystack: title only, lowercased, punctuation
+        // stripped, with a leading space prepended so the very first
+        // word also has a space before it (required for the word-
+        // boundary match below).
+        const haystack = `(' ' || regexp_replace(LOWER(COALESCE(title, '')), '[^a-z0-9 ]', '', 'g'))`
         for (const w of words) {
           // ' w%' = match w at a word boundary (a space immediately
           // precedes it). "men" matches "men", "mens", "menswear" but
