@@ -687,7 +687,15 @@ export default function StorefrontPage({ subdomain }) {
       <div className="mx-auto max-w-7xl px-4 py-4">
 
         {/* Products */}
-        {filteredProducts.length === 0 ? (
+        {searchQuery && filterLoading ? (
+          // Search request in flight — hide stale products so the
+          // customer doesn't see dimmed unrelated cards and assume
+          // the search matched nothing useful. Plain spinner instead.
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-slate-400 mb-3" />
+            <p className="text-sm text-slate-400">Searching for "{searchQuery}"…</p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
           <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} py-16 text-center shadow-sm`}>
             <Package className="mx-auto h-16 w-16 text-gray-300 mb-3" />
             <h3 className={`text-lg font-semibold ${theme.textPrimary} mb-1`}>
