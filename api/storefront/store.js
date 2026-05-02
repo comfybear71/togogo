@@ -119,7 +119,30 @@ export default async function handler(req, res) {
       else if (priceRange === '10to20') whereExtra += ` AND sale_price >= ${t10s} AND sale_price < ${t20s}`
       else if (priceRange === '20to50') whereExtra += ` AND sale_price >= ${t20s} AND sale_price < ${t50s}`
       else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
-      if (search) whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/%/g, '')}%'`
+      // Word-by-word search across title + description + category.
+      // Each word in the query must appear SOMEWHERE in the searchable
+      // text — not necessarily contiguous and not in the same order.
+      // So "tiktok ring" matches a product titled "Selfie Ring Light
+      // for TikTok Phone Holder" even though the literal substring
+      // "tiktok ring" isn't in the title. Common words ≤2 chars are
+      // dropped (the/of/in/etc) so a single noisy word doesn't ruin
+      // the result. Each word is sanitised individually for SQL.
+      if (search) {
+        const words = search.toLowerCase()
+          .replace(/[%_]/g, ' ')           // strip SQL wildcard chars
+          .split(/\s+/)
+          .map(w => w.replace(/'/g, "''")) // SQL-escape per word
+          .filter(w => w.length > 2)       // drop noise
+        for (const w of words) {
+          whereExtra += ` AND LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '')) LIKE '%${w}%'`
+        }
+        // If every word was noise (e.g. user typed "of in"), fall
+        // back to a basic title substring on the original input so
+        // the search isn't silently a no-op.
+        if (words.length === 0) {
+          whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/[%_]/g, '')}%'`
+        }
+      }
     }
 
     // Build ORDER BY. Default 'featured' is a true per-request random
