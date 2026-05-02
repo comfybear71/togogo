@@ -699,7 +699,9 @@ export default function StorefrontPage({ subdomain }) {
           <div className={`rounded-2xl ${theme.cardBg} ${theme.cardBorder} py-16 text-center shadow-sm`}>
             <Package className="mx-auto h-16 w-16 text-gray-300 mb-3" />
             <h3 className={`text-lg font-semibold ${theme.textPrimary} mb-1`}>
-              {storeData.products.length === 0 ? 'Coming Soon' : 'No matches'}
+              {searchQuery
+                ? `No matches for "${searchQuery}"`
+                : storeData.products.length === 0 ? 'Coming Soon' : 'No matches'}
             </h3>
             <p className={`text-sm ${theme.textSecondary}`}>
               {storeData.products.length === 0
