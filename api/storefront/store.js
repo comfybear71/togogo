@@ -206,8 +206,16 @@ export default async function handler(req, res) {
     const storeNiches = Array.isArray(store.niches) && store.niches.length > 0
       ? store.niches
       : (store.niche ? [store.niche] : [])
+    // Also admit products that have NO niches set (niches IS NULL or
+    // cardinality 0). Without this, products manually added before the
+    // /api/my-shop/products/add niche-tagging fix landed are stuck with
+    // niches=[] and never overlap the store's niches array, leaving
+    // them invisible on the storefront. Tenant isolation is already
+    // enforced by ownerWhere, so a product owned by this store with no
+    // niche tag is reasonably "show in any niche of this store" rather
+    // than "hide forever".
     const nicheWhere = storeNiches.length > 0
-      ? ` AND niches && ARRAY[${storeNiches.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',')}]::TEXT[]`
+      ? ` AND (niches IS NULL OR cardinality(niches) = 0 OR niches && ARRAY[${storeNiches.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',')}]::TEXT[])`
       : ''
 
     // Price integrity gate: only surface products that have been priced
