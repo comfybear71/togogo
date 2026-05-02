@@ -119,33 +119,43 @@ export default async function handler(req, res) {
       else if (priceRange === '10to20') whereExtra += ` AND sale_price >= ${t10s} AND sale_price < ${t20s}`
       else if (priceRange === '20to50') whereExtra += ` AND sale_price >= ${t20s} AND sale_price < ${t50s}`
       else if (priceRange === 'over50') whereExtra += ` AND sale_price >= ${t50s}`
-      // Word-by-word search across title + description + category.
-      // Each word in the query must appear SOMEWHERE in the searchable
-      // text — not necessarily contiguous and not in the same order.
-      // So "tiktok ring" matches a product titled "Selfie Ring Light
-      // for TikTok Phone Holder". Punctuation (apostrophes, hyphens,
-      // commas) is stripped from BOTH sides of the comparison so
-      // "Mens" finds "Men's", "antislip" finds "anti-slip", and
-      // "tiktok" finds "tik-tok". Common words ≤2 chars are dropped
-      // (the/of/in/etc) so a single noisy word doesn't ruin results.
+      // Word-PREFIX search across title + description + category.
+      // Each search word must appear as the START OF A WORD in the
+      // searchable text — not anywhere in the middle. Without this,
+      // searching "men" returns every product whose description happens
+      // to mention "compressed", "implements", "moments", "elements",
+      // "agreement", "improvements" etc. (because "men" is a substring
+      // of all of them) — which is exactly why customers see a near-
+      // random handful of unrelated products and the same shuffle
+      // every time. Same trap for "ring" matching "stringent" /
+      // "interesting", "charge" matching "discharger", etc.
+      //
+      // Implementation: pad the haystack with a leading space, then use
+      // LIKE '% w%' instead of LIKE '%w%'. The leading-space requirement
+      // means the pattern only matches when w sits at a word boundary.
+      // Punctuation is stripped from both sides so "Mens" finds "Men's"
+      // and "antislip" finds "anti-slip".
       if (search) {
         const words = search.toLowerCase()
           .replace(/[^a-z0-9 ]/g, ' ')     // strip ALL punctuation, leave a-z0-9 + space
           .split(/\s+/)
           .filter(w => w.length > 2)       // drop noise
         // Normalised haystack: title + description + category, lowercased,
-        // with every non-alphanumeric character removed. So "Men's" and
-        // "anti-slip" become "mens" and "antislip" before the LIKE.
-        const haystack = `regexp_replace(LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '')), '[^a-z0-9 ]', '', 'g')`
+        // punctuation stripped, with a leading space prepended so the
+        // very first word also has a space before it (required for the
+        // word-boundary match below).
+        const haystack = `(' ' || regexp_replace(LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '')), '[^a-z0-9 ]', '', 'g'))`
         for (const w of words) {
-          whereExtra += ` AND ${haystack} LIKE '%${w}%'`
+          // ' w%' = match w at a word boundary (a space immediately
+          // precedes it). "men" matches "men", "mens", "menswear" but
+          // NOT "compressed", "moments", "improvements".
+          whereExtra += ` AND ${haystack} LIKE '% ${w}%'`
         }
         // If every word was noise (e.g. user typed "of in"), fall
-        // back to a basic title substring on the original input so
-        // the search isn't silently a no-op.
+        // back to a word-boundary match on the original input.
         if (words.length === 0) {
           const fallback = search.toLowerCase().replace(/[^a-z0-9]/g, '')
-          if (fallback) whereExtra += ` AND ${haystack} LIKE '%${fallback}%'`
+          if (fallback) whereExtra += ` AND ${haystack} LIKE '% ${fallback}%'`
         }
       }
     }
