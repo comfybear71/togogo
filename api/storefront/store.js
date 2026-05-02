@@ -123,24 +123,29 @@ export default async function handler(req, res) {
       // Each word in the query must appear SOMEWHERE in the searchable
       // text — not necessarily contiguous and not in the same order.
       // So "tiktok ring" matches a product titled "Selfie Ring Light
-      // for TikTok Phone Holder" even though the literal substring
-      // "tiktok ring" isn't in the title. Common words ≤2 chars are
-      // dropped (the/of/in/etc) so a single noisy word doesn't ruin
-      // the result. Each word is sanitised individually for SQL.
+      // for TikTok Phone Holder". Punctuation (apostrophes, hyphens,
+      // commas) is stripped from BOTH sides of the comparison so
+      // "Mens" finds "Men's", "antislip" finds "anti-slip", and
+      // "tiktok" finds "tik-tok". Common words ≤2 chars are dropped
+      // (the/of/in/etc) so a single noisy word doesn't ruin results.
       if (search) {
         const words = search.toLowerCase()
-          .replace(/[%_]/g, ' ')           // strip SQL wildcard chars
+          .replace(/[^a-z0-9 ]/g, ' ')     // strip ALL punctuation, leave a-z0-9 + space
           .split(/\s+/)
-          .map(w => w.replace(/'/g, "''")) // SQL-escape per word
           .filter(w => w.length > 2)       // drop noise
+        // Normalised haystack: title + description + category, lowercased,
+        // with every non-alphanumeric character removed. So "Men's" and
+        // "anti-slip" become "mens" and "antislip" before the LIKE.
+        const haystack = `regexp_replace(LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '')), '[^a-z0-9 ]', '', 'g')`
         for (const w of words) {
-          whereExtra += ` AND LOWER(COALESCE(title, '') || ' ' || COALESCE(description, '') || ' ' || COALESCE(category, '')) LIKE '%${w}%'`
+          whereExtra += ` AND ${haystack} LIKE '%${w}%'`
         }
         // If every word was noise (e.g. user typed "of in"), fall
         // back to a basic title substring on the original input so
         // the search isn't silently a no-op.
         if (words.length === 0) {
-          whereExtra += ` AND LOWER(title) LIKE '%${search.toLowerCase().replace(/'/g, "''").replace(/[%_]/g, '')}%'`
+          const fallback = search.toLowerCase().replace(/[^a-z0-9]/g, '')
+          if (fallback) whereExtra += ` AND ${haystack} LIKE '%${fallback}%'`
         }
       }
     }
@@ -203,7 +208,10 @@ export default async function handler(req, res) {
     //   3. min_variant_price_usd>0  → we actually have a real variant price,
     //                                 not just a timestamp from a skipped
     //                                 rebuild attempt
-    const pricedWhere = ` AND variants_updated_at IS NOT NULL AND price_currency = 'USD' AND COALESCE(min_variant_price_usd, 0) > 0`
+    // OR: freshly-added product (last 6h) with at least a sale_price set —
+    // so a store owner who clicks "Add to my shop" doesn't have to wait
+    // for the every-minute rebuild cron before their product is findable.
+    const pricedWhere = ` AND ((variants_updated_at IS NOT NULL AND price_currency = 'USD' AND COALESCE(min_variant_price_usd, 0) > 0) OR (created_at > NOW() - INTERVAL '6 hours' AND COALESCE(sale_price, 0) > 0))`
 
     // Get total product count (with filters applied)
     const countResult = await sql.query(
