@@ -326,9 +326,17 @@ export default async function handler(req, res) {
       createdAt: p.created_at,
     }})
 
-    // If the owner has no custom products, fetch live AliExpress products
-    // so the store always has something to display
-    if (products.length === 0) {
+    // True-empty-store fallback: only run when the store has zero
+    // products AT ALL and the customer has no filters applied. Earlier
+    // versions ran this whenever `products.length === 0`, which fired on
+    // every search that returned no matches — silently dumping a generic
+    // AliExpress catalog onto the customer that wasn't tenant-scoped or
+    // niche-scoped, and making every "no match" search look like cross-
+    // store bleed. Now: if the customer is searching/filtering and there
+    // are no matches, the storefront will correctly show "No matches"
+    // (handled by the frontend) instead of swapping in unrelated AE feed.
+    const hasUserFilters = !!(category || priceRange || search || productId)
+    if (products.length === 0 && !hasUserFilters) {
       try {
         console.log(`[Storefront] Store "${subdomain}" has no owner products — fetching AliExpress products`)
         const aliProducts = await searchAliExpress('', 1)

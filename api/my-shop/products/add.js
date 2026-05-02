@@ -87,8 +87,29 @@ export default async function handler(req, res) {
     }
 
     const imgArray = Array.isArray(details.images) ? details.images : []
-    const nichesArr = niche ? [String(niche)] : []
     const cat = category && typeof category === 'string' ? category : 'General'
+
+    // Tag the new product with the store's current niches[] so it
+    // passes the storefront's niche-overlap filter immediately. Without
+    // this, a manually-added product gets niches=[] and is INVISIBLE on
+    // the storefront — which is what Stuart hit on stu.togogo.me when
+    // adding a TikTok ring and a Men's Arch Support shoe and finding
+    // they couldn't be searched. The store's niches[] is the source of
+    // truth for what the storefront will display, so copying it onto
+    // the product guarantees visibility regardless of which niche bucket
+    // the customer is currently filtering by. If the caller passed an
+    // explicit `niche`, we honour that too (used by AI Builder paths).
+    const { rows: storeRows } = await sql`
+      SELECT niches, niche FROM user_stores WHERE user_id = ${user.id} LIMIT 1
+    `
+    const storeNiches = Array.isArray(storeRows[0]?.niches) ? storeRows[0].niches : []
+    const legacyNiche = storeRows[0]?.niche
+    const baseNiches = storeNiches.length > 0
+      ? storeNiches
+      : (legacyNiche ? [legacyNiche] : [])
+    const nichesArr = niche
+      ? Array.from(new Set([...baseNiches, String(niche)]))
+      : baseNiches
 
     const { rows } = await sql`
       INSERT INTO user_products (
