@@ -1468,17 +1468,26 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInpu
   // Right-half coloured with the store's chosen theme.accent so the
   // wordmark blends into the rest of the storefront palette. Falls
   // back to the platform name when store_name is unset.
+  //
+  // Wordmark is a plain <a href="/"> so customers landing on a
+  // product page from an external link (Facebook ad, shared URL,
+  // etc.) always have a one-tap path back to the storefront grid.
+  // Using a real anchor (not a button) means it works from every
+  // sub-view (cart, checkout, success, product detail) without
+  // having to pipe a callback prop through each one.
   const [brandLeft, brandRight] = splitBrand(store?.name || '')
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
         <div className="flex items-center gap-1.5 flex-shrink-0 max-w-[40%] sm:max-w-none">
-          <span
-            className="text-base font-bold tracking-tight text-white truncate"
-            title={store?.name || 'ToGoGo'}
+          <a
+            href="/"
+            className="text-base font-bold tracking-tight text-white truncate hover:opacity-80 transition-opacity"
+            title={`${store?.name || 'ToGoGo'} — back to home`}
+            aria-label={`${store?.name || 'ToGoGo'} home`}
           >
             {brandLeft}<span style={{ color: theme?.accent || '#FF6B35' }}>{brandRight}</span>
-          </span>
+          </a>
         </div>
         {/* Search bar in header */}
         <div className="relative flex-1 min-w-0">
