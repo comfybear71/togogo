@@ -1092,37 +1092,54 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
   // where break_even_total = product + shipping + 10% tax.
   //
   // The list page applied this markup server-side to product.price
-  // (sale_price comes back pre-marked-up from /api/storefront/store).
-  // Here on the detail page we also need the live variant price, so we
-  // re-derive break-even and apply markup once.
+  // Customer-facing pricing — all in AUD, derived by proportional
+  // scaling from product.price (the storefront's known-correct AUD
+  // price for the cheapest variant). This avoids the unit-confusion
+  // bug the previous version hit: it computed displayPrice in USD
+  // (breakEvenTotal × markupMultiplier) and rendered it as "A$X",
+  // silently dropping the USD→AUD conversion. Customers added to
+  // cart at the USD figure and got surprised when checkout charged
+  // the proper AUD figure (~1.45× higher).
   //
-  // Matches api/_lib/pricing.js → breakEvenUsd on the break-even side,
-  // and user_stores.markup_percent on the markup side.
+  // Math:
+  //   product.price          = AUD for cheapest-variant break-even × markup × audRate
+  //   product.breakEvenUsd   = USD break-even (cost+ship+tax) for cheapest variant
+  //   variantBreakEvenUsd    = (selectedVariant.priceUsd + shipping) × (1+TAX_RATE)
+  //   displayPrice (AUD)     = product.price × variantBreakEvenUsd / product.breakEvenUsd
+  // Only the *ratio* of break-evens matters — markup and audRate cancel
+  // out, so we never have to know audRate on the frontend at all.
   const TAX_RATE = 0.10
-  const markupPercent = parseFloat(store?.markupPercent ?? 40) || 0
-  const markupMultiplier = 1 + markupPercent / 100
   const productShippingUsd = Number(product.shipping) || 0
   const basePrice = Number(product.price) || 0
+  const baseBreakEvenUsd = Number(product.breakEvenUsd) || 0
   const selectedProductUsd = selectedVariant?.priceUsd > 0 ? selectedVariant.priceUsd : null
-  // Derive break-even product cost when no variant is selected.
-  // product.price from the API is ALREADY marked up, so strip markup
-  // first, then strip shipping, then reverse the 10% tax:
-  //   basePrice      = (breakEvenProduct + shipping) × (1 + TAX_RATE) × markupMultiplier
-  //   breakEvenTotal = basePrice / markupMultiplier
-  //   breakEvenProduct = breakEvenTotal / (1 + TAX_RATE) − shipping
-  const breakEvenTotalFromBase = markupMultiplier > 0 ? basePrice / markupMultiplier : basePrice
-  const baseProductDerived = Math.max(0, (breakEvenTotalFromBase / (1 + TAX_RATE)) - productShippingUsd)
-  const breakEvenProductUsd = selectedProductUsd != null ? selectedProductUsd : baseProductDerived
+  // Variant break-even in USD for the currently-selected variant.
+  // When no variant is picked, fall back to the base break-even so
+  // displayPrice == basePrice exactly (no math drift).
+  const variantBreakEvenUsd = selectedProductUsd != null
+    ? (selectedProductUsd + productShippingUsd) * (1 + TAX_RATE)
+    : baseBreakEvenUsd
+  const breakEvenProductUsd = selectedProductUsd != null
+    ? selectedProductUsd
+    : Math.max(0, baseBreakEvenUsd / (1 + TAX_RATE) - productShippingUsd)
   const breakEvenShippingUsd = productShippingUsd
   const breakEvenTaxUsd = Math.round((breakEvenProductUsd + breakEvenShippingUsd) * TAX_RATE * 100) / 100
-  const breakEvenTotal = breakEvenProductUsd + breakEvenShippingUsd + breakEvenTaxUsd
-  // Customer-facing figures — break-even × markup, rounded cleanly.
-  const displayPrice = Math.round(breakEvenTotal * markupMultiplier * 100) / 100
-  const displayProductUsd = Math.round(breakEvenProductUsd * markupMultiplier * 100) / 100
-  const displayShippingUsd = Math.round(breakEvenShippingUsd * markupMultiplier * 100) / 100
-  // Derive displayed tax so the three lines sum to displayPrice cleanly
-  // regardless of rounding artefacts.
-  const displayTaxUsd = Math.round((displayPrice - displayProductUsd - displayShippingUsd) * 100) / 100
+  // Customer-facing total — proportional scale of basePrice.
+  const displayPrice = (basePrice > 0 && baseBreakEvenUsd > 0)
+    ? Math.round((basePrice * variantBreakEvenUsd / baseBreakEvenUsd) * 100) / 100
+    : basePrice
+  // Per-line breakdown: split displayPrice across product / shipping /
+  // tax in proportion to their USD shares of the variant break-even,
+  // so the three lines always sum exactly to displayPrice (AUD).
+  const displayProductAud = variantBreakEvenUsd > 0
+    ? Math.round((breakEvenProductUsd / variantBreakEvenUsd) * displayPrice * 100) / 100
+    : 0
+  const displayShippingAud = variantBreakEvenUsd > 0
+    ? Math.round((breakEvenShippingUsd / variantBreakEvenUsd) * displayPrice * 100) / 100
+    : 0
+  // Derived so the three lines sum to displayPrice exactly regardless
+  // of rounding artefacts.
+  const displayTaxAud = Math.round((displayPrice - displayProductAud - displayShippingAud) * 100) / 100
   const hasVariants = (details?.variants?.length > 1) || (Array.isArray(product.variants) && product.variants.length > 1)
   const needsVariantChoice = hasVariants && !selectedVariant
   const availableStock = selectedVariant?.stock ?? null
@@ -1163,15 +1180,15 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
             <div className="text-xs text-slate-400 mb-3 space-y-0.5">
               <div className="flex justify-between max-w-[240px]">
                 <span>Product</span>
-                <span className="tabular-nums">A${displayProductUsd.toFixed(2)}</span>
+                <span className="tabular-nums">A${displayProductAud.toFixed(2)}</span>
               </div>
               <div className="flex justify-between max-w-[240px]">
                 <span>Shipping</span>
-                <span className="tabular-nums">A${displayShippingUsd.toFixed(2)}</span>
+                <span className="tabular-nums">A${displayShippingAud.toFixed(2)}</span>
               </div>
               <div className="flex justify-between max-w-[240px]">
                 <span>Est. tax</span>
-                <span className="tabular-nums">A${displayTaxUsd.toFixed(2)}</span>
+                <span className="tabular-nums">A${displayTaxAud.toFixed(2)}</span>
               </div>
             </div>
             {selectedVariant && (
@@ -1675,13 +1692,13 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
             than what the customer saw in their cart. They confirm or
             cancel; no silent price increases. */}
         {priceDrift && (
-          <div className="mb-5 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4">
-            <p className="text-sm font-semibold text-amber-300 mb-1">Price updated at checkout</p>
-            <p className="text-xs text-amber-200/80 mb-3">
-              AliExpress changed the price while you were browsing.
+          <div className="mb-5 rounded-xl border-2 border-amber-500 bg-amber-50 p-4 shadow-sm">
+            <p className="text-sm font-bold text-amber-900 mb-1">Price updated at checkout</p>
+            <p className="text-sm text-slate-800 mb-3">
+              AliExpress changed the price while you were browsing.{' '}
               Previous: <span className="tabular-nums">A${priceDrift.oldTotalUsd.toFixed(2)}</span>
               {' → '}
-              New: <span className="tabular-nums font-semibold">A${priceDrift.newTotalUsd.toFixed(2)}</span>
+              New: <span className="tabular-nums font-bold text-amber-900">A${priceDrift.newTotalUsd.toFixed(2)}</span>
             </p>
             <div className="flex gap-2">
               <button
@@ -1694,7 +1711,7 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
               <button
                 type="button"
                 onClick={() => { setPriceDrift(null); onBack() }}
-                className="rounded-lg border border-white/[0.1] px-4 py-2 text-xs text-slate-300 hover:bg-white/[0.04]"
+                className="rounded-lg border-2 border-amber-500 px-4 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"
               >
                 Back to cart
               </button>
