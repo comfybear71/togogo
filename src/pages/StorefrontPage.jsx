@@ -535,7 +535,20 @@ export default function StorefrontPage({ subdomain }) {
   // ─── Product Grid (default view) ───────────────────────────────────
   return (
     <div className={`min-h-screen ${theme.pageBg}`} style={{ overflowX: 'clip' }}>
-      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} searchInput={searchInput} onSearchChange={(e) => { setSearchInput(e.target.value); clearTimeout(searchTimerRef.current); searchTimerRef.current = setTimeout(() => setSearchQuery(e.target.value), 1000) }} />
+      <StoreHeader store={store} cart={cart} theme={theme} onCartClick={() => navigateTo('cart')} onTrackOrder={() => navigateTo('orders')} searchInput={searchInput} onSearchChange={(e) => {
+        const v = e.target.value
+        setSearchInput(v)
+        clearTimeout(searchTimerRef.current)
+        // Clearing the search bar (empty value, e.g. via the X button)
+        // should reset results immediately — debouncing the empty
+        // string would leave the previous filter applied for a second
+        // and feels broken to customers.
+        if (v === '') {
+          setSearchQuery('')
+        } else {
+          searchTimerRef.current = setTimeout(() => setSearchQuery(v), 1000)
+        }
+      }} />
 
       {/* New Arrivals — horizontal scroll like AliExpress */}
       {allProducts.length > 0 && (
@@ -1503,64 +1516,102 @@ function StoreHeader({ store, cart, theme, onCartClick, onTrackOrder, searchInpu
   // sub-view (cart, checkout, success, product detail) without
   // having to pipe a callback prop through each one.
   const [brandLeft, brandRight] = splitBrand(store?.name || '')
+  // Search bar is hoisted into a const so we can render it in two
+  // different positions without duplicating markup. On mobile it sits
+  // on its own row below the brand+actions (full width). On desktop
+  // it lives between the brand and the actions, single-row.
+  const searchBar = onSearchChange ? (
+    <div className="relative w-full min-w-0">
+      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+      <input
+        type="text"
+        placeholder="Search products..."
+        value={searchInput || ''}
+        onChange={onSearchChange}
+        onKeyDown={(e) => { if (e.key === ' ') e.stopPropagation() }}
+        className="w-full rounded-full border border-white/[0.12] py-2 pl-10 pr-10 text-sm text-white bg-white/[0.06] placeholder-slate-500"
+        style={{ fontSize: '16px', outline: 'none' }}
+        onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
+        onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
+      />
+      {/* Clear button — only when there's text. Synthesises an empty-
+          value change event so the parent's onSearchChange handler
+          updates state through its existing path. */}
+      {searchInput && (
+        <button
+          type="button"
+          onClick={() => onSearchChange({ target: { value: '' } })}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Clear search"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  ) : null
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-[#0f172a]/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5">
-        <div className="flex items-center gap-1.5 flex-shrink-0 max-w-[40%] sm:max-w-none">
-          <a
-            href="/"
-            className="text-base font-bold tracking-tight text-white truncate hover:opacity-80 transition-opacity"
-            title={`${store?.name || 'ToGoGo'} — back to home`}
-            aria-label={`${store?.name || 'ToGoGo'} home`}
-          >
-            {brandLeft}<span style={{ color: theme?.accent || '#FF6B35' }}>{brandRight}</span>
-          </a>
-        </div>
-        {/* Search bar in header */}
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            placeholder="Search products..."
-            value={searchInput || ''}
-            onChange={onSearchChange}
-            onKeyDown={(e) => { if (e.key === ' ') e.stopPropagation() }}
-            className="w-full rounded-full border border-white/[0.12] py-2 pl-10 pr-4 text-sm text-white bg-white/[0.06] placeholder-slate-500"
-            style={{ fontSize: '16px', outline: 'none' }}
-            onFocus={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.3)'}
-            onBlur={(e) => e.target.style.borderColor = 'rgba(255,255,255,0.12)'}
-          />
-        </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          {onTrackOrder && (
-            <button
-              onClick={onTrackOrder}
+      <div className="mx-auto max-w-7xl px-4 py-2.5">
+        {/* Single row on desktop (≥ sm). On mobile the search bar
+            wraps to a second row below brand + actions because
+            crammed into one row it left only a few characters of
+            input visible. */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 flex-shrink-0 min-w-0">
+            <a
+              href="/"
+              className="text-base font-bold tracking-tight text-white truncate hover:opacity-80 transition-opacity"
+              title={`${store?.name || 'ToGoGo'} — back to home`}
+              aria-label={`${store?.name || 'ToGoGo'} home`}
+            >
+              {brandLeft}<span style={{ color: theme?.accent || '#FF6B35' }}>{brandRight}</span>
+            </a>
+          </div>
+          {/* Desktop-only search slot — hidden on mobile (where the
+              search renders below). Flex-1 so it eats the remaining
+              middle space. */}
+          {searchBar && (
+            <div className="hidden sm:block flex-1 min-w-0">
+              {searchBar}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 ml-auto">
+            {onTrackOrder && (
+              <button
+                onClick={onTrackOrder}
+                className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
+              >
+                <Package className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Track Order</span>
+              </button>
+            )}
+            <a
+              href="/auth"
               className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
             >
-              <Package className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Track Order</span>
+              Sign In
+            </a>
+            <button
+              onClick={onCartClick}
+              className="relative flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 text-sm font-medium text-white transition-colors"
+              style={{ backgroundColor: theme.accent }}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Cart</span>
+              {cart.count > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white bg-red-500">
+                  {cart.count}
+                </span>
+              )}
             </button>
-          )}
-          <a
-            href="/auth"
-            className="flex items-center gap-1.5 rounded-xl px-2 sm:px-3 py-2 text-xs sm:text-sm text-slate-300 hover:text-white transition-colors border border-white/[0.08] hover:border-white/[0.15]"
-          >
-            Sign In
-          </a>
-          <button
-            onClick={onCartClick}
-            className="relative flex items-center gap-2 rounded-xl px-3 sm:px-4 py-2 text-sm font-medium text-white transition-colors"
-            style={{ backgroundColor: theme.accent }}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            <span className="hidden sm:inline">Cart</span>
-            {cart.count > 0 && (
-              <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white bg-red-500">
-                {cart.count}
-              </span>
-            )}
-          </button>
+          </div>
         </div>
+        {/* Mobile-only search slot — full width below the top row. */}
+        {searchBar && (
+          <div className="sm:hidden mt-2">
+            {searchBar}
+          </div>
+        )}
       </div>
     </header>
   )
