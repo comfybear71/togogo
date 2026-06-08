@@ -304,6 +304,11 @@ export async function initializeSchema() {
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS orders_count INTEGER DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS original_price NUMERIC(10,2) DEFAULT 0` } catch { /* */ }
   try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS discount_percent INTEGER DEFAULT 0` } catch { /* */ }
+  // Store owner visibility control — hide products from their storefront without deleting
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS visible_to_storefront BOOLEAN DEFAULT true` } catch { /* */ }
+  // Cache real shipping cost (USD) per product, updated when owner checks shipping
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS shipping_cost_usd NUMERIC(10,2)` } catch { /* */ }
+  try { await sql`ALTER TABLE user_products ADD COLUMN IF NOT EXISTS shipping_checked_at TIMESTAMPTZ` } catch { /* */ }
 
   // Fix store_customers table — previous session created it with wrong columns (had password_hash)
   try {

@@ -27,7 +27,8 @@ export default async function handler(req, res) {
       const { rows: products } = await sql`
         SELECT id, title, description, image, images, supplier, supplier_product_id,
                supplier_url, supplier_cost, sale_price, category, is_active,
-               platforms_listed, total_sold, total_revenue, created_at
+               platforms_listed, total_sold, total_revenue, visible_to_storefront,
+               shipping_cost_usd, shipping_checked_at, created_at
         FROM user_products
         WHERE user_id = ${user.id}
         ORDER BY created_at DESC
@@ -83,9 +84,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // PATCH — update product (price, active status, etc.)
+  // PATCH — update product (price, active status, visibility, etc.)
   if (req.method === 'PATCH') {
-    const { id, salePrice, isActive, category } = req.body
+    const { id, salePrice, isActive, category, visibleToStorefront } = req.body
     if (!id) return res.status(400).json({ error: 'Product ID required' })
 
     try {
@@ -97,6 +98,9 @@ export default async function handler(req, res) {
       }
       if (category !== undefined) {
         await sql`UPDATE user_products SET category = ${category}, updated_at = NOW() WHERE id = ${id} AND user_id = ${user.id}`
+      }
+      if (visibleToStorefront !== undefined) {
+        await sql`UPDATE user_products SET visible_to_storefront = ${Boolean(visibleToStorefront)}, updated_at = NOW() WHERE id = ${id} AND user_id = ${user.id}`
       }
       return res.json({ success: true })
     } catch (err) {

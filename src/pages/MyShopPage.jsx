@@ -5,6 +5,7 @@ import {
   Store, CreditCard, DollarSign, ArrowRight, AlertTriangle,
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import MyProductsManager from '../components/client/MyProductsManager'
 
 // The client dashboard HOME page. Designed for elderly users:
 //   - Friendly welcome, plain language.
