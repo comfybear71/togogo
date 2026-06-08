@@ -23,6 +23,7 @@ export default function AEOAuthTokenWidget() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [authLoading, setAuthLoading] = useState(false)
   const [error, setError] = useState(null)
 
   async function load() {
@@ -57,6 +58,42 @@ export default function AEOAuthTokenWidget() {
       setError(err.message)
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  async function reauthorize() {
+    if (authLoading) return
+    setAuthLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/ae-auth-url`, { headers: getAuthHeaders() })
+      const data = await res.json()
+      if (data.auth_url) {
+        // Open AliExpress auth URL in new window
+        const authWindow = window.open(data.auth_url, 'AliExpress Auth', 'width=800,height=600')
+        // Poll for redirect completion
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusRes = await fetch(`${API_BASE}/api/admin/ae-token-status`, { headers: getAuthHeaders() })
+            const statusData = await statusRes.json()
+            if (statusData.present && statusData.status !== 'missing') {
+              clearInterval(pollInterval)
+              authWindow?.close()
+              await load()
+            }
+          } catch (e) {
+            // Continue polling
+          }
+        }, 1000)
+        // Stop polling after 3 minutes
+        setTimeout(() => clearInterval(pollInterval), 180000)
+      } else {
+        setError(data.error || 'Failed to get authorization URL')
+      }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAuthLoading(false)
     }
   }
 
@@ -138,14 +175,15 @@ export default function AEOAuthTokenWidget() {
             {refreshing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
             Refresh
           </button>
-          <a
-            href="/api/platforms/callback/aliexpress"
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-black px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/[0.04]"
+          <button
+            onClick={reauthorize}
+            disabled={authLoading}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-black px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
             title="Re-authorize if auto-refresh stops working"
           >
-            <ExternalLink className="h-3 w-3" />
+            {authLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
             Re-auth
-          </a>
+          </button>
         </div>
       </div>
     </div>
