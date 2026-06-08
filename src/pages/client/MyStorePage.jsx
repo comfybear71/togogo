@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 import { STOREFRONT_THEMES } from '../../lib/storefrontThemes'
+import MyProductsManager from '../../components/client/MyProductsManager'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -120,7 +121,7 @@ export default function MyStorePage() {
       <StoreDetailsCard store={store} onSave={patchStore} />
       <MarkupCard store={store} onSave={patchStore} />
       <ThemeCard store={store} onSave={patchStore} />
-      <ProductsCard products={products} />
+      <ProductsCard products={products} token={token} onUpdate={load} />
       <ResetShopCard productCount={products.length} token={token} onReset={load} />
     </div>
   )
@@ -355,45 +356,25 @@ function ThemeSwatch({ theme }) {
   )
 }
 
-function ProductsCard({ products }) {
+function ProductsCard({ products, token, onUpdate }) {
   const count = products.length
   return (
     <Card icon={Package} title="Your products">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-[17px] text-zinc-300">
-          You have <strong className="text-white">{count}</strong> product{count === 1 ? '' : 's'}.
-        </div>
-        <Link
-          to="/my-shop/browse"
-          className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] px-4 py-2 text-[15px] font-semibold text-white hover:bg-white/[0.06] min-h-[44px]"
-        >
-          Browse more
-        </Link>
-      </div>
-
+      <p className="text-[15px] text-zinc-400 mb-4">
+        Manage your {count} product{count === 1 ? '' : 's'} below. Hide products with expensive shipping or that don't sell.
+      </p>
       {count === 0 ? (
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-6 text-center">
           <div className="text-[16px] text-zinc-400">No products added yet.</div>
+          <Link
+            to="/my-shop/browse"
+            className="inline-flex items-center gap-2 rounded-xl border border-white/[0.12] px-4 py-2 text-[15px] font-semibold text-white hover:bg-white/[0.06] min-h-[44px] mt-4"
+          >
+            Add products
+          </Link>
         </div>
       ) : (
-        <ul className="divide-y divide-white/[0.04]">
-          {products.slice(0, 12).map(p => (
-            <li key={p.id} className="flex items-center gap-3 py-3">
-              {p.image && (
-                <img src={p.image} alt="" className="h-12 w-12 rounded-lg object-cover flex-shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="text-[16px] text-white truncate">{p.title}</div>
-                <div className="text-[14px] text-zinc-500">US ${parseFloat(p.sale_price || 0).toFixed(2)}</div>
-              </div>
-            </li>
-          ))}
-          {count > 12 && (
-            <li className="py-3 text-[14px] text-zinc-500 text-center">
-              +{count - 12} more
-            </li>
-          )}
-        </ul>
+        <MyProductsManager products={products} token={token} onUpdate={onUpdate} />
       )}
     </Card>
   )
