@@ -7,6 +7,32 @@ import {
 import { getThemeById, DEFAULT_THEME_ID } from '../lib/storefrontThemes'
 import { splitBrand } from '../lib/brand'
 
+// Subtle, copyable SKU chip shown on every storefront card. Kept faint/grey
+// so it doesn't shout at customers, but lets the owner browsing their own shop
+// tap it to copy the AliExpress SKU, paste it into the backend, and remove a
+// bad product. Tap (or long-press) to copy.
+function SkuChip({ sku }) {
+  const [copied, setCopied] = useState(false)
+  const clean = String(sku || '').replace('ae_', '')
+  if (!clean) return null
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation()
+        try { navigator.clipboard?.writeText(clean) } catch { /* ignore */ }
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1200)
+      }}
+      className="mt-1 inline-flex max-w-full items-center gap-1 text-[10px] font-mono text-slate-400/70 hover:text-slate-200 select-all"
+      title="Tap to copy SKU"
+    >
+      {copied
+        ? <><Check className="h-3 w-3 flex-shrink-0 text-emerald-400" /><span>Copied!</span></>
+        : <><Copy className="h-3 w-3 flex-shrink-0 opacity-70" /><span className="truncate">{clean}</span></>}
+    </button>
+  )
+}
+
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 // Theme is now loaded from the store's database record (via API)
@@ -795,6 +821,11 @@ export default function StorefrontPage({ subdomain }) {
                 {/* Product info */}
                 <div className="p-2.5">
                   <h3 className={`text-xs font-medium ${theme.textPrimary} line-clamp-2 mb-1.5 leading-tight`}>{product.title}</h3>
+                  {/* Faint, copyable SKU — for the owner to grab and remove a
+                      bad product from the backend; stays subtle for customers. */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <SkuChip sku={product.supplierProductId} />
+                  </div>
 
                   {/* Price section */}
                   <div className="mb-1">
