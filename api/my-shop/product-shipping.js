@@ -1,7 +1,7 @@
 // Query real shipping cost for a product and cache it
 import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
-import { queryDSFreight } from '../_lib/suppliers.js'
+import { queryDSFreight, getProductDetails } from '../_lib/suppliers.js'
 
 export default async function handler(req, res) {
   let user
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     try {
       // Check if product exists and belongs to user
       const { rows: productRows } = await sql`
-        SELECT id, supplier_product_id, shipping_cost_usd, shipping_checked_at
+        SELECT id, supplier_product_id, shipping_cost_usd, shipping_checked_at, variants
         FROM user_products
         WHERE id = ${productId} AND user_id = ${user.id}
       `
@@ -47,15 +47,36 @@ export default async function handler(req, res) {
         })
       }
 
-      // Query fresh shipping cost from AliExpress
-      const aeProductId = product.supplier_product_id
-      if (!aeProductId) {
-        return res.status(400).json({ error: 'No AliExpress product ID found' })
+      // Query fresh shipping cost from AliExpress. Mirror the working paths
+      // (storefront checkout + rebuild cron): strip the 'ae_' prefix and pass
+      // a SKU id — ds.freight.query returns NO delivery options without a
+      // selectedSkuId, which is why every product was reporting
+      // "no shipping options available".
+      const aeProductId = String(product.supplier_product_id || '').replace('ae_', '')
+      if (!aeProductId || aeProductId.includes('-')) {
+        return res.status(400).json({ error: 'No AliExpress product ID found for this product' })
       }
+
+      // Find a SKU id: prefer the variants already stored on the row, else
+      // fetch product details once. queryDSFreight needs it to return options.
+      let skuId = ''
+      try {
+        let variants = product.variants
+        if (typeof variants === 'string') {
+          try { variants = JSON.parse(variants) } catch { variants = [] }
+        }
+        if (Array.isArray(variants) && variants.length > 0) {
+          skuId = variants[0]?.skuId || variants[0]?.sku_id || ''
+        }
+        if (!skuId) {
+          const details = await getProductDetails(aeProductId)
+          skuId = details?.variants?.[0]?.skuId || ''
+        }
+      } catch { /* fall through — try freight without a sku */ }
 
       let options
       try {
-        options = await queryDSFreight(aeProductId, 'AU', 1)
+        options = await queryDSFreight(aeProductId, 'AU', 1, skuId)
       } catch (freightErr) {
         console.error(`[product-shipping] queryDSFreight failed for product ${productId}:`, freightErr.message)
         return res.json({
