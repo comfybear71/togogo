@@ -19,6 +19,8 @@ export default function AECouponsWidget() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [newCode, setNewCode] = useState('')
+  const [newMinSpend, setNewMinSpend] = useState('')
+  const [newDiscount, setNewDiscount] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -56,8 +58,12 @@ export default function AECouponsWidget() {
   async function add() {
     const c = newCode.trim()
     if (!c) return
-    await post({ code: c })
-    setNewCode('')
+    await post({
+      code: c,
+      minSpendAud: parseFloat(newMinSpend) || 0,
+      discountAud: parseFloat(newDiscount) || 0,
+    })
+    setNewCode(''); setNewMinSpend(''); setNewDiscount('')
   }
 
   const failed = status?.lastFailedCode
@@ -96,14 +102,30 @@ export default function AECouponsWidget() {
       )}
 
       {/* Add */}
-      <div className="flex gap-2 mb-3">
+      <div className="flex flex-wrap gap-2 mb-1">
         <input
           type="text"
-          placeholder="Paste a coupon code (e.g. AUAP05)"
+          placeholder="Coupon code (e.g. EOFY06)"
           value={newCode}
           onChange={e => setNewCode(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add() }}
-          className="flex-1 rounded-lg border border-white/[0.08] bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#FFD23F] focus:outline-none"
+          className="flex-1 min-w-[140px] rounded-lg border border-white/[0.08] bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#FFD23F] focus:outline-none"
+        />
+        <input
+          type="number" inputMode="decimal" min="0" step="1"
+          placeholder="Min spend A$"
+          value={newMinSpend}
+          onChange={e => setNewMinSpend(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') add() }}
+          className="w-28 rounded-lg border border-white/[0.08] bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#FFD23F] focus:outline-none"
+        />
+        <input
+          type="number" inputMode="decimal" min="0" step="1"
+          placeholder="Discount A$"
+          value={newDiscount}
+          onChange={e => setNewDiscount(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') add() }}
+          className="w-28 rounded-lg border border-white/[0.08] bg-black px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#FFD23F] focus:outline-none"
         />
         <button
           onClick={add}
@@ -114,6 +136,10 @@ export default function AECouponsWidget() {
           Add
         </button>
       </div>
+      <p className="text-[11px] text-zinc-500 mb-3">
+        Min spend is the order total the coupon needs (from AliExpress, e.g. "over A$55").
+        A code is only used on orders that reach its minimum — otherwise it's skipped.
+      </p>
 
       {/* List */}
       {loading ? (
@@ -124,9 +150,15 @@ export default function AECouponsWidget() {
         <ul className="space-y-1.5">
           {codes.map((c, i) => (
             <li key={c.code} className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.06] bg-black px-3 py-2">
-              <span className="flex items-center gap-2 min-w-0">
+              <span className="flex items-center gap-2 min-w-0 flex-wrap">
                 <span className="font-mono text-sm text-white select-all truncate">{c.code}</span>
                 {i === 0 && <span className="text-[10px] font-medium text-emerald-400 bg-emerald-400/10 rounded px-1.5 py-0.5 flex-shrink-0">ACTIVE</span>}
+                {(parseFloat(c.discountAud) > 0 || parseFloat(c.minSpendAud) > 0) && (
+                  <span className="text-xs text-zinc-400">
+                    {parseFloat(c.discountAud) > 0 ? `−A$${parseFloat(c.discountAud).toFixed(2)}` : ''}
+                    {parseFloat(c.minSpendAud) > 0 ? ` over A$${parseFloat(c.minSpendAud).toFixed(2)}` : ''}
+                  </span>
+                )}
                 {c.note && <span className="text-xs text-zinc-500 truncate">— {c.note}</span>}
               </span>
               <button

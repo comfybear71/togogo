@@ -303,18 +303,32 @@ export default async function handler(req, res) {
                     // Log the final address being used
                     console.log(`[Webhook] Address for AE: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
 
-                    // Active AliExpress coupon code, managed in the admin
-                    // dashboard (ae_coupon_codes — first entry is active).
-                    // submitOrder applies it and AUTO-FALLS-BACK to no coupon
-                    // if AE rejects it, so an expired code never blocks an
-                    // order (AE de-dupes by our out_order_id).
+                    // Active AliExpress coupon, managed in the admin dashboard
+                    // (ae_coupon_codes). Each code has a minimum spend; we only
+                    // consider codes this order qualifies for (order value ≈ our
+                    // AE cost in AUD), then pick the biggest discount. submitOrder
+                    // still AUTO-FALLS-BACK to no coupon if AE rejects it, so an
+                    // expired code never blocks an order (AE de-dupes by our
+                    // out_order_id). Below-threshold orders simply use no coupon
+                    // (no false "expired" flag).
                     let couponCode = undefined
                     try {
                       const { rows: ccRows } = await sql`SELECT value FROM admin_settings WHERE key = 'ae_coupon_codes'`
                       if (ccRows[0]?.value) {
                         const list = JSON.parse(ccRows[0].value)
-                        const first = Array.isArray(list) ? list[0] : null
-                        couponCode = (typeof first === 'string' ? first : first?.code) || undefined
+                        const codes = Array.isArray(list)
+                          ? list.map(c => (typeof c === 'string' ? { code: c } : c)).filter(c => c?.code)
+                          : []
+                        let rate = 1.45
+                        try {
+                          const od = typeof order.order_data === 'string' ? JSON.parse(order.order_data) : order.order_data
+                          rate = parseFloat(od?.audRate) || 1.45
+                        } catch { /* default rate */ }
+                        const orderTotalAud = (parseFloat(order.supplier_cost) || 0) * rate
+                        const eligible = codes
+                          .filter(c => (parseFloat(c.minSpendAud) || 0) <= orderTotalAud)
+                          .sort((a, b) => (parseFloat(b.discountAud) || 0) - (parseFloat(a.discountAud) || 0))
+                        couponCode = eligible[0]?.code || undefined
                       }
                     } catch { /* no coupon configured */ }
 
