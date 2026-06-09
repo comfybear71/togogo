@@ -1196,13 +1196,16 @@ function ProductDetailView({ product, store, cart, theme, subdomain, allProducts
                 <span className="tabular-nums">A${displayProductAud.toFixed(2)}</span>
               </div>
               <div className="flex justify-between max-w-[240px]">
-                <span>Shipping</span>
+                <span>Shipping (est.)</span>
                 <span className="tabular-nums">A${displayShippingAud.toFixed(2)}</span>
               </div>
               <div className="flex justify-between max-w-[240px]">
                 <span>Est. tax</span>
                 <span className="tabular-nums">A${displayTaxAud.toFixed(2)}</span>
               </div>
+              <p className="text-[11px] text-slate-500 pt-1 max-w-[240px] leading-snug">
+                Shipping &amp; tax are estimated — your final shipping is confirmed at checkout.
+              </p>
             </div>
             {selectedVariant && (
               <p className="text-xs text-slate-500 mb-2">
@@ -1794,14 +1797,17 @@ function CheckoutView({ store, cart, subdomain, theme, onBack, onSuccess }) {
                 <span>Subtotal</span>
                 <span>A${cart.total.toFixed(2)}</span>
               </div>
-              <div className={`flex justify-between text-sm ${shippingFee > 0 ? theme.textSecondary : 'text-emerald-400'}`}>
+              <div className={`flex justify-between text-sm ${theme.textSecondary}`}>
                 <span>Shipping</span>
-                <span>{shippingFee > 0 ? `A$${shippingFee.toFixed(2)}` : 'Free'}</span>
+                <span>{shippingFee > 0 ? `A$${shippingFee.toFixed(2)}` : 'Included'}</span>
               </div>
               <div className={`flex justify-between text-base font-bold ${theme.textPrimary} pt-2 border-t`} style={{ borderColor: theme.accentLight }}>
                 <span>Total</span>
                 <span>A${(cart.total + shippingFee).toFixed(2)}</span>
               </div>
+              <p className="text-[11px] text-slate-500 pt-1 leading-snug">
+                Each item's price includes shipping &amp; GST.
+              </p>
             </div>
           </div>
 
