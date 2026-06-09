@@ -65,34 +65,49 @@ export default function AEOAuthTokenWidget() {
     if (authLoading) return
     setAuthLoading(true)
     setError(null)
+    // Snapshot the CURRENT token's obtained_at so we can tell when the
+    // callback saves a genuinely NEW token. The old code treated "a token
+    // is present" as success — but an expired token is already present, so
+    // it closed the popup after ~1s, before the user could even sign in to
+    // AliExpress. That's why re-auth silently did nothing.
+    const prevObtainedAt = status?.obtained_at || null
     try {
       const res = await fetch(`${API_BASE}/api/admin/ae-auth-url`, { headers: getAuthHeaders() })
       const data = await res.json()
-      if (data.auth_url) {
-        // Open AliExpress auth URL in new window
-        const authWindow = window.open(data.auth_url, 'AliExpress Auth', 'width=800,height=600')
-        // Poll for redirect completion
-        const pollInterval = setInterval(async () => {
-          try {
-            const statusRes = await fetch(`${API_BASE}/api/admin/ae-token-status`, { headers: getAuthHeaders() })
-            const statusData = await statusRes.json()
-            if (statusData.present && statusData.status !== 'missing') {
-              clearInterval(pollInterval)
-              authWindow?.close()
-              await load()
-            }
-          } catch (e) {
-            // Continue polling
-          }
-        }, 1000)
-        // Stop polling after 3 minutes
-        setTimeout(() => clearInterval(pollInterval), 180000)
-      } else {
+      if (!data.auth_url) {
         setError(data.error || 'Failed to get authorization URL')
+        setAuthLoading(false)
+        return
       }
+      // Open AliExpress auth in a new window/tab.
+      const authWindow = window.open(data.auth_url, 'AliExpress Auth', 'width=800,height=600')
+      // Poll for a brand-new token (obtained_at changes once the callback
+      // exchanges the code and saves it). Give the user up to 3 minutes to
+      // finish signing in + tapping Authorize.
+      let elapsed = 0
+      const pollInterval = setInterval(async () => {
+        elapsed += 2
+        try {
+          const statusRes = await fetch(`${API_BASE}/api/admin/ae-token-status`, { headers: getAuthHeaders() })
+          const statusData = await statusRes.json()
+          if (statusData.present && statusData.obtained_at && statusData.obtained_at !== prevObtainedAt) {
+            clearInterval(pollInterval)
+            authWindow?.close()
+            setAuthLoading(false)
+            await load()
+            return
+          }
+        } catch {
+          // keep polling
+        }
+        if (elapsed >= 180) {
+          clearInterval(pollInterval)
+          setAuthLoading(false)
+          setError('Re-authorization didn’t complete. In the AliExpress window, sign in and tap Authorize — then it saves automatically. Try again if needed.')
+        }
+      }, 2000)
     } catch (err) {
       setError(err.message)
-    } finally {
       setAuthLoading(false)
     }
   }
