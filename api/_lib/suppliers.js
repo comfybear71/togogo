@@ -893,9 +893,27 @@ export async function calculateFreight(productId, quantity = 1, countryCode = 'A
 //   fields: productId, selectedSkuId, quantity, shipToCountry, sendGoodsCountryCode,
 //   language, locale, currency. All required.
 // Response path: aliexpress_ds_freight_query_response.result.delivery_options
-//   .delivery_option_d_t_o[] — each has shipping_fee_cent (USD), free_shipping,
-//   mayHavePFS (Platform Free Shipping eligibility), code, company, delivery days.
+//   .delivery_option_d_t_o[] — each has shipping_fee_cent (INTEGER CENTS),
+//   shipping_fee_format (display string), free_shipping, mayHavePFS
+//   (Platform Free Shipping eligibility), code, company, delivery days.
 // ============================================
+
+// Convert one delivery option's shipping fee to DOLLARS.
+// `shipping_fee_cent` is integer cents (350 == $3.50) per AE's documented
+// freight convention — NOT dollars. Billing it as dollars was a 100x
+// overcharge (a $0.41 ship cost became $41 -> ~A$60 at checkout). Prefer
+// AE's own display string (e.g. "US $1.99"), which is unambiguous; fall
+// back to cents/100.
+function shippingFeeToDollars(o) {
+  const fmt = String(o?.shipping_fee_format || '')
+  const m = fmt.replace(/,/g, '').match(/(\d+(?:\.\d+)?)/)
+  if (m) {
+    const v = parseFloat(m[1])
+    if (Number.isFinite(v)) return v
+  }
+  const cents = parseFloat(o?.shipping_fee_cent || '0')
+  return Number.isFinite(cents) ? Math.round(cents) / 100 : 0
+}
 
 export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1, skuId = '') {
   try {
@@ -928,7 +946,7 @@ export async function queryDSFreight(productId, countryCode = 'AU', quantity = 1
     return options.map(o => ({
       serviceCode: o.code || '',
       serviceName: o.company || '',
-      cost: parseFloat(o.shipping_fee_cent || '0'),
+      cost: shippingFeeToDollars(o),
       currency: o.shipping_fee_currency || 'USD',
       freeShipping: !!o.free_shipping,
       mayHavePFS: !!o.mayHavePFS,
