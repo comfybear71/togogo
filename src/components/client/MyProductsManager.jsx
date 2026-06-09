@@ -22,6 +22,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
   const itemsPerPage = 20
   const [shippingCache, setShippingCache] = useState({})
   const [queryingShipping, setQueryingShipping] = useState({})
+  const [shippingErrors, setShippingErrors] = useState({})
   const [toggleStates, setToggleStates] = useState({})
   const [expandedVariants, setExpandedVariants] = useState({})
   // Local optimistic overrides for visibility, keyed by product id. The
@@ -99,6 +100,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
   async function queryShipping(productId) {
     if (queryingShipping[productId]) return
     setQueryingShipping(s => ({ ...s, [productId]: true }))
+    setShippingErrors(s => ({ ...s, [productId]: null }))
     try {
       const res = await fetch(`${API_BASE}/api/my-shop/product-shipping?productId=${productId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -106,9 +108,18 @@ export default function MyProductsManager({ products, token, storageSubdomain })
       const data = await res.json()
       if (data.success && data.shippingUsd !== undefined) {
         setShippingCache(s => ({ ...s, [productId]: data.shippingUsd }))
+      } else {
+        // Don't fail silently — the most common cause is the AliExpress
+        // OAuth token having expired, which the owner can fix themselves.
+        const raw = (data.error || '').toLowerCase()
+        const msg = raw.includes('oauth') || raw.includes('token') || raw.includes('authoriz')
+          ? 'Shipping check needs AliExpress re-authorization (Admin → Settings → Re-auth).'
+          : (data.error || 'Could not get a shipping price for this product right now.')
+        setShippingErrors(s => ({ ...s, [productId]: msg }))
       }
     } catch (err) {
       console.error('Shipping query failed:', err)
+      setShippingErrors(s => ({ ...s, [productId]: 'Could not reach the shipping service. Please try again.' }))
     } finally {
       setQueryingShipping(s => ({ ...s, [productId]: false }))
     }
@@ -194,6 +205,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
             const shippingUsd = shippingCache[product.id]
             const shippingStatus = getShippingStatus(shippingUsd)
             const isQuerying = queryingShipping[product.id]
+            const shippingError = shippingErrors[product.id]
             const toggleState = toggleStates[product.id]
             const isVisible = isProductVisible(product)
             const isExpanded = expandedVariants[product.id]
@@ -268,12 +280,20 @@ export default function MyProductsManager({ products, token, storageSubdomain })
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => queryShipping(product.id)}
-                      className="w-full text-[13px] text-[#FF6B35] hover:bg-[#FF6B35]/10 px-3 py-2 rounded-lg transition-colors"
-                    >
-                      Check shipping cost
-                    </button>
+                    <>
+                      <button
+                        onClick={() => queryShipping(product.id)}
+                        className="w-full text-[13px] text-[#FF6B35] hover:bg-[#FF6B35]/10 px-3 py-2 rounded-lg transition-colors"
+                      >
+                        Check shipping cost
+                      </button>
+                      {shippingError && (
+                        <div className="mt-2 flex items-start gap-1.5 text-[12px] text-amber-400/90">
+                          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                          <span>{shippingError}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
