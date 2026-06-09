@@ -53,11 +53,24 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No AliExpress product ID found' })
       }
 
-      const options = await queryDSFreight(aeProductId, 'AU', 1)
-      if (!options || options.length === 0) {
+      let options
+      try {
+        options = await queryDSFreight(aeProductId, 'AU', 1)
+      } catch (freightErr) {
+        console.error(`[product-shipping] queryDSFreight failed for product ${productId}:`, freightErr.message)
         return res.json({
           success: false,
-          error: 'Could not fetch shipping cost from AliExpress',
+          error: 'AliExpress freight query failed (OAuth token may be expired)',
+          cached: false,
+          debug: freightErr.message,
+        })
+      }
+
+      if (!options || options.length === 0) {
+        console.warn(`[product-shipping] No shipping options for product ${aeProductId}`)
+        return res.json({
+          success: false,
+          error: 'No shipping options available for this product',
           cached: false,
         })
       }
