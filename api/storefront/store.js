@@ -220,6 +220,11 @@ export default async function handler(req, res) {
       ? ` AND (niches IS NULL OR cardinality(niches) = 0 OR niches && ARRAY[${storeNiches.map(n => `'${String(n).replace(/'/g, "''")}'`).join(',')}]::TEXT[])`
       : ''
 
+    // Visibility gate: only show products the store owner has not hidden.
+    // Store owners can hide individual products from their storefront while
+    // keeping them in the database for future re-listing.
+    const visibilityWhere = ` AND COALESCE(visible_to_storefront, true) = true`
+
     // Price integrity gate: only surface products that have been priced
     // under the new USD+variants model. Three checks because we've been
     // burned:
@@ -237,7 +242,7 @@ export default async function handler(req, res) {
     const countResult = await sql.query(
       `SELECT COUNT(*) as total FROM (
         SELECT DISTINCT ON (supplier_product_id) id, sale_price, category, title
-        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
+        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${visibilityWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped WHERE true${whereExtra}`,
       []
@@ -276,7 +281,7 @@ export default async function handler(req, res) {
                  product_rating, orders_count, original_price, discount_percent, in_stock,
                  variants, min_variant_price_usd, max_variant_price_usd, shipping_usd, variants_updated_at
           FROM user_products
-          WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
+          WHERE is_active = true${ownerWhere}${nicheWhere}${visibilityWhere}${pricedWhere}
           ORDER BY supplier_product_id, created_at DESC
         ) products
         WHERE true${whereExtra}
@@ -382,7 +387,7 @@ export default async function handler(req, res) {
     const { rows: catRows } = await sql.query(
       `SELECT category, COUNT(*) as count FROM (
         SELECT DISTINCT ON (supplier_product_id) category, supplier_product_id
-        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
+        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${visibilityWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped
       GROUP BY category ORDER BY count DESC`,
@@ -399,7 +404,7 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE sale_price >= ${t50s}) as over50
       FROM (
         SELECT DISTINCT ON (supplier_product_id) sale_price, supplier_product_id
-        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${pricedWhere}
+        FROM user_products WHERE is_active = true${ownerWhere}${nicheWhere}${visibilityWhere}${pricedWhere}
         ORDER BY supplier_product_id, created_at DESC
       ) deduped`,
       []
