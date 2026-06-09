@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Eye, EyeOff, Loader2, RefreshCw, Search, ChevronDown, ChevronUp,
-  ExternalLink, AlertTriangle
+  ExternalLink, AlertTriangle, Check
 } from 'lucide-react'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -14,7 +14,7 @@ function getShippingStatus(usd) {
   return { label: `A$${aud.toFixed(2)}`, color: 'text-emerald-500', bg: 'bg-emerald-500/10', emoji: '🟢' }
 }
 
-export default function MyProductsManager({ products, token, storageSubdomain, onUpdate }) {
+export default function MyProductsManager({ products, token, storageSubdomain }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('newest')
   const [filterVisible, setFilterVisible] = useState(null)
@@ -24,11 +24,25 @@ export default function MyProductsManager({ products, token, storageSubdomain, o
   const [queryingShipping, setQueryingShipping] = useState({})
   const [toggleStates, setToggleStates] = useState({})
   const [expandedVariants, setExpandedVariants] = useState({})
+  // Local optimistic overrides for visibility, keyed by product id. The
+  // server is the source of truth, but we flip the UI instantly on click
+  // and only fall back to the override if the PATCH fails. Without this the
+  // toggle appeared to "do nothing" because the old code refetched stale
+  // server data before the write landed.
+  const [visibilityOverrides, setVisibilityOverrides] = useState({})
+
+  // Effective visibility = optimistic override if we have one, else the
+  // server value. Defaults to visible (true) for legacy rows where the
+  // column is NULL.
+  const isProductVisible = (p) =>
+    visibilityOverrides[p.id] !== undefined
+      ? visibilityOverrides[p.id]
+      : p.visible_to_storefront !== false
 
   // Filter and sort products
   let filtered = products.filter(p => {
-    const matchesVisibility = filterVisible === null || p.visible_to_storefront === filterVisible
-    const matchesSearch = !searchQuery || p.title.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesVisibility = filterVisible === null || isProductVisible(p) === filterVisible
+    const matchesSearch = !searchQuery || (p.title || '').toLowerCase().includes(searchQuery.toLowerCase())
     return matchesVisibility && matchesSearch
   })
 
@@ -45,11 +59,14 @@ export default function MyProductsManager({ products, token, storageSubdomain, o
   const paged = filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)
 
   async function toggleVisibility(productId, currentValue) {
-    // Optimistic update: toggle immediately in UI, API call happens in background
     const newValue = !currentValue
-    onUpdate?.()
+    // 1. Flip the UI instantly via the optimistic override.
+    setVisibilityOverrides(s => ({ ...s, [productId]: newValue }))
+    setToggleStates(s => ({ ...s, [productId]: 'saving' }))
 
     try {
+      // 2. Persist to the database (hides from the storefront — the row is
+      //    NEVER deleted, only flagged).
       const res = await fetch(`${API_BASE}/api/my-shop/products`, {
         method: 'PATCH',
         headers: {
@@ -62,14 +79,20 @@ export default function MyProductsManager({ products, token, storageSubdomain, o
         }),
       })
       if (!res.ok) throw new Error('Failed to toggle visibility')
+      // 3. Success — keep the override so the card stays flipped, show a
+      //    brief tick. No refetch: a refetch here would clobber other
+      //    pending optimistic toggles with stale data.
       setToggleStates(s => ({ ...s, [productId]: 'done' }))
       setTimeout(() => setToggleStates(s => ({ ...s, [productId]: null })), 800)
-    } catch (err) {
+    } catch {
+      // 4. Failure — roll the override back and surface the error.
+      setVisibilityOverrides(s => {
+        const next = { ...s }
+        delete next[productId]
+        return next
+      })
       setToggleStates(s => ({ ...s, [productId]: 'error' }))
-      setTimeout(() => {
-        setToggleStates(s => ({ ...s, [productId]: null }))
-        onUpdate?.()
-      }, 2000)
+      setTimeout(() => setToggleStates(s => ({ ...s, [productId]: null })), 2500)
     }
   }
 
@@ -172,7 +195,7 @@ export default function MyProductsManager({ products, token, storageSubdomain, o
             const shippingStatus = getShippingStatus(shippingUsd)
             const isQuerying = queryingShipping[product.id]
             const toggleState = toggleStates[product.id]
-            const isVisible = product.visible_to_storefront !== false
+            const isVisible = isProductVisible(product)
             const isExpanded = expandedVariants[product.id]
             const variantCount = (Array.isArray(product.variants) ? product.variants.length : 0)
 
@@ -285,39 +308,54 @@ export default function MyProductsManager({ products, token, storageSubdomain, o
                   </div>
                 )}
 
-                {/* Visibility toggle - sticky at bottom */}
+                {/* Remove / add-back control. This only flags the product so
+                    the customer storefront skips it — the row is NEVER deleted
+                    from the database, so it can always be added back. */}
                 <div className="mt-auto pt-4 border-t border-white/[0.06]">
+                  {!isVisible && toggleState !== 'saving' && (
+                    <div className="mb-2 flex items-center justify-center gap-1.5 text-[12px] text-zinc-500">
+                      <EyeOff className="h-3.5 w-3.5" />
+                      Removed from your store
+                    </div>
+                  )}
                   <button
                     onClick={() => toggleVisibility(product.id, isVisible)}
-                    disabled={toggleState === 'loading'}
-                    className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-medium transition-all ${
+                    disabled={toggleState === 'saving'}
+                    className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold transition-all ${
                       isVisible
-                        ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                        : 'bg-zinc-500/10 text-zinc-400 hover:bg-zinc-500/20'
-                    } disabled:opacity-50 disabled:cursor-wait`}
-                    title={isVisible ? 'Click to hide from storefront' : 'Click to show on storefront'}
+                        ? 'border border-white/[0.12] text-zinc-200 hover:bg-white/[0.06]'
+                        : 'bg-[#FF6B35]/10 text-[#FF6B35] hover:bg-[#FF6B35]/20'
+                    } disabled:opacity-60 disabled:cursor-wait`}
+                    title={isVisible
+                      ? 'Tap to remove this product from your store (it stays saved and can be added back)'
+                      : 'Tap to add this product back to your store'}
                   >
-                    {toggleState === 'loading' ? (
+                    {toggleState === 'saving' ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Updating...
+                        Saving…
+                      </>
+                    ) : toggleState === 'done' ? (
+                      <>
+                        <Check className="h-4 w-4" />
+                        Saved
                       </>
                     ) : isVisible ? (
                       <>
-                        <Eye className="h-4 w-4" />
-                        Visible
+                        <EyeOff className="h-4 w-4" />
+                        Remove from my store
                       </>
                     ) : (
                       <>
-                        <EyeOff className="h-4 w-4" />
-                        Hidden
+                        <Eye className="h-4 w-4" />
+                        Add back to my store
                       </>
                     )}
                   </button>
                   {toggleState === 'error' && (
                     <div className="mt-2 flex items-start gap-2 p-2 rounded bg-red-500/10 border border-red-500/20">
                       <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
-                      <div className="text-[12px] text-red-300">Failed to update</div>
+                      <div className="text-[12px] text-red-300">Couldn't save — tap to try again</div>
                     </div>
                   )}
                 </div>
@@ -333,9 +371,9 @@ export default function MyProductsManager({ products, token, storageSubdomain, o
           <div className="text-[13px] text-zinc-400 space-y-1.5">
             <div><span className="text-emerald-500">🟢 LOW</span> — Shipping &lt; A$5 (great for customers)</div>
             <div><span className="text-yellow-500">🟡 MEDIUM</span> — Shipping A$5–10 (reasonable)</div>
-            <div><span className="text-red-500">🔴 HIGH</span> — Shipping &gt; A$10 (consider hiding)</div>
+            <div><span className="text-red-500">🔴 HIGH</span> — Shipping &gt; A$10 (consider removing)</div>
             <div className="mt-2 pt-2 border-t border-white/[0.06]">
-              💡 Tip: Products with HIGH shipping often don't sell. Hide them to improve your store's appeal.
+              💡 Tip: Products with HIGH shipping often don't sell. Remove them from your store to keep it appealing — they stay saved and can be added back any time.
             </div>
           </div>
         </div>

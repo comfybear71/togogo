@@ -121,7 +121,7 @@ export default function MyStorePage() {
       <StoreDetailsCard store={store} onSave={patchStore} />
       <MarkupCard store={store} onSave={patchStore} />
       <ThemeCard store={store} onSave={patchStore} />
-      <ProductsCard products={products} token={token} onUpdate={load} />
+      <ProductsCard products={products} token={token} onUpdate={load} store={store} />
       <ResetShopCard productCount={products.length} token={token} onReset={load} />
     </div>
   )
@@ -356,12 +356,12 @@ function ThemeSwatch({ theme }) {
   )
 }
 
-function ProductsCard({ products, token, onUpdate }) {
+function ProductsCard({ products, token, onUpdate, store }) {
   const count = products.length
   return (
     <Card icon={Package} title="Your products">
       <p className="text-[15px] text-zinc-400 mb-4">
-        Manage your {count} product{count === 1 ? '' : 's'} below. Hide products with expensive shipping or that don't sell.
+        Manage your {count} product{count === 1 ? '' : 's'} below. Remove products with expensive shipping or that don't sell — they stay saved and can be added back any time.
       </p>
       {count === 0 ? (
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-6 text-center">
