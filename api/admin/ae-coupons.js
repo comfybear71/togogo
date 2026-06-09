@@ -65,7 +65,17 @@ export default async function handler(req, res) {
       if (codes.some(c => c.code.toLowerCase() === code.toLowerCase())) {
         return res.json({ success: true, codes }) // already present, no-op
       }
-      codes.unshift({ code, note: String(req.body?.note || '').trim(), addedAt: new Date().toISOString() })
+      codes.unshift({
+        code,
+        // Minimum order spend the coupon needs (AUD) and the discount it gives
+        // (AUD) — both off the AliExpress coupon. minSpendAud gates whether
+        // the order webhook even tries this code, so a below-threshold order
+        // doesn't get a false "rejected/expired" flag.
+        minSpendAud: Math.max(0, parseFloat(req.body?.minSpendAud) || 0),
+        discountAud: Math.max(0, parseFloat(req.body?.discountAud) || 0),
+        note: String(req.body?.note || '').trim(),
+        addedAt: new Date().toISOString(),
+      })
       await writeCodes(codes)
       return res.json({ success: true, codes })
     }
