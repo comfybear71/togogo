@@ -6,9 +6,9 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
-function getShippingStatus(usd) {
+function getShippingStatus(usd, audRate = 1.45) {
   if (!usd) return { label: '?', color: 'text-zinc-500', bg: 'bg-zinc-500/10', emoji: '❓' }
-  const aud = usd * 1.45
+  const aud = usd * (Number(audRate) || 1.45)
   if (aud > 10) return { label: `A$${aud.toFixed(2)} — HIGH`, color: 'text-red-500', bg: 'bg-red-500/10', emoji: '🔴' }
   if (aud > 5) return { label: `A$${aud.toFixed(2)}`, color: 'text-yellow-500', bg: 'bg-yellow-500/10', emoji: '🟡' }
   return { label: `A$${aud.toFixed(2)}`, color: 'text-emerald-500', bg: 'bg-emerald-500/10', emoji: '🟢' }
@@ -39,7 +39,9 @@ function PaginationBar({ page, totalPages, onChange }) {
   )
 }
 
-export default function MyProductsManager({ products, token, storageSubdomain }) {
+export default function MyProductsManager({ products, token, storageSubdomain, audRate = 1.45 }) {
+  const rate = Number(audRate) || 1.45
+  const toAud = (usd) => (parseFloat(usd) || 0) * rate
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('newest')
   const [filterVisible, setFilterVisible] = useState(null)
@@ -218,8 +220,16 @@ export default function MyProductsManager({ products, token, storageSubdomain })
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {paged.map(product => {
-            const shippingUsd = shippingCache[product.id]
-            const shippingStatus = getShippingStatus(shippingUsd)
+            // Show a live-checked value if we have one, else the last value
+            // stored in the database (real data from a previous check) so the
+            // owner sees shipping per product without tapping each one.
+            const storedShipUsd = product.shipping_checked_at != null
+              ? (parseFloat(product.shipping_cost_usd) || 0)
+              : undefined
+            const shippingUsd = shippingCache[product.id] !== undefined
+              ? shippingCache[product.id]
+              : storedShipUsd
+            const shippingStatus = getShippingStatus(shippingUsd, rate)
             const isQuerying = queryingShipping[product.id]
             const shippingError = shippingErrors[product.id]
             const toggleState = toggleStates[product.id]
@@ -271,7 +281,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
                 <div className="mb-4 p-3 rounded-lg bg-white/[0.04] border border-white/[0.06]">
                   <div className="text-[12px] text-zinc-500 mb-1">Wholesale cost</div>
                   <div className="text-[18px] font-bold text-white">
-                    US ${parseFloat(product.supplier_cost || 0).toFixed(2)}
+                    A${toAud(product.supplier_cost).toFixed(2)}
                   </div>
                 </div>
 
@@ -334,7 +344,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
                             <div className="font-medium text-white">{variant.name || `Variant ${idx + 1}`}</div>
                             {variant.price && (
                               <div className="text-zinc-400 mt-0.5">
-                                US ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
+                                A${toAud(variant.price).toFixed(2)}
                               </div>
                             )}
                           </div>
