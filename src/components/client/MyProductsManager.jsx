@@ -14,6 +14,31 @@ function getShippingStatus(usd) {
   return { label: `A$${aud.toFixed(2)}`, color: 'text-emerald-500', bg: 'bg-emerald-500/10', emoji: '🟢' }
 }
 
+// Back / Page X of Y / Next. Rendered at the top AND bottom of the list so
+// owners with many products don't have to scroll back up to change pages.
+function PaginationBar({ page, totalPages, onChange }) {
+  if (!totalPages || totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={page === 1}
+        className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        ← Back
+      </button>
+      <span className="text-[14px] text-zinc-400">Page {page} of {totalPages}</span>
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page === totalPages}
+        className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Next →
+      </button>
+    </div>
+  )
+}
+
 export default function MyProductsManager({ products, token, storageSubdomain }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('newest')
@@ -127,6 +152,17 @@ export default function MyProductsManager({ products, token, storageSubdomain })
 
   const storefrontBase = storageSubdomain ? `https://${storageSubdomain}.togogo.me` : null
 
+  // Change page and bring the list back into view — used by both the top
+  // and bottom pagination bars so a Next/Back tap at the bottom doesn't
+  // leave the owner scrolled past the new page's first products.
+  function goToPage(p) {
+    const next = Math.min(totalPages || 1, Math.max(1, p))
+    setPage(next)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Controls */}
@@ -169,27 +205,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
         <div className="text-[14px] text-zinc-400">
           {filtered.length} product{filtered.length !== 1 ? 's' : ''} ({page} of {totalPages || 1})
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              ← Back
-            </button>
-            <span className="text-[14px] text-zinc-400">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next →
-            </button>
-          </div>
-        )}
+        <PaginationBar page={page} totalPages={totalPages} onChange={goToPage} />
       </div>
 
       {/* Empty state */}
@@ -383,6 +399,11 @@ export default function MyProductsManager({ products, token, storageSubdomain })
             )
           })}
         </div>
+      )}
+
+      {/* Bottom pagination — mirrors the top bar */}
+      {filtered.length > 0 && (
+        <PaginationBar page={page} totalPages={totalPages} onChange={goToPage} />
       )}
 
       {/* Legend */}
