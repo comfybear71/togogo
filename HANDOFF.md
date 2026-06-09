@@ -1,9 +1,97 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-06-09 (End of Session 13)
+**Last Updated:** 2026-06-09 (End of Session 14)
 **Branch:** master (PRODUCTION on Vercel)
 **GitHub:** https://github.com/comfybear71/togogo
+
+---
+
+## What Was Done Session 14 (June 9 — fix Session 13's regressions)
+
+### Context
+Session 13 shipped v1.20.0 with two production-breaking regressions and an
+unfixed money bug. Owner reported: black screen, the "remove product" button
+doing nothing, and a $10 item showing ~$60 shipping. Started by reading all
+three sacred files. First confirmed the owner's correction: **no products
+were lost** — the prior session's "lost products" theory was wrong, and
+nothing was deleted or changed in the database this session.
+
+### Fixes (all on branch `claude/oauth-token-refresh-investigation-003dtn`, PR #126)
+
+**1. Black screen on My Store — `14e2775` (URGENT)**
+- `src/pages/client/MyStorePage.jsx`: `ProductsCard` referenced
+  `store?.subdomain` but never received `store` as a prop and it wasn't in
+  scope → `ReferenceError: store is not defined` thrown during render →
+  whole app blanked. Only fired when a shop had products (that's the branch
+  that renders `MyProductsManager`), which is why v1.20.0 passed a quick look.
+- Fix: pass `store` into `ProductsCard` + destructure it. 2 lines.
+
+**2. "Remove from my store" actually works — `f32afc7`**
+- `src/components/client/MyProductsManager.jsx`: the toggle called
+  `onUpdate()` (a full server refetch) BEFORE the PATCH write landed, so it
+  reloaded stale data and the UI never changed.
+- True optimistic UI via a per-product `visibilityOverrides` map: card flips
+  instantly, PATCH persists in background, rolls back only on failure.
+- Reworded for store owners: "Remove from my store" / "Add back to my store"
+  + "Removed from your store" status (was "Visible/Hidden").
+- NON-DESTRUCTIVE: only sets `visible_to_storefront=false`. Row is never
+  deleted from the DB. Storefront already filters via
+  `COALESCE(visible_to_storefront, true)=true` (store.js, added Session 13).
+
+**3. $60 shipping overcharge — `66fb18a` (customer money bug)**
+- `api/_lib/suppliers.js` `queryDSFreight()`: `aliexpress.ds.freight.query`
+  returns `shipping_fee_cent` as INTEGER CENTS (AE convention: `cent 350`
+  == $3.50; confirmed by sibling `calculateFreight()` reading `freight.amount`
+  dollars + `freight.cent` cents, and docs/ALIEXPRESS-API-REFERENCE.md).
+  Old code did `parseFloat(shipping_fee_cent)` and billed it as dollars — a
+  100x overcharge ($0.41 → $41 → ~A$60). Intermittent because most freight
+  lookups fail and fall back to the min-shipping floor.
+- Fix: new `shippingFeeToDollars()` prefers AE's display string
+  (`shipping_fee_format`, e.g. "US $1.99"), else `shipping_fee_cent / 100`.
+  No caps, no fake data — real number, right unit.
+- NOTE: live freight only works once the AE OAuth token is re-authorized.
+  Until then freight fails and the safe floor applies (never overcharges).
+
+### OAuth token (the trigger email)
+- refresh_token expired; access token had ~6 days left. **No code needed** —
+  the **"Re-auth" button already exists** in Admin → Settings
+  (`AEOAuthTokenWidget` → `/api/admin/ae-auth-url` → popup → callback saves
+  token). iPad/iPhone friendly, no terminal, no URL hunting. Prior session
+  failed to tell the owner this button exists.
+- `api/cron/refresh-ae-token.js` runs daily and emails on failure (that's the
+  email the owner received). Working as intended.
+
+### Verified
+- `npm run build` clean on every commit. `MyProductsManager.jsx` lint-clean.
+- Pre-existing `MyStorePage.jsx` lint noise left untouched (incl. a
+  false-positive `Icon` unused — it IS used in JSX; the eslint config doesn't
+  track JSX usage, so the repo already ships with these).
+- COULD NOT verify against live DB / live AliExpress from the session env —
+  owner must eyeball shipping on one real order after deploy.
+
+### Rules followed
+- Read CLAUDE.md + HANDOFF.md + SAFETY-RULES.md before any work.
+- Investigation-first: confirmed "no products lost" before touching anything.
+- Surgical commits, one logical change each. No blanket reverts, no
+  batch deletes, no DB changes, no production push (work is on a branch + PR).
+- Did NOT change pricing on a guess — verified the cents convention from the
+  repo's own API reference + the sibling freight function before fixing.
+
+### Next session / owner to-do
+1. Merge PR #126 → tag `v1.20.1-2026-06-09` → deploy. Close+reopen the tab
+   after deploy (PWA service worker caches the old bundle).
+2. Tap "Re-auth" in Admin → Settings to restore the AE token (fixes the
+   "Check shipping" button + product detail page + live freight).
+3. Eyeball shipping on one real order to confirm the cents fix end-to-end.
+4. DECISION PENDING: "Reset shop" button (`api/my-shop/products/reset.js`)
+   still does a hard `DELETE FROM user_products`, which conflicts with the
+   owner's rule "no item should ever be removed from the database". Left
+   untouched this session — convert to non-destructive "remove all from
+   store" (set visible_to_storefront=false) on owner's say-so.
+5. `getShippingStatus()` in MyProductsManager hardcodes 1.45 USD→AUD for the
+   owner-facing shipping badge (display only, not billing). Low priority —
+   could read the admin rate.
 
 ---
 
