@@ -67,10 +67,16 @@ export default function MyProductsManager({ products, token, storageSubdomain, a
       ? visibilityOverrides[p.id]
       : p.visible_to_storefront !== false
 
-  // Filter and sort products
+  // Filter and sort products. Search matches the title OR the SKU
+  // (AliExpress item number) so owners can paste a SKU to jump straight
+  // to a product.
   let filtered = products.filter(p => {
+    const q = searchQuery.toLowerCase().trim()
     const matchesVisibility = filterVisible === null || isProductVisible(p) === filterVisible
-    const matchesSearch = !searchQuery || (p.title || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const sku = String(p.supplier_product_id || '').toLowerCase()
+    const matchesSearch = !q
+      || (p.title || '').toLowerCase().includes(q)
+      || sku.includes(q)
     return matchesVisibility && matchesSearch
   })
 
@@ -171,7 +177,7 @@ export default function MyProductsManager({ products, token, storageSubdomain, a
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
         <input
           type="text"
-          placeholder="Search products..."
+          placeholder="Search by name or SKU…"
           value={searchQuery}
           onChange={e => { setSearchQuery(e.target.value); setPage(1) }}
           className="flex-1 rounded-lg border border-white/[0.08] bg-[#0a0a0a] px-4 py-2.5 text-[15px] text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
@@ -274,6 +280,14 @@ export default function MyProductsManager({ products, token, storageSubdomain, a
                       {product.title}
                     </h3>
                     <div className="text-[12px] text-zinc-500 mt-0.5">{product.category || 'General'}</div>
+                  </div>
+                )}
+
+                {/* SKU — the AliExpress item number. Tap to select-all so it's
+                    easy to copy; also searchable via the search box above. */}
+                {product.supplier_product_id && (
+                  <div className="mb-3 text-[11px] text-zinc-500 font-mono select-all break-all">
+                    SKU: {String(product.supplier_product_id).replace('ae_', '')}
                   </div>
                 )}
 
