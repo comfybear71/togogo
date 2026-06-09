@@ -2,6 +2,7 @@
 import { sql } from '../_lib/db.js'
 import { requireAuth } from '../_lib/auth.js'
 import { getCommissionRate } from '../_lib/commission.js'
+import { getAudRate } from '../_lib/pricing.js'
 
 const DEFAULT_SALE_MARKUP = 1.40 // 40% above cost by default (ensures profit after commission)
 
@@ -33,7 +34,11 @@ export default async function handler(req, res) {
         WHERE user_id = ${user.id}
         ORDER BY created_at DESC
       `
-      return res.json({ products })
+      // Send the live USD->AUD rate so the owner's product manager can show
+      // wholesale cost, variants and shipping in AUD (AE bills us in USD).
+      let audRate = 1.45
+      try { audRate = await getAudRate() } catch { /* default applies */ }
+      return res.json({ products, audRate })
     } catch (err) {
       console.error('My products error:', err)
       return res.json({ products: [] })

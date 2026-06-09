@@ -24,6 +24,7 @@ export default function MyStorePage() {
 
   const [store, setStore] = useState(null)
   const [products, setProducts] = useState([])
+  const [audRate, setAudRate] = useState(1.45)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
 
@@ -56,6 +57,7 @@ export default function MyStorePage() {
       if (productsRes.ok) {
         const data = await productsRes.json()
         setProducts(data.products || [])
+        if (data.audRate) setAudRate(data.audRate)
       }
     } catch (e) {
       setErr('Could not load your store. Please refresh the page.')
@@ -121,7 +123,7 @@ export default function MyStorePage() {
       <StoreDetailsCard store={store} onSave={patchStore} />
       <MarkupCard store={store} onSave={patchStore} />
       <ThemeCard store={store} onSave={patchStore} />
-      <ProductsCard products={products} token={token} onUpdate={load} store={store} />
+      <ProductsCard products={products} token={token} onUpdate={load} store={store} audRate={audRate} />
       <ResetShopCard productCount={products.length} token={token} onReset={load} />
     </div>
   )
@@ -356,7 +358,7 @@ function ThemeSwatch({ theme }) {
   )
 }
 
-function ProductsCard({ products, token, onUpdate, store }) {
+function ProductsCard({ products, token, onUpdate, store, audRate }) {
   const count = products.length
   return (
     <Card icon={Package} title="Your products">
@@ -374,7 +376,7 @@ function ProductsCard({ products, token, onUpdate, store }) {
           </Link>
         </div>
       ) : (
-        <MyProductsManager products={products} token={token} storageSubdomain={store?.subdomain} onUpdate={onUpdate} />
+        <MyProductsManager products={products} token={token} storageSubdomain={store?.subdomain} audRate={audRate} onUpdate={onUpdate} />
       )}
     </Card>
   )

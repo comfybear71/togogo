@@ -89,9 +89,33 @@ nothing was deleted or changed in the database this session.
    owner's rule "no item should ever be removed from the database". Left
    untouched this session — convert to non-destructive "remove all from
    store" (set visible_to_storefront=false) on owner's say-so.
-5. `getShippingStatus()` in MyProductsManager hardcodes 1.45 USD→AUD for the
-   owner-facing shipping badge (display only, not billing). Low priority —
-   could read the admin rate.
+5. `getShippingStatus()` hardcoded 1.45 USD→AUD — FIXED in v1.21.0 (now reads
+   the live admin rate).
+
+### Session 14 continued — v1.21.0 (PR #127, branch oauth-token-refresh-investigation-003dtn)
+Follow-ups from live iPad/iPhone testing after v1.20.1 deployed:
+- **One-click AliExpress re-auth** — NEW `api/admin/ae-connect.js` 302-redirects
+  to the AE sign-in; the OAuth widget's Authorize/Re-auth buttons now link to it
+  (full-page nav). The old popup flow silently failed: mobile Safari blocks
+  popups, and the poll false-"succeeded" because the expired token is already
+  present. Simple path: open https://togogo.me/api/admin/ae-connect → sign in →
+  Authorize → green.
+- **Owner prices in AUD** — `api/my-shop/products.js` returns the live USD→AUD
+  rate; product manager converts wholesale cost + variant prices to A$.
+- **Shipping badge per card** — seeds from each product's stored shipping value
+  so Low/Med/High shows without re-checking; real admin FX rate.
+- **"Check shipping cost" surfaces failures** — points to re-auth when the token
+  is the problem instead of silently reverting.
+- **Bottom pagination** on the product list (mirrors the top; scrolls to top).
+- **Process:** added `.github/PULL_REQUEST_TEMPLATE.md` and a mandatory
+  "PR HANDOFF FORMAT" section to CLAUDE.md (Stuart's 5-section handoff:
+  Compare URL / Title / Description / Merge steps / Release tag; never create
+  PRs or tags myself; update HANDOFF.md in the same PR).
+- **Reset shop:** left untouched per Stuart's instruction (he has a remove-all
+  flow already; never wipe the DB myself).
+- Still pending: OAuth must be re-authorized (above) before "Check shipping",
+  live freight, and the product detail page work. v1.20.1 shipping cents-fix
+  only returns correct live numbers once the token is valid.
 
 ---
 

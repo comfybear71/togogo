@@ -6,15 +6,42 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
-function getShippingStatus(usd) {
+function getShippingStatus(usd, audRate = 1.45) {
   if (!usd) return { label: '?', color: 'text-zinc-500', bg: 'bg-zinc-500/10', emoji: '❓' }
-  const aud = usd * 1.45
+  const aud = usd * (Number(audRate) || 1.45)
   if (aud > 10) return { label: `A$${aud.toFixed(2)} — HIGH`, color: 'text-red-500', bg: 'bg-red-500/10', emoji: '🔴' }
   if (aud > 5) return { label: `A$${aud.toFixed(2)}`, color: 'text-yellow-500', bg: 'bg-yellow-500/10', emoji: '🟡' }
   return { label: `A$${aud.toFixed(2)}`, color: 'text-emerald-500', bg: 'bg-emerald-500/10', emoji: '🟢' }
 }
 
-export default function MyProductsManager({ products, token, storageSubdomain }) {
+// Back / Page X of Y / Next. Rendered at the top AND bottom of the list so
+// owners with many products don't have to scroll back up to change pages.
+function PaginationBar({ page, totalPages, onChange }) {
+  if (!totalPages || totalPages <= 1) return null
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={page === 1}
+        className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        ← Back
+      </button>
+      <span className="text-[14px] text-zinc-400">Page {page} of {totalPages}</span>
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page === totalPages}
+        className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Next →
+      </button>
+    </div>
+  )
+}
+
+export default function MyProductsManager({ products, token, storageSubdomain, audRate = 1.45 }) {
+  const rate = Number(audRate) || 1.45
+  const toAud = (usd) => (parseFloat(usd) || 0) * rate
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('newest')
   const [filterVisible, setFilterVisible] = useState(null)
@@ -22,6 +49,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
   const itemsPerPage = 20
   const [shippingCache, setShippingCache] = useState({})
   const [queryingShipping, setQueryingShipping] = useState({})
+  const [shippingErrors, setShippingErrors] = useState({})
   const [toggleStates, setToggleStates] = useState({})
   const [expandedVariants, setExpandedVariants] = useState({})
   // Local optimistic overrides for visibility, keyed by product id. The
@@ -99,6 +127,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
   async function queryShipping(productId) {
     if (queryingShipping[productId]) return
     setQueryingShipping(s => ({ ...s, [productId]: true }))
+    setShippingErrors(s => ({ ...s, [productId]: null }))
     try {
       const res = await fetch(`${API_BASE}/api/my-shop/product-shipping?productId=${productId}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -106,15 +135,35 @@ export default function MyProductsManager({ products, token, storageSubdomain })
       const data = await res.json()
       if (data.success && data.shippingUsd !== undefined) {
         setShippingCache(s => ({ ...s, [productId]: data.shippingUsd }))
+      } else {
+        // Don't fail silently — the most common cause is the AliExpress
+        // OAuth token having expired, which the owner can fix themselves.
+        const raw = (data.error || '').toLowerCase()
+        const msg = raw.includes('oauth') || raw.includes('token') || raw.includes('authoriz')
+          ? 'Shipping check needs AliExpress re-authorization (Admin → Settings → Re-auth).'
+          : (data.error || 'Could not get a shipping price for this product right now.')
+        setShippingErrors(s => ({ ...s, [productId]: msg }))
       }
     } catch (err) {
       console.error('Shipping query failed:', err)
+      setShippingErrors(s => ({ ...s, [productId]: 'Could not reach the shipping service. Please try again.' }))
     } finally {
       setQueryingShipping(s => ({ ...s, [productId]: false }))
     }
   }
 
   const storefrontBase = storageSubdomain ? `https://${storageSubdomain}.togogo.me` : null
+
+  // Change page and bring the list back into view — used by both the top
+  // and bottom pagination bars so a Next/Back tap at the bottom doesn't
+  // leave the owner scrolled past the new page's first products.
+  function goToPage(p) {
+    const next = Math.min(totalPages || 1, Math.max(1, p))
+    setPage(next)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -158,27 +207,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
         <div className="text-[14px] text-zinc-400">
           {filtered.length} product{filtered.length !== 1 ? 's' : ''} ({page} of {totalPages || 1})
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              ← Back
-            </button>
-            <span className="text-[14px] text-zinc-400">
-              Page {page} of {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next →
-            </button>
-          </div>
-        )}
+        <PaginationBar page={page} totalPages={totalPages} onChange={goToPage} />
       </div>
 
       {/* Empty state */}
@@ -191,9 +220,18 @@ export default function MyProductsManager({ products, token, storageSubdomain })
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {paged.map(product => {
-            const shippingUsd = shippingCache[product.id]
-            const shippingStatus = getShippingStatus(shippingUsd)
+            // Show a live-checked value if we have one, else the last value
+            // stored in the database (real data from a previous check) so the
+            // owner sees shipping per product without tapping each one.
+            const storedShipUsd = product.shipping_checked_at != null
+              ? (parseFloat(product.shipping_cost_usd) || 0)
+              : undefined
+            const shippingUsd = shippingCache[product.id] !== undefined
+              ? shippingCache[product.id]
+              : storedShipUsd
+            const shippingStatus = getShippingStatus(shippingUsd, rate)
             const isQuerying = queryingShipping[product.id]
+            const shippingError = shippingErrors[product.id]
             const toggleState = toggleStates[product.id]
             const isVisible = isProductVisible(product)
             const isExpanded = expandedVariants[product.id]
@@ -243,7 +281,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
                 <div className="mb-4 p-3 rounded-lg bg-white/[0.04] border border-white/[0.06]">
                   <div className="text-[12px] text-zinc-500 mb-1">Wholesale cost</div>
                   <div className="text-[18px] font-bold text-white">
-                    US ${parseFloat(product.supplier_cost || 0).toFixed(2)}
+                    A${toAud(product.supplier_cost).toFixed(2)}
                   </div>
                 </div>
 
@@ -268,12 +306,20 @@ export default function MyProductsManager({ products, token, storageSubdomain })
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => queryShipping(product.id)}
-                      className="w-full text-[13px] text-[#FF6B35] hover:bg-[#FF6B35]/10 px-3 py-2 rounded-lg transition-colors"
-                    >
-                      Check shipping cost
-                    </button>
+                    <>
+                      <button
+                        onClick={() => queryShipping(product.id)}
+                        className="w-full text-[13px] text-[#FF6B35] hover:bg-[#FF6B35]/10 px-3 py-2 rounded-lg transition-colors"
+                      >
+                        Check shipping cost
+                      </button>
+                      {shippingError && (
+                        <div className="mt-2 flex items-start gap-1.5 text-[12px] text-amber-400/90">
+                          <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                          <span>{shippingError}</span>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -298,7 +344,7 @@ export default function MyProductsManager({ products, token, storageSubdomain })
                             <div className="font-medium text-white">{variant.name || `Variant ${idx + 1}`}</div>
                             {variant.price && (
                               <div className="text-zinc-400 mt-0.5">
-                                US ${typeof variant.price === 'number' ? variant.price.toFixed(2) : variant.price}
+                                A${toAud(variant.price).toFixed(2)}
                               </div>
                             )}
                           </div>
@@ -363,6 +409,11 @@ export default function MyProductsManager({ products, token, storageSubdomain })
             )
           })}
         </div>
+      )}
+
+      {/* Bottom pagination — mirrors the top bar */}
+      {filtered.length > 0 && (
+        <PaginationBar page={page} totalPages={totalPages} onChange={goToPage} />
       )}
 
       {/* Legend */}

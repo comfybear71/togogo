@@ -60,6 +60,37 @@ If the user asks you to:
 
 ---
 
+# PR HANDOFF FORMAT — MANDATORY FOR EVERY PR
+
+> Stuart copy-pastes each section straight into GitHub. Re-read this block
+> before writing each handoff. Don't paraphrase or reconstruct from memory.
+> **Update HANDOFF.md (and any affected docs) IN THE SAME PR as the change.**
+
+**Before writing a handoff:** push the branch first, then run `git remote -v`
+to read the real `<OWNER>/<REPO>`. The Compare URL must work when clicked.
+
+**Hard rules:**
+- Push commits BEFORE delivering the handoff.
+- NEVER create the PR or tag yourself — only suggest them. Stuart drives
+  merges + tags via the GitHub UI.
+- Every PR gets a tag. Check `git tag --list --sort=-v:refname | head -10` first.
+- Semver: patch = bug fix only; minor = new backwards-compatible feature;
+  major = breaking. Suffixes: `-docs` (docs-only), `-recovery` (hotfix/revert).
+
+**Produce ALL FIVE sections, in order:**
+
+1. **Compare URL** — plain clickable: `https://github.com/<OWNER>/<REPO>/compare/<BASE>...<BRANCH>`
+2. **PR Title** — one line, ≤70 chars, imperative ("Add X"/"Fix Y"), in a code block.
+3. **PR Description** — code block with `## Summary`, `## Changes` (file: what+why),
+   `## Test plan` (checkboxes, `[x]` done / `[ ]` post-deploy manual).
+4. **Merge instructions** — numbered: 1) Open Compare URL 2) Create pull request
+   3) Bottom → ▼ → "Squash and merge" 4) Confirm squash and merge 5) Delete branch.
+5. **Release tag** (mandatory) — table (Tag name `v<SEMVER>-<YYYY-MM-DD>` / Target
+   `<BASE>` / Title / Create via `https://github.com/<OWNER>/<REPO>/releases/new`),
+   then a code block: `## v<SEMVER>` with `### New`, `### Fixed`, `### Changed`.
+
+---
+
 # ToGoGo — CLAUDE.md
 
 ## Project Overview
