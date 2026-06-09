@@ -23,8 +23,13 @@ export default function AEOAuthTokenWidget() {
   const [status, setStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [authLoading, setAuthLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  // One-click re-authorization: navigate the whole page to the AliExpress
+  // sign-in (via our redirect endpoint). When it returns the token is saved
+  // and this widget reloads green. Far more reliable on iPad/iPhone than a
+  // popup — mobile Safari blocks/auto-closes popups.
+  const reauthUrl = `${API_BASE}/api/admin/ae-connect`
 
   async function load() {
     setLoading(true)
@@ -61,57 +66,6 @@ export default function AEOAuthTokenWidget() {
     }
   }
 
-  async function reauthorize() {
-    if (authLoading) return
-    setAuthLoading(true)
-    setError(null)
-    // Snapshot the CURRENT token's obtained_at so we can tell when the
-    // callback saves a genuinely NEW token. The old code treated "a token
-    // is present" as success — but an expired token is already present, so
-    // it closed the popup after ~1s, before the user could even sign in to
-    // AliExpress. That's why re-auth silently did nothing.
-    const prevObtainedAt = status?.obtained_at || null
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/ae-auth-url`, { headers: getAuthHeaders() })
-      const data = await res.json()
-      if (!data.auth_url) {
-        setError(data.error || 'Failed to get authorization URL')
-        setAuthLoading(false)
-        return
-      }
-      // Open AliExpress auth in a new window/tab.
-      const authWindow = window.open(data.auth_url, 'AliExpress Auth', 'width=800,height=600')
-      // Poll for a brand-new token (obtained_at changes once the callback
-      // exchanges the code and saves it). Give the user up to 3 minutes to
-      // finish signing in + tapping Authorize.
-      let elapsed = 0
-      const pollInterval = setInterval(async () => {
-        elapsed += 2
-        try {
-          const statusRes = await fetch(`${API_BASE}/api/admin/ae-token-status`, { headers: getAuthHeaders() })
-          const statusData = await statusRes.json()
-          if (statusData.present && statusData.obtained_at && statusData.obtained_at !== prevObtainedAt) {
-            clearInterval(pollInterval)
-            authWindow?.close()
-            setAuthLoading(false)
-            await load()
-            return
-          }
-        } catch {
-          // keep polling
-        }
-        if (elapsed >= 180) {
-          clearInterval(pollInterval)
-          setAuthLoading(false)
-          setError('Re-authorization didn’t complete. In the AliExpress window, sign in and tap Authorize — then it saves automatically. Try again if needed.')
-        }
-      }, 2000)
-    } catch (err) {
-      setError(err.message)
-      setAuthLoading(false)
-    }
-  }
-
   useEffect(() => { load() }, [])
 
   if (loading) {
@@ -133,7 +87,7 @@ export default function AEOAuthTokenWidget() {
             <p className="text-xs text-zinc-500 mt-0.5">No token saved — authorize to unlock product details, freight, wholesale.</p>
           </div>
           <a
-            href="/api/platforms/callback/aliexpress"
+            href={reauthUrl}
             className="inline-flex items-center gap-1.5 rounded-md bg-[#FF6B35] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#FF6B35]/90"
           >
             <ExternalLink className="h-3 w-3" />
@@ -190,15 +144,14 @@ export default function AEOAuthTokenWidget() {
             {refreshing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
             Refresh
           </button>
-          <button
-            onClick={reauthorize}
-            disabled={authLoading}
-            className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-black px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
-            title="Re-authorize if auto-refresh stops working"
+          <a
+            href={reauthUrl}
+            className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-black px-2.5 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/[0.04]"
+            title="Re-authorize AliExpress — opens the AliExpress sign-in, then returns here"
           >
-            {authLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ExternalLink className="h-3 w-3" />}
+            <ExternalLink className="h-3 w-3" />
             Re-auth
-          </button>
+          </a>
         </div>
       </div>
     </div>
