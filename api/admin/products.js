@@ -24,7 +24,12 @@ export default async function handler(req, res) {
       // Build WHERE conditions
       const conditions = []
       const params = []
-      if (search) conditions.push(`p.title ILIKE '%' || $${params.push(search)} || '%'`)
+      if (search) {
+        // Match the product TITLE or the SKU (supplier_product_id) so the
+        // admin can paste a SKU to jump straight to a product and remove it.
+        const idx = params.push(search)
+        conditions.push(`(p.title ILIKE '%' || $${idx} || '%' OR p.supplier_product_id ILIKE '%' || $${idx} || '%')`)
+      }
       if (category) conditions.push(`p.category = $${params.push(category)}`)
       if (storeUserId) conditions.push(`p.user_id = $${params.push(storeUserId)}::uuid`)
 

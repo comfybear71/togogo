@@ -402,7 +402,7 @@ export default function ProductsPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-600" />
             <input
               type="text"
-              placeholder="Search products..."
+              placeholder="Search by name or SKU…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               className="w-full rounded-xl border border-white/[0.08] bg-[#0a0a0a] py-2.5 pl-10 pr-4 text-sm text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/20"
@@ -493,7 +493,14 @@ export default function ProductsPage() {
                               <Image className="h-5 w-5 text-zinc-600" />
                             )}
                           </div>
-                          <p className="font-medium text-white max-w-[200px] truncate" title={p.title}>{p.title}</p>
+                          <div className="min-w-0">
+                            <p className="font-medium text-white max-w-[200px] truncate" title={p.title}>{p.title}</p>
+                            {p.supplier_product_id && (
+                              <p className="font-mono text-[11px] text-zinc-500 select-all truncate max-w-[200px]">
+                                SKU: {String(p.supplier_product_id).replace('ae_', '')}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="py-3 pr-3 text-zinc-400">A${costAud.toFixed(2)}</td>
