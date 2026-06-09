@@ -1,6 +1,8 @@
 // Admin products API — fetches real products from database
 import { sql } from '../_lib/db.js'
 import { requireAdminLite } from '../_lib/auth.js'
+import { getAudRate } from '../_lib/pricing.js'
+import { getCommissionRate } from '../_lib/commission.js'
 
 export default async function handler(req, res) {
   try {
@@ -42,7 +44,8 @@ export default async function handler(req, res) {
             p.supplier_product_id,
             p.category, p.is_active, p.total_sold, p.total_revenue,
             p.created_at, p.updated_at,
-            u.name AS seller_name, u.email AS seller_email
+            u.name AS seller_name, u.email AS seller_email,
+            (SELECT st.markup_percent FROM user_stores st WHERE st.user_id = p.user_id LIMIT 1) AS markup_percent
           FROM user_products p
           JOIN users u ON u.id = p.user_id
           ${whereClause}
@@ -62,7 +65,8 @@ export default async function handler(req, res) {
             p.supplier_product_id,
             p.category, p.is_active, p.total_sold, p.total_revenue,
             p.created_at, p.updated_at,
-            u.name AS seller_name, u.email AS seller_email
+            u.name AS seller_name, u.email AS seller_email,
+            (SELECT st.markup_percent FROM user_stores st WHERE st.user_id = p.user_id LIMIT 1) AS markup_percent
           FROM user_products p
           JOIN users u ON u.id = p.user_id
           ${whereClause}
@@ -84,10 +88,21 @@ export default async function handler(req, res) {
         FROM user_stores s WHERE s.status = 'active' ORDER BY s.store_name
       `
 
+      // Real profit needs the same inputs the storefront uses: USD->AUD rate
+      // and the platform commission rate. supplier_cost/sale_price are stored
+      // in break-even USD; the customer price = sale_price x (1 + markup/100),
+      // converted to AUD. Profit/commission are zero without the markup.
+      let audRate = 1.45
+      let commissionRate = 0.30
+      try { audRate = await getAudRate() } catch { /* default */ }
+      try { commissionRate = await getCommissionRate() } catch { /* default */ }
+
       return res.json({
         products: productResult.rows,
         categories,
         stores: storeRows,
+        audRate,
+        commissionRate,
         pagination: { page, limit, totalProducts, totalPages },
       })
     } catch (err) {
