@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 
 import AEOAuthTokenWidget from '../../components/admin/AEOAuthTokenWidget'
+import AEDSBenefitsWidget from '../../components/admin/AEDSBenefitsWidget'
 
 const AdminRevenueLineChart = lazy(() => import('../../components/charts/AdminRevenueLineChart'))
 const AdminSignupsBarChart = lazy(() => import('../../components/charts/AdminSignupsBarChart'))
@@ -110,6 +111,10 @@ export default function DashboardPage() {
       </div>
 
       <AEOAuthTokenWidget />
+
+      <div className="mt-3">
+        <AEDSBenefitsWidget />
+      </div>
 
       {backupResult && (
         <div className={`rounded-xl p-3 text-sm ${backupResult.success ? 'bg-[#06D6A0]/10 text-[#06D6A0]' : 'bg-red-500/10 text-red-400'}`}>
