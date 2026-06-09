@@ -25,6 +25,11 @@ export default function ProductsPage() {
   const [importResult, setImportResult] = useState(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ totalProducts: 0, totalPages: 0 });
+  // Rates needed to show REAL profit: stored sale_price is break-even USD, so
+  // the customer price = sale_price x (1 + markup/100) x audRate. Without the
+  // markup, profit and commission read $0.
+  const [audRate, setAudRate] = useState(1.45);
+  const [commissionRate, setCommissionRate] = useState(0.30);
   const [showImportPanel, setShowImportPanel] = useState(false);
   const [cooldown, setCooldown] = useState(0);
   const [megaImporting, setMegaImporting] = useState(false);
@@ -45,6 +50,8 @@ export default function ProductsPage() {
       setProducts(data.products || []);
       setCategories(data.categories || []);
       if (data.stores) setStores(data.stores);
+      if (data.audRate) setAudRate(data.audRate);
+      if (data.commissionRate != null) setCommissionRate(data.commissionRate);
       setPagination(data.pagination || { totalProducts: 0, totalPages: 0 });
     } catch (err) {
       console.error('Failed to fetch products:', err);
@@ -466,8 +473,15 @@ export default function ProductsPage() {
               <tbody>
                 {filteredProducts.map((p) => {
                   const status = p.is_active ? 'active' : 'inactive';
-                  const supplierCost = parseFloat(p.supplier_cost || 0);
-                  const salePrice = parseFloat(p.sale_price || 0);
+                  // Match the storefront's math: stored prices are break-even
+                  // USD; customer pays sale_price x (1 + markup/100), and we
+                  // show everything in AUD. Profit = sale - cost; ToGoGo's cut
+                  // = profit x the real commission rate.
+                  const markup = parseFloat(p.markup_percent ?? 40) || 0;
+                  const costAud = (parseFloat(p.supplier_cost || 0)) * audRate;
+                  const saleAud = (parseFloat(p.sale_price || 0)) * (1 + markup / 100) * audRate;
+                  const profitAud = saleAud - costAud;
+                  const togogoAud = Math.max(profitAud, 0) * commissionRate;
                   return (
                     <tr key={p.id} className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.04]">
                       <td className="py-3 pr-4">
@@ -482,10 +496,10 @@ export default function ProductsPage() {
                           <p className="font-medium text-white max-w-[200px] truncate" title={p.title}>{p.title}</p>
                         </div>
                       </td>
-                      <td className="py-3 pr-3 text-zinc-400">A${supplierCost.toFixed(2)}</td>
-                      <td className="py-3 pr-3 font-medium text-white">${salePrice.toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-emerald-400">${(salePrice - supplierCost).toFixed(2)}</td>
-                      <td className="py-3 pr-3 text-[#FF6B35]">${((salePrice - supplierCost) * 0.1).toFixed(2)}</td>
+                      <td className="py-3 pr-3 text-zinc-400">A${costAud.toFixed(2)}</td>
+                      <td className="py-3 pr-3 font-medium text-white">A${saleAud.toFixed(2)}</td>
+                      <td className="py-3 pr-3 text-emerald-400">A${profitAud.toFixed(2)}</td>
+                      <td className="py-3 pr-3 text-[#FF6B35]">A${togogoAud.toFixed(2)}</td>
                       {storeFilter && <td className="py-3 pr-3 text-zinc-400 text-xs">{p.seller_name || p.seller_email?.split('@')[0]}</td>}
                       <td className="py-3 pr-4">
                         <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColors[status]}`}>
