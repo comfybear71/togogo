@@ -315,9 +315,37 @@ export default async function handler(req, res) {
     // Stripe balance because applicationFee was locked in using the estimate.
     const totalSupplierCostCents = usdToAudCents(totalSupplierCost, audRate)
     const profitCents = totalAmount - totalSupplierCostCents
+
+    // Spend-and-save discount (OFF by default). Margin-funded: it comes out of
+    // profit and is HARD-CAPPED so it can never push the charge below our AE
+    // cost. Read from admin_settings; any error → no discount.
+    let discountCents = 0
+    let promoPercent = 0
+    try {
+      const { rows: promoRows } = await sql`
+        SELECT key, value FROM admin_settings
+        WHERE key IN ('spend_save_enabled', 'spend_save_threshold_aud', 'spend_save_percent')
+      `
+      const promo = Object.fromEntries(promoRows.map(r => [r.key, r.value]))
+      const enabled = String(promo.spend_save_enabled || '').toLowerCase() === 'true'
+      const promoThresholdAud = parseFloat(promo.spend_save_threshold_aud) || 0
+      promoPercent = parseFloat(promo.spend_save_percent) || 0
+      if (enabled && promoPercent > 0 && (totalAmount / 100) >= promoThresholdAud) {
+        const raw = Math.round(totalAmount * (promoPercent / 100))
+        // Never discount more than the profit ⇒ never sell below cost.
+        discountCents = Math.min(raw, Math.max(profitCents, 0))
+      }
+    } catch { /* promo off on any error */ }
+
+    // Margin-funded: profit (and therefore both the owner's share AND our
+    // commission) shrink by the discount. ApplicationFee is computed on the
+    // reduced profit so the Connect split stays correct and ≤ the charge.
+    const discountedProfitCents = profitCents - discountCents
     const applicationFee = totalSupplierCostCents
-      + Math.round(Math.max(profitCents, 0) * commissionRate)
+      + Math.round(Math.max(discountedProfitCents, 0) * commissionRate)
       + shippingFeeCents
+    // Ratio used to keep the per-item order records accurate after the discount.
+    const discountRatio = totalAmount > 0 ? discountCents / totalAmount : 0
 
     const orderRef = `TG-${Date.now().toString(36).toUpperCase()}`
 
@@ -359,6 +387,25 @@ export default async function handler(req, res) {
       console.log(`[Checkout] Direct payment: ${totalAmount}c (no Connect account for ${subdomain})`)
     }
 
+    // Apply the spend-and-save discount as a one-off Stripe coupon so the
+    // customer sees the saving on the payment page. The charge becomes
+    // (total − discount); applicationFee (recomputed above) stays ≤ charge.
+    if (discountCents > 0) {
+      try {
+        const coupon = await stripe.coupons.create({
+          amount_off: discountCents,
+          currency: 'aud',
+          duration: 'once',
+          name: `Spend & Save ${promoPercent}% off`,
+        })
+        sessionParams.discounts = [{ coupon: coupon.id }]
+        sessionParams.metadata.togogo_discount_aud = (discountCents / 100).toFixed(2)
+        console.log(`[Checkout] Spend & Save applied: -A$${(discountCents / 100).toFixed(2)}`)
+      } catch (e) {
+        console.error('[Checkout] discount coupon failed, proceeding without:', e.message)
+      }
+    }
+
     const session = await stripe.checkout.sessions.create(sessionParams)
 
     // Save pending order to database
@@ -369,7 +416,9 @@ export default async function handler(req, res) {
       // gets paid AUD via Stripe Connect; ToGoGo's commission lives in
       // AUD too. Use the same audRate captured at session start so all
       // numbers come from one rate snapshot.
-      const salePriceAud = Math.round(item.salePrice * qty * 100) / 100
+      // Reduce the recorded sale by the same discount ratio so profit/
+      // commission records match what the customer was actually charged.
+      const salePriceAud = Math.round(item.salePrice * qty * (1 - discountRatio) * 100) / 100
       const supplierCostUsd = Math.round(item.supplierCost * qty * 100) / 100
       const supplierCostAud = usdToAud(supplierCostUsd, audRate)
       const grossProfitAud = Math.round((salePriceAud - supplierCostAud) * 100) / 100
