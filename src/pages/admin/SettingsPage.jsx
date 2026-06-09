@@ -410,6 +410,32 @@ export default function SettingsPage() {
                     <Plus className="h-4 w-4" />
                     Add Custom Field
                   </button>
+
+                  {/* AliExpress re-authorization button (supplier_api_keys section only) */}
+                  {activeSection === 'supplier_api_keys' && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const token = localStorage.getItem('togogo-token')
+                          const res = await fetch(`${API_BASE}/api/admin/aliexpress-auth-url`, {
+                            headers: { Authorization: `Bearer ${token}` },
+                          })
+                          const data = await res.json()
+                          if (data.authUrl) {
+                            window.location.href = data.authUrl
+                          } else {
+                            alert('Error: ' + (data.error || 'Could not generate auth URL'))
+                          }
+                        } catch (err) {
+                          alert('Failed to get auth URL: ' + err.message)
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-4 py-3 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                    >
+                      <Key className="h-4 w-4" />
+                      Re-authorize AliExpress OAuth (expires in ~30 days)
+                    </button>
+                  )}
                 </div>
 
                 {/* Save button (bottom) */}
