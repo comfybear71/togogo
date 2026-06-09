@@ -76,6 +76,12 @@ to read the real `<OWNER>/<REPO>`. The Compare URL must work when clicked.
 - Every PR gets a tag. Check `git tag --list --sort=-v:refname | head -10` first.
 - Semver: patch = bug fix only; minor = new backwards-compatible feature;
   major = breaking. Suffixes: `-docs` (docs-only), `-recovery` (hotfix/revert).
+- **COPY-PASTE RULE:** Stuart works on iPhone/iPad — his client only shows a
+  copy button on fenced ``` code blocks ```, NOT on tables, inline code, or
+  bare links. So EVERY value he must paste goes in its OWN one-line code
+  block: the Compare URL, the PR title, the PR description, the tag name, the
+  "create via" releases URL, and the tag-notes block. A table is fine as a
+  visual summary, but never make him copy a value out of a table or a link.
 
 **Produce ALL FIVE sections, in order:**
 
@@ -85,9 +91,11 @@ to read the real `<OWNER>/<REPO>`. The Compare URL must work when clicked.
    `## Test plan` (checkboxes, `[x]` done / `[ ]` post-deploy manual).
 4. **Merge instructions** — numbered: 1) Open Compare URL 2) Create pull request
    3) Bottom → ▼ → "Squash and merge" 4) Confirm squash and merge 5) Delete branch.
-5. **Release tag** (mandatory) — table (Tag name `v<SEMVER>-<YYYY-MM-DD>` / Target
-   `<BASE>` / Title / Create via `https://github.com/<OWNER>/<REPO>/releases/new`),
-   then a code block: `## v<SEMVER>` with `### New`, `### Fixed`, `### Changed`.
+5. **Release tag** (mandatory) — optional table for the eye, but ALSO give
+   each value as its own one-line code block so it's copyable: tag name
+   `v<SEMVER>-<YYYY-MM-DD>`, target `<BASE>`, title, and the create-via URL
+   `https://github.com/<OWNER>/<REPO>/releases/new`. Then the tag-notes code
+   block: `## v<SEMVER>` with `### New`, `### Fixed`, `### Changed`.
 
 ---
 
