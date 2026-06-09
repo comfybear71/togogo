@@ -121,7 +121,7 @@ export default function MyStorePage() {
       <StoreDetailsCard store={store} onSave={patchStore} />
       <MarkupCard store={store} onSave={patchStore} />
       <ThemeCard store={store} onSave={patchStore} />
-      <ProductsCard products={products} token={token} onUpdate={load} />
+      <ProductsCard products={products} token={token} onUpdate={load} store={store} />
       <ResetShopCard productCount={products.length} token={token} onReset={load} />
     </div>
   )
@@ -356,7 +356,7 @@ function ThemeSwatch({ theme }) {
   )
 }
 
-function ProductsCard({ products, token, onUpdate }) {
+function ProductsCard({ products, token, onUpdate, store }) {
   const count = products.length
   return (
     <Card icon={Package} title="Your products">
