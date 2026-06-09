@@ -303,11 +303,20 @@ export default async function handler(req, res) {
                     // Log the final address being used
                     console.log(`[Webhook] Address for AE: ${JSON.stringify(shippingAddr).slice(0, 300)}`)
 
-                    // Promo codes disabled (2026-04-23): the AUAP* codes expired
-                    // and AE rejected every order with CheckException. Leave as
-                    // undefined until a live code is configured (ideally via
-                    // admin_settings, not hardcoded here).
-                    const couponCode = undefined
+                    // Active AliExpress coupon code, managed in the admin
+                    // dashboard (ae_coupon_codes — first entry is active).
+                    // submitOrder applies it and AUTO-FALLS-BACK to no coupon
+                    // if AE rejects it, so an expired code never blocks an
+                    // order (AE de-dupes by our out_order_id).
+                    let couponCode = undefined
+                    try {
+                      const { rows: ccRows } = await sql`SELECT value FROM admin_settings WHERE key = 'ae_coupon_codes'`
+                      if (ccRows[0]?.value) {
+                        const list = JSON.parse(ccRows[0].value)
+                        const first = Array.isArray(list) ? list[0] : null
+                        couponCode = (typeof first === 'string' ? first : first?.code) || undefined
+                      }
+                    } catch { /* no coupon configured */ }
 
                     // Pull the customer's chosen variant from order_data (written
                     // by /api/storefront/checkout). No auto-resolve here — if
@@ -334,6 +343,20 @@ export default async function handler(req, res) {
                         phone: (shippingAddr.phone || '').replace(/\D/g, ''),
                       },
                     })
+                    // Record the coupon outcome so the dashboard can warn the
+                    // admin to swap out an expired code. Best-effort.
+                    if (couponCode && (result.couponDropped || result.couponUsed)) {
+                      try {
+                        const status = result.couponDropped
+                          ? { activeCode: couponCode, lastFailedCode: couponCode, lastFailedAt: new Date().toISOString(), lastFailReason: result.couponDropReason || 'rejected' }
+                          : { activeCode: couponCode, lastUsedCode: couponCode, lastUsedAt: new Date().toISOString() }
+                        await sql`
+                          INSERT INTO admin_settings (key, value, category, label, is_secret)
+                          VALUES ('ae_coupon_status', ${JSON.stringify(status)}, 'pricing', 'AliExpress coupon status', false)
+                          ON CONFLICT (key) DO UPDATE SET value = ${JSON.stringify(status)}, updated_at = NOW()
+                        `
+                      } catch { /* non-critical */ }
+                    }
                     if (result.success) {
                       // submitOrder already calls trade.ds.order.get inside and
                       // returns pay_amount as result.realCostUSD. Write that
