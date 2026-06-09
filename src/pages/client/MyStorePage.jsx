@@ -361,7 +361,7 @@ function ProductsCard({ products, token, onUpdate, store }) {
   return (
     <Card icon={Package} title="Your products">
       <p className="text-[15px] text-zinc-400 mb-4">
-        Manage your {count} product{count === 1 ? '' : 's'} below. Hide products with expensive shipping or that don't sell.
+        Manage your {count} product{count === 1 ? '' : 's'} below. Remove products with expensive shipping or that don't sell — they stay saved and can be added back any time.
       </p>
       {count === 0 ? (
         <div className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-6 text-center">
