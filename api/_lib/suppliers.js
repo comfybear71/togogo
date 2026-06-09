@@ -593,12 +593,6 @@ export async function submitOrder({ productId, skuId, skuAttr, quantity, shippin
       out_order_id: orderId || undefined,
     }
 
-    // Add promotion/coupon code if available
-    if (promotionCode) {
-      orderRequest.promotion = { promotion_code: promotionCode }
-      console.log(`[AliExpress] Applying promo code: ${promotionCode}`)
-    }
-
     console.log(`[AliExpress] Placing DS order: product=${productId}, sku=${resolvedSkuAttr}, qty=${quantity}, to=${fullName}, ${orderRequest.logistics_address.city}, ${orderRequest.logistics_address.province}, ${countryCode}`)
 
     // ds_extend_request: contains auto-pay trigger (try_to_pay)
@@ -609,39 +603,71 @@ export async function submitOrder({ productId, skuId, skuAttr, quantity, shippin
       },
     }
 
-    // Add promotion to ds_extend_request if available
-    if (promotionCode) {
-      dsExtendRequest.promotion = { promotion_activity_id: promotionCode }
-    }
-
     // Use wholesale pricing model for bulk orders (10+)
     if (quantity >= 10) {
       dsExtendRequest.trade_extra_param = { business_model: 'wholesale' }
       console.log(`[AliExpress] Bulk order (qty=${quantity}), using wholesale pricing`)
     }
 
-    const params = {
-      param_place_order_request4_open_api_d_t_o: JSON.stringify(orderRequest),
-      ds_extend_request: JSON.stringify(dsExtendRequest),
+    // One order.create attempt. With `withCoupon` the promo code is attached;
+    // otherwise it's stripped. AliExpress de-dupes by out_order_id (set on
+    // orderRequest), so retrying after a coupon rejection can NEVER create a
+    // second order.
+    async function attemptCreate(withCoupon) {
+      const reqDto = { ...orderRequest }
+      const extReq = { ...dsExtendRequest }
+      if (withCoupon && promotionCode) {
+        reqDto.promotion = { promotion_code: promotionCode }
+        extReq.promotion = { promotion_activity_id: promotionCode }
+      } else {
+        delete reqDto.promotion
+        delete extReq.promotion
+      }
+      const params = {
+        param_place_order_request4_open_api_d_t_o: JSON.stringify(reqDto),
+        ds_extend_request: JSON.stringify(extReq),
+      }
+      const data = await callAuthenticatedAPI('aliexpress.ds.order.create', params)
+      console.log(`[AliExpress] DS order.create raw response: ${JSON.stringify(data).slice(0, 500)}`)
+      const result = data?.aliexpress_ds_order_create_response?.result
+        || data?.aliexpress_trade_buy_placeorder_response?.result
+        || data?.result
+      const error = !result
+        ? 'No result from AliExpress: ' + JSON.stringify(data).slice(0, 200)
+        : (result.is_success === false ? (result.error_msg || 'Order submission failed') : null)
+      return { data, result, ok: !!result && result.is_success !== false, error }
     }
 
-    console.log(`[AliExpress] ds_extend_request: ${JSON.stringify(dsExtendRequest)}`)
+    // Try WITH the coupon first; if AliExpress rejects it (expired/invalid →
+    // CheckException on the whole order), retry WITHOUT it so the customer's
+    // order still gets placed. The coupon is best-effort savings.
+    let couponUsed = false
+    let couponDropped = false
+    let couponDropReason = null
+    let attempt
+    if (promotionCode) {
+      console.log(`[AliExpress] Trying order WITH coupon: ${promotionCode}`)
+      attempt = await attemptCreate(true)
+      if (attempt.ok) {
+        couponUsed = true
+      } else {
+        couponDropped = true
+        couponDropReason = attempt.error
+        console.warn(`[AliExpress] Order rejected WITH coupon ${promotionCode} (${attempt.error}) — retrying without coupon`)
+        attempt = await attemptCreate(false)
+      }
+    } else {
+      attempt = await attemptCreate(false)
+    }
 
-    const data = await callAuthenticatedAPI('aliexpress.ds.order.create', params)
-
-    console.log(`[AliExpress] DS order.create raw response: ${JSON.stringify(data).slice(0, 500)}`)
-
-    // Response can be in different formats depending on API version
-    const result = data?.aliexpress_ds_order_create_response?.result
-      || data?.aliexpress_trade_buy_placeorder_response?.result
-      || data?.result
+    const { data, result } = attempt
     if (!result) {
       console.error('[AliExpress] Order placement failed:', JSON.stringify(data).slice(0, 500))
-      return { success: false, error: 'No result from AliExpress: ' + JSON.stringify(data).slice(0, 200) }
+      return { success: false, error: attempt.error, couponDropped, couponDropReason }
     }
 
     if (result.is_success === false) {
-      return { success: false, error: result.error_msg || 'Order submission failed' }
+      return { success: false, error: attempt.error, couponDropped, couponDropReason }
     }
 
     console.log(`[AliExpress] Order submitted: ${JSON.stringify(result).slice(0, 300)}`)
@@ -712,6 +738,9 @@ export async function submitOrder({ productId, skuId, skuAttr, quantity, shippin
       orderId: aeOrderId,
       orderData: result,
       realCostUSD,
+      couponUsed,
+      couponDropped,
+      couponDropReason,
     }
   } catch (err) {
     console.error('[AliExpress] Order submit error:', err.message)

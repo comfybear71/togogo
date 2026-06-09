@@ -7,6 +7,7 @@ import {
 import AEOAuthTokenWidget from '../../components/admin/AEOAuthTokenWidget'
 import AEDSBenefitsWidget from '../../components/admin/AEDSBenefitsWidget'
 import SpendSaveWidget from '../../components/admin/SpendSaveWidget'
+import AECouponsWidget from '../../components/admin/AECouponsWidget'
 
 const AdminRevenueLineChart = lazy(() => import('../../components/charts/AdminRevenueLineChart'))
 const AdminSignupsBarChart = lazy(() => import('../../components/charts/AdminSignupsBarChart'))
@@ -119,6 +120,10 @@ export default function DashboardPage() {
 
       <div className="mt-3">
         <SpendSaveWidget />
+      </div>
+
+      <div className="mt-3">
+        <AECouponsWidget />
       </div>
 
       {backupResult && (
