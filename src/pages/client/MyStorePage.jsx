@@ -374,7 +374,7 @@ function ProductsCard({ products, token, onUpdate }) {
           </Link>
         </div>
       ) : (
-        <MyProductsManager products={products} token={token} onUpdate={onUpdate} />
+        <MyProductsManager products={products} token={token} storageSubdomain={store?.subdomain} onUpdate={onUpdate} />
       )}
     </Card>
   )

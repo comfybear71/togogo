@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Eye, EyeOff, Loader2, RefreshCw, Search, ChevronDown, ChevronUp,
   ExternalLink, AlertTriangle
@@ -14,10 +14,12 @@ function getShippingStatus(usd) {
   return { label: `A$${aud.toFixed(2)}`, color: 'text-emerald-500', bg: 'bg-emerald-500/10', emoji: '🟢' }
 }
 
-export default function MyProductsManager({ products, token, onUpdate }) {
+export default function MyProductsManager({ products, token, storageSubdomain, onUpdate }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('newest')
   const [filterVisible, setFilterVisible] = useState(null)
+  const [page, setPage] = useState(1)
+  const itemsPerPage = 20
   const [shippingCache, setShippingCache] = useState({})
   const [queryingShipping, setQueryingShipping] = useState({})
   const [toggleStates, setToggleStates] = useState({})
@@ -38,18 +40,15 @@ export default function MyProductsManager({ products, token, onUpdate }) {
     filtered.sort((a, b) => (shippingCache[b.id] || 0) - (shippingCache[a.id] || 0))
   }
 
+  // Pagination
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
+  const paged = filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage)
+
   async function toggleVisibility(productId, currentValue) {
     // Optimistic update: toggle immediately in UI, API call happens in background
     const newValue = !currentValue
-    // Find and update the product in the local state optimistically
-    const optimisticProducts = products.map(p =>
-      p.id === productId ? { ...p, visible_to_storefront: newValue } : p
-    )
-
-    // Trigger UI update immediately (component re-renders with new visibility)
     onUpdate?.()
 
-    // API call happens in background without blocking
     try {
       const res = await fetch(`${API_BASE}/api/my-shop/products`, {
         method: 'PATCH',
@@ -69,7 +68,7 @@ export default function MyProductsManager({ products, token, onUpdate }) {
       setToggleStates(s => ({ ...s, [productId]: 'error' }))
       setTimeout(() => {
         setToggleStates(s => ({ ...s, [productId]: null }))
-        onUpdate?.() // Revert on error
+        onUpdate?.()
       }, 2000)
     }
   }
@@ -92,6 +91,8 @@ export default function MyProductsManager({ products, token, onUpdate }) {
     }
   }
 
+  const storefrontBase = storageSubdomain ? `https://${storageSubdomain}.togogo.me` : null
+
   return (
     <div className="space-y-6">
       {/* Controls */}
@@ -100,7 +101,7 @@ export default function MyProductsManager({ products, token, onUpdate }) {
           type="text"
           placeholder="Search products..."
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={e => { setSearchQuery(e.target.value); setPage(1) }}
           className="flex-1 rounded-lg border border-white/[0.08] bg-[#0a0a0a] px-4 py-2.5 text-[15px] text-white placeholder-zinc-600 focus:border-[#FF6B35] focus:outline-none"
         />
 
@@ -119,6 +120,7 @@ export default function MyProductsManager({ products, token, onUpdate }) {
           onChange={e => {
             const val = e.target.value
             setFilterVisible(val === 'all' ? null : val === 'visible')
+            setPage(1)
           }}
           className="rounded-lg border border-white/[0.08] bg-[#0a0a0a] px-4 py-2.5 text-[15px] text-white focus:border-[#FF6B35] focus:outline-none"
         >
@@ -128,9 +130,32 @@ export default function MyProductsManager({ products, token, onUpdate }) {
         </select>
       </div>
 
-      {/* Results info */}
-      <div className="text-[14px] text-zinc-400">
-        {filtered.length} product{filtered.length !== 1 ? 's' : ''}
+      {/* Results info + pagination controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="text-[14px] text-zinc-400">
+          {filtered.length} product{filtered.length !== 1 ? 's' : ''} ({page} of {totalPages || 1})
+        </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              ← Back
+            </button>
+            <span className="text-[14px] text-zinc-400">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-2 rounded-lg border border-white/[0.08] text-[14px] text-zinc-300 hover:bg-white/[0.06] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Empty state */}
@@ -142,7 +167,7 @@ export default function MyProductsManager({ products, token, onUpdate }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(product => {
+          {paged.map(product => {
             const shippingUsd = shippingCache[product.id]
             const shippingStatus = getShippingStatus(shippingUsd)
             const isQuerying = queryingShipping[product.id]
@@ -167,20 +192,29 @@ export default function MyProductsManager({ products, token, onUpdate }) {
                 </div>
 
                 {/* Product Name - Clickable to view on storefront */}
-                <a
-                  href={`/product/${product.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-start gap-2 group mb-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-[15px] font-semibold text-white group-hover:text-[#FF6B35] transition-colors line-clamp-2">
+                {storefrontBase ? (
+                  <a
+                    href={`${storefrontBase}/product/${product.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-start gap-2 group mb-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[15px] font-semibold text-white group-hover:text-[#FF6B35] transition-colors line-clamp-2">
+                        {product.title}
+                      </h3>
+                      <div className="text-[12px] text-zinc-500 mt-0.5">{product.category || 'General'}</div>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-zinc-500 group-hover:text-[#FF6B35] flex-shrink-0 mt-0.5 transition-colors" />
+                  </a>
+                ) : (
+                  <div className="mb-3">
+                    <h3 className="text-[15px] font-semibold text-white line-clamp-2">
                       {product.title}
                     </h3>
                     <div className="text-[12px] text-zinc-500 mt-0.5">{product.category || 'General'}</div>
                   </div>
-                  <ExternalLink className="h-4 w-4 text-zinc-500 group-hover:text-[#FF6B35] flex-shrink-0 mt-0.5 transition-colors" />
-                </a>
+                )}
 
                 {/* Pricing */}
                 <div className="mb-4 p-3 rounded-lg bg-white/[0.04] border border-white/[0.06]">

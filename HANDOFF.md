@@ -1,9 +1,90 @@
 # ToGoGo — HANDOFF.md
 ## Session Handoff Document
 
-**Last Updated:** 2026-04-25 (End of Session 12)
+**Last Updated:** 2026-06-09 (End of Session 13)
 **Branch:** master (PRODUCTION on Vercel)
 **GitHub:** https://github.com/comfybear71/togogo
+
+---
+
+## What Was Done Session 13 (June 9 — Product Manager Rebuild)
+
+### The Task
+Complete three-phase rebuild of product manager UI:
+1. Hide products from storefronts without deleting from database
+2. Eliminate page freeze when toggling visibility (optimistic UI)
+3. Redesign from table layout to mobile-first card-based layout
+
+User reported: "whole page waits for refresh, doing this will take ages" + "need 100% mobile friendly"
+
+### Phase 1: Storefront Filtering — DONE ✅
+**File:** `/api/storefront/store.js`
+- Added `visibilityWhere` variable: `COALESCE(visible_to_storefront, true) = true`
+- Applied to 4 product queries:
+  - Product count (for pagination)
+  - Product listing (main results)
+  - Category counts (sidebar)
+  - Price range counts (filters)
+- Hidden products stay in database but are 100% invisible on customer storefronts
+
+### Phase 2: Optimistic UI Updates — DONE ✅
+**File:** `/src/components/client/MyProductsManager.jsx` (toggleVisibility function)
+- Visibility toggle now updates **instantly** in UI (no loading wait)
+- API call happens in background without blocking user
+- Shows "✓ Saved" confirmation for 800ms
+- Shows error box with auto-revert on failure
+- **Eliminates the "page freeze" problem entirely**
+
+### Phase 3: Complete Card-Based Redesign — DONE ✅
+**File:** `/src/components/client/MyProductsManager.jsx` (complete rewrite)
+- **Responsive grid layout:** 1 col on mobile, 2 cols on tablet, 3 cols on desktop
+- **Product image** — prominent, proper aspect ratio (h-48 sm:h-40)
+- **Product name** — clickable link to view on storefront with external icon
+- **Cost section** — dedicated "Wholesale cost" box in AUD
+- **Shipping status** — color-coded badges (🟢 LOW, 🟡 MEDIUM, 🔴 HIGH) with AUD cost
+- **Shipping checker** — "Check shipping cost" button with refresh icon + 24h cache
+- **Collapsible variants** — expandable section showing all variant names & prices
+- **Visibility toggle** — sticky at card bottom, loads instantly, shows success/error
+- **Mobile-friendly** — proper touch targets, readable text, no cramped columns
+- **Search/sort/filter** — flex layout on mobile, horizontal on desktop
+
+### PR Created
+- **PR #124:** https://github.com/comfybear71/togogo/pull/124
+- **Title:** "Product Manager Rebuild: Hidden products, optimistic UI, mobile-first design"
+- **Testing Checklist:** Provided with full iPhone + desktop test cases
+
+### Release Tag
+- **Tag:** `v1.19.0-2026-06-09`
+- **Title:** Product Manager Rebuild: Hidden products, optimistic UI, mobile-first design
+- **Description:** See PR #124 above
+- **GitHub URL:** https://github.com/comfybear71/togogo/releases/tag/v1.19.0-2026-06-09
+
+### Merge Conflict Resolution
+- Master had old table-based version from earlier work
+- Resolved by keeping branch's new card-based design
+- Merged master into feature branch to stay current
+
+### What Users Can Now Do
+✅ Click Visible/Hidden → toggles instantly (no page refresh)
+✅ Hide a product → gone from storefront, stays in database
+✅ Click product name → opens on storefront in new tab
+✅ Check shipping → shows AUD cost with emoji indicator
+✅ Expand variants → see all options and pricing
+✅ Use on iPhone and desktop (fully responsive)
+
+### Files Changed
+- `api/storefront/store.js` — 4 product queries + visibility filter
+- `src/components/client/MyProductsManager.jsx` — complete redesign
+
+### Rules Followed
+- Worked on feature branch (not master)
+- Discussed plan before coding
+- Atomic commits with clear messages
+- Full PR handoff package
+- Resolved merge conflicts properly
+- Created tag with full release notes
+
+---
 
 ---
 
