@@ -29,59 +29,34 @@ export default async function handler(req, res) {
   try {
     console.log(`[AliExpress OAuth] Received auth code: ${code.slice(0, 10)}...`)
 
-    // Exchange code for access token using /auth/token/create
+    // Exchange code for access token via /sync using the standard TOP
+    // system params (app_key, method, sign_method, timestamp, format, v).
+    // This mirrors callAPI() in suppliers.js, which is the proven-working
+    // signing pattern for every other AliExpress call in this app. The old
+    // "try GET /auth/token/create first" attempt omitted format/v and the
+    // gateway rejected it with IncompleteSignature — and because AliExpress
+    // returns that error with HTTP 200, the retry logic never even reached
+    // this fallback.
+    const method = 'POST /sync method=/auth/token/create'
     const params = {
       app_key: appKey,
+      method: '/auth/token/create',
       sign_method: 'hmac-sha256',
-      timestamp: String(Date.now()),
+      timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+      format: 'json',
+      v: '2.0',
       code,
     }
     params.sign = signRequest(params, appSecret)
-
-    // Try all known endpoint formats for token exchange
     const qs = new URLSearchParams(params).toString()
-    let response, rawText, method
 
-    // Attempt 1: GET to /auth/token/create
-    method = 'GET /auth/token/create'
-    response = await fetch(`https://api-sg.aliexpress.com/auth/token/create?${qs}`)
-    rawText = await response.text()
+    const response = await fetch('https://api-sg.aliexpress.com/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: qs,
+    })
+    const rawText = await response.text()
     console.log(`[AliExpress OAuth] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
-
-    if (!response.ok || !rawText || rawText.length < 10) {
-      // Attempt 2: POST to /sync with code param (same as other API calls)
-      method = 'POST /sync'
-      const syncParams = {
-        app_key: appKey,
-        method: '/auth/token/create',
-        sign_method: 'hmac-sha256',
-        timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-        format: 'json',
-        v: '2.0',
-        code,
-      }
-      syncParams.sign = signRequest(syncParams, appSecret)
-      const syncBody = new URLSearchParams(syncParams).toString()
-      response = await fetch('https://api-sg.aliexpress.com/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: syncBody,
-      })
-      rawText = await response.text()
-      console.log(`[AliExpress OAuth] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
-    }
-
-    if (!response.ok || !rawText || rawText.length < 10) {
-      // Attempt 3: POST body to /auth/token/create
-      method = 'POST body /auth/token/create'
-      response = await fetch('https://api-sg.aliexpress.com/auth/token/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: qs,
-      })
-      rawText = await response.text()
-      console.log(`[AliExpress OAuth] ${method}: status=${response.status}, body=${rawText.slice(0, 200)}`)
-    }
 
     let data
     try {
